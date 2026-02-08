@@ -253,9 +253,47 @@ class CommunityAuthService {
   }
 
   Future<void> setGuidelinesAccepted({required String uid}) async {
+    final timestamp = FieldValue.serverTimestamp();
+    
+    // Update Users collection (backwards compatibility)
     await _db.collection('Users').doc(uid).set({
-      'guidelinesAcceptedAt': FieldValue.serverTimestamp(),
+      'guidelinesAcceptedAt': timestamp,
     }, SetOptions(merge: true));
+
+    // Check which collection the user is in and update accordingly
+    final memberDoc = await _db.collection('members').doc(uid).get();
+    if (memberDoc.exists) {
+      // Update members collection
+      await _db.collection('members').doc(uid).set({
+        'guidelinesAcceptedAt': timestamp,
+      }, SetOptions(merge: true));
+    } else {
+      // Check org_rep collection  
+      final orgDoc = await _db.collection('org_rep').doc(uid).get();
+      if (orgDoc.exists) {
+        // Update org_rep collection
+        await _db.collection('org_rep').doc(uid).set({
+          'guidelinesAcceptedAt': timestamp,
+        }, SetOptions(merge: true));
+        
+        // Also update the organizations collection
+        final orgRepData = orgDoc.data() as Map<String, dynamic>?;
+        final orgName = orgRepData?['org_name'];
+        if (orgName != null) {
+          final orgQuery = await _db.collection('organizations')
+              .where('org_name', isEqualTo: orgName)
+              .where('org_rep_uid', isEqualTo: uid)
+              .limit(1)
+              .get();
+          
+          if (orgQuery.docs.isNotEmpty) {
+            await _db.collection('organizations').doc(orgQuery.docs.first.id).set({
+              'guidelinesAcceptedAt': timestamp,
+            }, SetOptions(merge: true));
+          }
+        }
+      }
+    }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_guidelinesKey(uid), true);
@@ -266,6 +304,29 @@ class CommunityAuthService {
     final local = prefs.getBool(_guidelinesKey(uid));
     if (local == true) return true;
 
+    // Check members collection first
+    final memberDoc = await _db.collection('members').doc(uid).get();
+    if (memberDoc.exists) {
+      final acceptedAt = memberDoc.data()?['guidelinesAcceptedAt'];
+      final hasAccepted = acceptedAt != null;
+      if (hasAccepted) {
+        await prefs.setBool(_guidelinesKey(uid), true);
+      }
+      return hasAccepted;
+    }
+
+    // Check org_rep collection
+    final orgDoc = await _db.collection('org_rep').doc(uid).get();
+    if (orgDoc.exists) {
+      final acceptedAt = orgDoc.data()?['guidelinesAcceptedAt'];
+      final hasAccepted = acceptedAt != null;
+      if (hasAccepted) {
+        await prefs.setBool(_guidelinesKey(uid), true);
+      }
+      return hasAccepted;
+    }
+
+    // Fallback to Users collection for backwards compatibility
     final doc = await _db.collection('Users').doc(uid).get();
     if (!doc.exists) return false;
     final acceptedAt = doc.data()?['guidelinesAcceptedAt'];

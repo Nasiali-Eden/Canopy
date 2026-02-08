@@ -1,14 +1,16 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../Models/user.dart';
-import '../../Services/Authentication/community_auth.dart';
 import '../../Services/Demo/demo_seeder.dart';
+import '../../Services/storage/user_persistence.dart';
 import '../../Community/Home/community_home.dart';
 import '../../Organization/Home/org_home.dart';
 import '../../Shared/Pages/welcome_screen.dart';
-import '../../Shared/Pages/community_guidelines.dart';
 import '../../Shared/Authentication/join_community.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -29,20 +31,20 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    
+
     // Setup fade animation
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    
+
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeIn,
     );
-    
+
     _animationController.forward();
-    
+
     // Start initialization after frame is rendered
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _start();
@@ -67,13 +69,26 @@ class _SplashScreenState extends State<SplashScreen>
       await Future.delayed(const Duration(milliseconds: 1500));
       if (!mounted || _navigated || _isNavigating) return;
 
-      // Check authentication state
+      // Check authentication state - wait for Firebase Auth to restore session
       _updateStatus('Checking authentication...');
-      final user = Provider.of<F_User?>(context, listen: false);
 
-      debugPrint('[SPLASH] User auth state: ${user?.uid ?? "null"}');
+      // Wait for Firebase Auth to restore session (up to 5 seconds)
+      final authUser = await _waitForAuthState();
 
-      if (user == null) {
+      debugPrint('[SPLASH] Auth state restored: ${authUser?.uid ?? "null"}');
+
+      if (authUser == null) {
+        // Check if there's a persisted login that we can restore
+        final persistedUid = await UserPersistence.getUserUid();
+        final isLoginValid = await UserPersistence.isLoginValid();
+
+        if (persistedUid != null && isLoginValid) {
+          debugPrint(
+              '[SPLASH] Found persisted login but Firebase Auth not restored yet');
+          // Firebase Auth should restore automatically, but if not, show welcome
+          // This could happen if the auth token expired
+        }
+
         debugPrint('[SPLASH] No user, going to welcome');
         _goToWidget(const WelcomeScreen());
         return;
@@ -81,7 +96,7 @@ class _SplashScreenState extends State<SplashScreen>
 
       // For authenticated users, seed demo data first
       _updateStatus('Preparing your workspace...');
-      await _seedDemoData(user.uid);
+      await _seedDemoData(authUser.uid);
 
       // Small delay to show final status
       await Future.delayed(const Duration(milliseconds: 300));
@@ -89,18 +104,18 @@ class _SplashScreenState extends State<SplashScreen>
 
       // Use role-based routing
       _updateStatus('Loading...');
-      await _navigateToRoleBasedHome();
+      await _navigateToRoleBasedHome(authUser);
     } catch (e) {
       debugPrint('[SPLASH] Error: $e');
       if (!mounted || _navigated || _isNavigating) return;
-      
+
       // On error, still attempt to navigate
       _updateStatus('Loading...');
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       if (!mounted || _navigated || _isNavigating) return;
       final user = Provider.of<F_User?>(context, listen: false);
-      
+
       if (user == null) {
         _goToWidget(const WelcomeScreen());
       } else {
@@ -109,45 +124,69 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  Future<void> _navigateToRoleBasedHome() async {
+  /// Wait for Firebase Auth to restore session
+  Future<User?> _waitForAuthState() async {
+    final auth = FirebaseAuth.instance;
+
+    // If already signed in, return immediately
+    if (auth.currentUser != null) {
+      return auth.currentUser;
+    }
+
+    // Listen for auth state changes with a timeout
+    final completer = Completer<User?>();
+
+    StreamSubscription? subscription;
+
+    subscription = auth.authStateChanges().listen((user) {
+      if (!completer.isCompleted) {
+        completer.complete(user);
+        subscription?.cancel();
+      }
+    });
+
+    // Timeout after 5 seconds
+    await Future.delayed(const Duration(seconds: 5));
+    if (!completer.isCompleted) {
+      subscription?.cancel();
+      completer.complete(auth.currentUser);
+    }
+
+    return completer.future;
+  }
+
+  Future<void> _navigateToRoleBasedHome(User authUser) async {
     if (_navigated || _isNavigating) {
       debugPrint('[SPLASH] Navigation already in progress');
       return;
     }
 
-    final user = Provider.of<F_User?>(context, listen: false);
-    if (user == null) {
-      debugPrint('[SPLASH] User is null during role routing');
-      _goToWidget(const WelcomeScreen());
-      return;
-    }
-
     try {
-      debugPrint('[SPLASH] Checking user role for uid: ${user.uid}');
-      
+      debugPrint('[SPLASH] Checking user role for uid: ${authUser.uid}');
+
       // Check if user exists in members collection
       final memberSnapshot = await FirebaseFirestore.instance
           .collection('members')
-          .doc(user.uid)
+          .doc(authUser.uid)
           .get();
 
       debugPrint('[SPLASH] Members check: exists=${memberSnapshot.exists}');
 
       if (memberSnapshot.exists) {
-        _handleUserRoute(memberSnapshot, 'Member', user.uid);
+        _handleUserRoute(memberSnapshot, 'Member', authUser.uid);
         return;
       }
 
       // Check if user exists in org_rep collection
       final orgSnapshot = await FirebaseFirestore.instance
           .collection('org_rep')
-          .doc(user.uid)
+          .doc(authUser.uid)
           .get();
 
       debugPrint('[SPLASH] Org_rep check: exists=${orgSnapshot.exists}');
 
       if (orgSnapshot.exists) {
-        _handleUserRoute(orgSnapshot, 'Org Rep', user.uid);
+        _handleUserRoute(orgSnapshot, 'Org Rep', authUser.uid);
         return;
       }
 
@@ -166,20 +205,9 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    final data = userDoc.data() as Map<String, dynamic>?;
-    final acceptedAt = data?['guidelinesAcceptedAt'];
-
     debugPrint('[SPLASH] Role: $role, uid: $uid');
-    debugPrint('[SPLASH] Guidelines accepted: ${acceptedAt != null}');
 
-    // Check if user has accepted guidelines
-    if (acceptedAt == null) {
-      debugPrint('[SPLASH] Guidelines not accepted, routing to guidelines');
-      _goToWidget(const CommunityGuidelinesScreen());
-      return;
-    }
-
-    // Route based on role
+    // Route based on role (no guidelines check)
     if (role == 'Org Rep') {
       debugPrint('[SPLASH] ✅ Routing Org Rep to OrganizationHome');
       _goToWidget(const OrganizationHome());
@@ -217,7 +245,7 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     debugPrint('[SPLASH] 🚀 Starting navigation to ${widget.runtimeType}');
-    
+
     // Set both flags immediately
     _isNavigating = true;
     _navigated = true;
@@ -226,12 +254,15 @@ class _SplashScreenState extends State<SplashScreen>
     _animationController.reverse().then((_) {
       if (mounted) {
         debugPrint('[SPLASH] 🎯 Executing navigation to ${widget.runtimeType}');
-        
-        Navigator.of(context).pushAndRemoveUntil(
+
+        Navigator.of(context)
+            .pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => widget),
           (route) => false, // Clear entire stack
-        ).then((_) {
-          debugPrint('[SPLASH] ✅ Navigation completed to ${widget.runtimeType}');
+        )
+            .then((_) {
+          debugPrint(
+              '[SPLASH] ✅ Navigation completed to ${widget.runtimeType}');
         }).catchError((error) {
           debugPrint('[SPLASH] ❌ Navigation error: $error');
         });
@@ -243,13 +274,13 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    
+
     // If we've already navigated, don't do anything
     if (_navigated) {
       debugPrint('[SPLASH] didChangeDependencies called but already navigated');
       return;
     }
-    
+
     debugPrint('[SPLASH] didChangeDependencies called');
   }
 
@@ -287,22 +318,23 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Tagline
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
                         child: Text(
                           'Track real-world contributions. Build community impact.',
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: Colors.black87,
-                                fontWeight: FontWeight.w500,
-                                height: 1.4,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: Colors.black87,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.4,
+                                  ),
                         ),
                       ),
                       const SizedBox(height: 32),
-                      
+
                       // Loading indicator
                       SizedBox(
                         width: 28,
@@ -315,24 +347,25 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Status message with smooth transition
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 300),
                         child: Text(
                           _statusMessage,
                           key: ValueKey(_statusMessage),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.black54,
-                                fontWeight: FontWeight.w400,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.w400,
+                                  ),
                         ),
                       ),
                     ],
                   ),
                 ),
                 const Spacer(),
-                
+
                 // Version info
                 Padding(
                   padding: const EdgeInsets.only(bottom: 20),

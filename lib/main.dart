@@ -5,90 +5,118 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'dart:io';
-import 'Community/Activities/activities_list.dart';
-import 'Community/Activities/activity_detail.dart';
-import 'Community/Activities/create_activity.dart';
-import 'Community/Contributions/contribution_confirmation.dart';
-import 'Community/Contributions/log_contribution.dart';
-import 'Community/Impact/impact_dashboard.dart';
-import 'Community/Recognition/acknowledgements.dart';
-import 'Community/Recognition/badges_screen.dart';
-import 'Community/Communication/announcement_detail.dart';
-import 'Community/Communication/announcements_list.dart';
-import 'Community/Communication/notification_center.dart';
-import 'Community/Profile/community_info.dart';
-import 'Community/Profile/edit_profile.dart';
-import 'Community/Profile/roadmap_screen.dart';
-import 'Community/Profile/settings_screen.dart';
-import 'Community/Blockchain/blockchain_settings.dart';
-import 'Community/Blockchain/proof_preview.dart';
-import 'Community/Blockchain/transparency_preview.dart';
-import 'Organization/Home/org_home.dart';
+import 'Services/storage/user_persistence.dart';
+
 import 'Models/user.dart';
 import 'Providers/theme_provider.dart';
 import 'Services/Authentication/auth.dart';
-import 'Community/Home/community_home.dart';
-import 'Shared/Authentication/join_community.dart';
-import 'Shared/Pages/community_guidelines.dart';
+
 import 'Shared/Pages/splash_screen.dart';
-import 'Shared/Pages/welcome_screen.dart';
-import 'Shared/Pages/login.dart';
+
 import 'Shared/theme/app_theme.dart';
 import 'firebase_options.dart';
 
-/// Initialize Firebase safely (only once)
+/// Initialize Firebase safely with retry logic
 Future<void> initializeFirebase() async {
-  try {
-    // Check if Firebase is already initialized by the native platform
-    // (This happens automatically on Android/iOS when google-services.json is present)
-    if (Firebase.apps.isNotEmpty) {
-      debugPrint('Firebase already initialized by native platform');
-      _configureFirestore();
-      return;
-    }
-
-    // Only attempt to initialize if no apps exist
-    // (This shouldn't happen on Android with google-services.json, but handles other cases)
+  const int maxRetries = 3;
+  const Duration retryDelay = Duration(seconds: 2);
+  
+  for (int attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      debugPrint('Initializing Firebase from Dart...');
+      // Check if Firebase is already initialized
+      if (Firebase.apps.isNotEmpty) {
+        debugPrint('Firebase already initialized (${Firebase.apps.length} apps found)');
+        await _configureFirestoreSafely();
+        return;
+      }
+
+      debugPrint('Firebase initialization attempt $attempt/$maxRetries...');
+      
+      // Initialize Firebase with timeout
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 20),
         onTimeout: () {
-          throw TimeoutException(
-              'Firebase initialization timed out after 30 seconds');
+          throw TimeoutException('Firebase initialization timed out after 20 seconds');
         },
       );
-      debugPrint('Firebase initialized successfully from Dart');
-      _configureFirestore();
+      
+      debugPrint('✅ Firebase initialized successfully on attempt $attempt');
+      await _configureFirestoreSafely();
+      return;
+      
+    } on FirebaseException catch (e) {
+      debugPrint('Firebase exception on attempt $attempt: ${e.code} - ${e.message}');
+      
+      // If it's already initialized error, check for apps
+      if (e.code == 'duplicate-app' || Firebase.apps.isNotEmpty) {
+        debugPrint('Firebase was already initialized, proceeding...');
+        await _configureFirestoreSafely();
+        return;
+      }
+      
+      // For other Firebase errors, retry unless it's the last attempt
+      if (attempt == maxRetries) {
+        debugPrint('❌ Firebase initialization failed after $maxRetries attempts');
+        rethrow;
+      }
+      
+    } on TimeoutException catch (e) {
+      debugPrint('Timeout on attempt $attempt: $e');
+      if (attempt == maxRetries) {
+        debugPrint('❌ Firebase initialization timed out after $maxRetries attempts');
+        rethrow;
+      }
+      
     } catch (e) {
-      // If initialization fails, Firebase might still be available from native
+      debugPrint('Unexpected error on attempt $attempt: $e');
+      
+      // Check if Firebase became available despite the error
       if (Firebase.apps.isNotEmpty) {
-        debugPrint(
-            'Firebase initialization attempt failed, but Firebase is available: $e');
-        _configureFirestore();
-      } else {
+        debugPrint('Firebase is available despite error, proceeding...');
+        await _configureFirestoreSafely();
+        return;
+      }
+      
+      if (attempt == maxRetries) {
+        debugPrint('❌ Firebase initialization failed after $maxRetries attempts');
         rethrow;
       }
     }
-  } catch (e) {
-    debugPrint('Firebase initialization error: $e');
-    rethrow;
+    
+    // Wait before retry (except on last attempt)
+    if (attempt < maxRetries) {
+      debugPrint('Waiting ${retryDelay.inSeconds}s before retry...');
+      await Future.delayed(retryDelay);
+    }
   }
 }
 
-/// Configure Firestore settings (safe to call multiple times)
-void _configureFirestore() {
+/// Configure Firestore settings safely
+Future<void> _configureFirestoreSafely() async {
   try {
-    FirebaseFirestore.instance.settings = const Settings(
+    // Check if Firestore is available first
+    final firestore = FirebaseFirestore.instance;
+    
+    // Try to configure settings
+    await Future.delayed(const Duration(milliseconds: 100)); // Small delay for stability
+    
+    firestore.settings = const Settings(
       persistenceEnabled: true,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
-    debugPrint('Firestore settings configured');
+    
+    debugPrint('✅ Firestore settings configured successfully');
+    
+    // Test basic connectivity
+    await firestore.enableNetwork();
+    debugPrint('✅ Firestore network enabled');
+    
   } catch (e) {
-    debugPrint('Error configuring Firestore settings: $e');
-    // Continue anyway, Firestore might already be configured
+    debugPrint('⚠️ Error configuring Firestore settings: $e');
+    // Continue anyway - Firestore might already be configured or will use defaults
+    // This is not critical for app functionality
   }
 }
 
@@ -145,10 +173,17 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    // Initialize user persistence first
+    await UserPersistence.init();
+    debugPrint('✅ User persistence initialized');
+    
+    // Then initialize Firebase
     await initializeFirebase();
+    debugPrint('✅ App initialization completed successfully');
+    
     runApp(const MyApp());
   } catch (e) {
-    debugPrint('Failed to initialize Firebase: $e');
+    debugPrint('❌ Failed to initialize app: $e');
     // Still run the app but show error
     runApp(const ErrorApp());
   }
@@ -191,55 +226,6 @@ class MyApp extends StatelessWidget {
             // CRITICAL: Start at splash and use direct navigation from there
             // This prevents the app from auto-routing on auth changes
             home: const SplashScreen(),
-            // Keep routes for nested navigation within the app
-            routes: {
-              '/activities': (context) => const ActivitiesListScreen(),
-              '/activities/create': (context) => const CreateActivityScreen(),
-              '/contributions/log': (context) => const LogContributionScreen(),
-              '/impact': (context) => const ImpactDashboardScreen(),
-              '/recognition/badges': (context) => const BadgesScreen(),
-              '/recognition/acknowledgements': (context) => const AcknowledgementsScreen(),
-              '/announcements': (context) => const AnnouncementsListScreen(),
-              '/notifications': (context) => const NotificationCenterScreen(),
-              '/settings': (context) => const SettingsScreen(),
-              '/profile/edit': (context) => const EditProfileScreen(),
-              '/community/info': (context) => const CommunityInfoScreen(),
-              '/roadmap': (context) => const RoadmapScreen(),
-              '/blockchain/transparency': (context) => const TransparencyPreviewScreen(),
-              '/blockchain/proof': (context) => const ProofPreviewScreen(),
-              '/dev/blockchain': (context) => const BlockchainDevSettingsScreen(),
-            },
-            onGenerateRoute: (settings) {
-              final name = settings.name ?? '/';
-
-              // Handle routes with parameters
-              if (name.startsWith('/activities/') && name != '/activities/create') {
-                final parts = name.split('/');
-                final id = parts.isNotEmpty ? parts.last : '';
-                return MaterialPageRoute(
-                  builder: (context) => ActivityDetailScreen(activityId: id),
-                  settings: settings,
-                );
-              } else if (name.startsWith('/announcements/')) {
-                final parts = name.split('/');
-                final id = parts.isNotEmpty ? parts.last : '';
-                return MaterialPageRoute(
-                  builder: (context) => AnnouncementDetailScreen(announcementId: id),
-                  settings: settings,
-                );
-              } else if (name == '/contributions/confirm') {
-                final args = settings.arguments;
-                final points = (args is Map && args['points'] is int)
-                    ? args['points'] as int
-                    : 0;
-                return MaterialPageRoute(
-                  builder: (context) => ContributionConfirmationScreen(points: points),
-                  settings: settings,
-                );
-              }
-
-              return null;
-            },
           );
         },
       ),

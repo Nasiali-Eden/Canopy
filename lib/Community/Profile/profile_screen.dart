@@ -6,6 +6,7 @@ import '../../Models/user.dart';
 import '../../Services/Authentication/auth.dart';
 import '../../Services/Impact/impact_service.dart';
 import '../../Services/Profile/profile_service.dart';
+import '../../Shared/Pages/login.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -14,36 +15,8 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = Provider.of<F_User?>(context);
 
-    if (user == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.person_outline, size: 48),
-              const SizedBox(height: 12),
-              Text(
-                'You are not signed in',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () =>
-                    Navigator.pushReplacementNamed(context, '/welcome'),
-                child: const Text('Go to Welcome'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return StreamBuilder<ProfileData>(
-      stream: ProfileService().watchProfile(userId: user.uid),
+      stream: ProfileService().watchProfile(userId: user!.uid),
       builder: (context, snapshot) {
         final profile = snapshot.data;
 
@@ -109,7 +82,7 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             StreamBuilder<int>(
-              stream: ImpactService().watchUserImpactPoints(userId: user.uid),
+              stream: ImpactService().watchUserImpactPoints(userId: user!.uid),
               builder: (context, snapshot) {
                 final points = snapshot.data ?? 0;
                 return Card(
@@ -166,7 +139,11 @@ class ProfileScreen extends StatelessWidget {
                 onTap: () async {
                   await AuthService().signOut();
                   if (context.mounted) {
-                    Navigator.pushReplacementNamed(context, '/welcome');
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const LoginPage()),
+                    );
                   }
                 },
               ),

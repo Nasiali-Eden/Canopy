@@ -23,9 +23,28 @@ class DatabaseService {
       userData['Type'] = additionalData['Type'];
       userData['Contact'] = additionalData['Contact'];
     }
-    
+
     String collection = role == 'Organization' ? 'Organizations' : 'Users';
     await _firebaseFirestore.collection(collection).doc(uid).set(userData);
+  }
+
+  Future<String?> getUserRole(String uid) async {
+    try {
+      // Check Users collection
+      final userDoc = await _firebaseFirestore.collection('Users').doc(uid).get();
+      if (userDoc.exists) {
+        return userDoc.data()?['role'] as String?;
+      }
+      // Check Organizations collection
+      final orgDoc = await _firebaseFirestore.collection('Organizations').doc(uid).get();
+      if (orgDoc.exists) {
+        return orgDoc.data()?['role'] as String?;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting user role: $e');
+      return null;
+    }
   }
 }
 

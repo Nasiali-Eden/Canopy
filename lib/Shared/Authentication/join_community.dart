@@ -4,6 +4,8 @@ import 'dart:io';
 
 import '../../Services/Authentication/community_auth.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../Pages/community_guidelines.dart';
+import '../Pages/login.dart';
 
 class JoinCommunityScreen extends StatefulWidget {
   const JoinCommunityScreen({super.key});
@@ -207,8 +209,12 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
         }
 
         print('[JoinCommunity] org registration completed, user=${user.uid}');
-        // Redirect to login screen - no auto-login
-        Navigator.pushReplacementNamed(context, '/login');
+        // Redirect to guidelines after signup
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const CommunityGuidelinesScreen()),
+        );
       } else {
         // Register as Member or Volunteer
         final user = await communityAuth.registerWithEmail(
@@ -232,8 +238,12 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
         }
 
         print('[JoinCommunity] registration completed, user=${user.uid}');
-        // Redirect to login screen - no auto-login
-        Navigator.pushReplacementNamed(context, '/login');
+        // Redirect to guidelines after signup
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const CommunityGuidelinesScreen()),
+        );
       }
     } catch (e, st) {
       if (!mounted) return;

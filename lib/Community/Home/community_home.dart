@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:impact_trail/Community/Contributions/eco_shop.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../Models/user.dart';
 import '../../Services/Community/community_service.dart';
@@ -8,6 +10,11 @@ import '../Activities/activities_list.dart';
 import '../Impact/impact_dashboard.dart';
 import '../Profile/profile_screen.dart';
 import '../Map/map.dart';
+import '../Contributions/log_contribution.dart';
+import '../Contributions/contribution_card.dart';
+import '../Contributions/contribution_placeholders.dart';
+import '../Communication/notification_center.dart';
+import '../Activities/create_activity.dart';
 
 class CommunityHomeScreen extends StatefulWidget {
   const CommunityHomeScreen({super.key});
@@ -39,7 +46,11 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
         userId: user?.uid,
         onJoinActivity: () => setState(() => _index = 1),
         onLogContribution: () {
-          Navigator.pushNamed(context, '/contributions/log');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => const LogContributionScreen()),
+          );
         },
         onViewImpact: () => setState(() => _index = 2),
       ),
@@ -83,9 +94,53 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
                 ),
           ),
           actions: [
+            // Shop Icon with label
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const EcoShopScreen(),
+                      ),
+                    );
+                  },
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.lightGreen.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.shopping_bag_outlined,
+                      color: AppTheme.primary,
+                      size: 22,
+                    ),
+                  ),
+                ),
+                Transform.translate(
+                  offset: const Offset(0, -8),
+                  child: Text(
+                    'Shop',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.darkGreen.withOpacity(0.7),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 4),
             IconButton(
               onPressed: () {
-                Navigator.pushNamed(context, '/notifications');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const NotificationCenterScreen()),
+                );
               },
               icon: Stack(
                 clipBehavior: Clip.none,
@@ -111,43 +166,8 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 4),
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Builder(
-                builder: (context) {
-                  final userName = "Community Member";
-                  final initials = _getInitials(userName);
-
-                  return Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primary.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        initials.isNotEmpty ? initials : '?',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+           
+     ],
         ),
         body: pages[_index],
         floatingActionButton: _index != 1 || user == null
@@ -160,8 +180,11 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
                   if (!isOrganizer) return const SizedBox.shrink();
 
                   return FloatingActionButton(
-                    onPressed: () =>
-                        Navigator.pushNamed(context, '/activities/create'),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const CreateActivityScreen()),
+                    ),
                     backgroundColor: AppTheme.tertiary,
                     foregroundColor: Colors.white,
                     elevation: 4,
@@ -191,27 +214,32 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               destinations: [
                 NavigationDestination(
-                  icon: Icon(Icons.home_outlined, color: AppTheme.darkGreen.withOpacity(0.5)),
+                  icon: Icon(Icons.home_outlined,
+                      color: AppTheme.darkGreen.withOpacity(0.5)),
                   selectedIcon: Icon(Icons.home, color: AppTheme.primary),
                   label: 'Home',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.event_note_outlined, color: AppTheme.darkGreen.withOpacity(0.5)),
+                  icon: Icon(Icons.event_note_outlined,
+                      color: AppTheme.darkGreen.withOpacity(0.5)),
                   selectedIcon: Icon(Icons.event_note, color: AppTheme.primary),
                   label: 'Activities',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.analytics_outlined, color: AppTheme.darkGreen.withOpacity(0.5)),
+                  icon: Icon(Icons.analytics_outlined,
+                      color: AppTheme.darkGreen.withOpacity(0.5)),
                   selectedIcon: Icon(Icons.analytics, color: AppTheme.primary),
                   label: 'Impact',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.map_outlined, color: AppTheme.darkGreen.withOpacity(0.5)),
+                  icon: Icon(Icons.map_outlined,
+                      color: AppTheme.darkGreen.withOpacity(0.5)),
                   selectedIcon: Icon(Icons.map, color: AppTheme.primary),
                   label: 'Map',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.person_outline, color: AppTheme.darkGreen.withOpacity(0.5)),
+                  icon: Icon(Icons.person_outline,
+                      color: AppTheme.darkGreen.withOpacity(0.5)),
                   selectedIcon: Icon(Icons.person, color: AppTheme.primary),
                   label: 'Profile',
                 ),
@@ -231,7 +259,7 @@ class _HomeTab extends StatelessWidget {
   final VoidCallback onViewImpact;
 
   const _HomeTab({
-    required this.userId,
+    this.userId,
     required this.onJoinActivity,
     required this.onLogContribution,
     required this.onViewImpact,
@@ -239,535 +267,346 @@ class _HomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _HomeTabBody(
-      userId: userId,
-      onJoinActivity: onJoinActivity,
-      onLogContribution: onLogContribution,
-      onViewImpact: onViewImpact,
-    );
-  }
-}
-
-class _HomeTabBody extends StatefulWidget {
-  final String? userId;
-  final VoidCallback onJoinActivity;
-  final VoidCallback onLogContribution;
-  final VoidCallback onViewImpact;
-
-  const _HomeTabBody({
-    required this.userId,
-    required this.onJoinActivity,
-    required this.onLogContribution,
-    required this.onViewImpact,
-  });
-
-  @override
-  State<_HomeTabBody> createState() => _HomeTabBodyState();
-}
-
-class _HomeTabBodyState extends State<_HomeTabBody> {
-  int _feedLimit = 3;
-
-  // Dummy news data
-  final List<Map<String, dynamic>> _communityNews = [
-    {
-      'title': 'New Recycling Center Opens in Kibera',
-      'description': 'Community members can now drop off sorted materials at the new facility on Olympic Estate Road.',
-      'image': 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400',
-      'date': '2 days ago',
-    },
-    {
-      'title': 'Beach Cleanup Collects 2 Tons of Waste',
-      'description': 'Volunteers gathered last weekend for the largest coastal cleanup event this year.',
-      'image': 'https://images.unsplash.com/photo-1618477461853-cf6ed80faba5?w=400',
-      'date': '1 week ago',
-    },
-    {
-      'title': 'Blockchain Rewards Program Launches',
-      'description': 'Earn ADA tokens for verified environmental contributions through our new platform.',
-      'image': 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400',
-      'date': '2 weeks ago',
-    },
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return RefreshIndicator(
-      onRefresh: () async {},
-      color: AppTheme.primary,
-      child: ListView(
-        padding: const EdgeInsets.all(18),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          StreamBuilder<CommunityOverview>(
-            stream: CommunityService().watchOverview(),
-            builder: (context, snapshot) {
-              final overview = snapshot.data ??
-                  const CommunityOverview(
-                    activeInitiatives: 0,
-                    membersParticipating: 0,
-                    totalImpactPoints: 0,
-                  );
-
-              return Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppTheme.primary,
-                      AppTheme.secondary,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withOpacity(0.3),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.trending_up,
-                            color: Colors.white.withOpacity(0.9), size: 22),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Community Impact',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                fontSize: 18,
-                              ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatCard(
-                            label: 'Initiatives',
-                            value: '${overview.activeInitiatives}',
-                            icon: Icons.flag_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _StatCard(
-                            label: 'Members',
-                            value: '${overview.membersParticipating}',
-                            icon: Icons.people_outline,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _StatCard(
-                            label: 'Points',
-                            value: '${overview.totalImpactPoints}',
-                            icon: Icons.star_outline,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _QuickActionCard(
-                  title: 'Join Activity',
-                  icon: Icons.event_available_outlined,
-                  gradient: LinearGradient(
-                    colors: [AppTheme.primary, AppTheme.secondary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  onTap: widget.onJoinActivity,
-                ),
+          // Hero Section
+          Container(
+            margin: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppTheme.primary, AppTheme.lightGreen],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _QuickActionCard(
-                  title: 'Log Impact',
-                  icon: Icons.add_circle_outline,
-                  gradient: LinearGradient(
-                    colors: [AppTheme.accent, AppTheme.secondary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  onTap: widget.onLogContribution,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _QuickActionCard(
-            title: 'View My Impact Dashboard',
-            icon: Icons.analytics_outlined,
-            gradient: LinearGradient(
-              colors: [AppTheme.tertiary, Color(0xFFD4B972)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              ],
             ),
-            onTap: widget.onViewImpact,
-            expanded: true,
-          ),
-          const SizedBox(height: 26),
-          
-          // Community Updates Section
-          Row(
-            children: [
-              Icon(Icons.newspaper, color: AppTheme.darkGreen, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Community Updates',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.darkGreen,
-                      fontSize: 18,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          
-          // News Cards
-          ..._communityNews.map((news) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: AppTheme.lightGreen.withOpacity(0.3),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Image
-                  ClipRRect(
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(14),
-                      bottomLeft: Radius.circular(14),
-                    ),
-                    child: Container(
-                      width: 90,
-                      height: 90,
-                      color: AppTheme.lightGreen.withOpacity(0.2),
-                      child: Icon(
-                        Icons.image_outlined,
-                        color: AppTheme.primary.withOpacity(0.5),
-                        size: 32,
-                      ),
-                    ),
-                  ),
-                  // Content
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            news['title'],
+                            'Building a Better',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 26,
+                                  height: 1.2,
+                                ),
+                          ),
+                          Text(
+                            'Community Together',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 20,
+                                  height: 1.2,
+                                ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Every action counts. Track your impact.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.darkGreen,
+                                  color: Colors.white.withOpacity(0.85),
                                   fontSize: 14,
                                 ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            news['description'],
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: AppTheme.darkGreen.withOpacity(0.6),
-                                  fontSize: 12,
-                                ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.access_time,
-                                size: 12,
-                                color: AppTheme.accent,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                news['date'],
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppTheme.accent,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          
-          const SizedBox(height: 26),
-          Row(
-            children: [
-              Icon(Icons.history, color: AppTheme.darkGreen, size: 20),
-              const SizedBox(width: 8),
-              Text(
-                'Recent Activity',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.darkGreen,
-                      fontSize: 18,
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.eco,
+                        size: 40,
+                        color: Colors.white,
+                      ),
                     ),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: () {},
-                style: TextButton.styleFrom(
-                  foregroundColor: AppTheme.accent,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                ),
-                child: Row(
-                  children: [
-                    const Text('View All',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        )),
-                    const SizedBox(width: 4),
-                    Icon(Icons.arrow_forward, size: 14),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream:
-                CommunityService().watchRecentActivityFeed(limit: _feedLimit),
-            builder: (context, snapshot) {
-              final items = snapshot.data ?? const [];
+                const SizedBox(height: 20),
+                // Stats Row
+                if (userId != null)
+                  StreamBuilder<DocumentSnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(userId)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      final data =
+                          snapshot.data?.data() as Map<String, dynamic>?;
+                      final points = data?['totalPoints'] ?? 0;
+                      final contributions = data?['contributions'] ?? 0;
+                      final rank = data?['rank'] ?? 'Member';
 
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: CircularProgressIndicator(color: AppTheme.primary),
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: _StatCard(
+                              label: 'Points',
+                              value: points.toString(),
+                              icon: Icons.bolt,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _StatCard(
+                              label: 'Contributions',
+                              value: contributions.toString(),
+                              icon: Icons.volunteer_activism,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _StatCard(
+                              label: 'Rank',
+                              value: rank.toString(),
+                              icon: Icons.emoji_events,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                );
-              }
-
-              if (items.isEmpty) {
-                return Column(
-                  children: List.generate(3, (i) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppTheme.lightGreen.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppTheme.lightGreen.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Icons.person_outline,
-                                color: AppTheme.primary, size: 20),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Member logged a contribution',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: AppTheme.darkGreen,
-                                        fontSize: 13,
-                                      ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Just now',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: AppTheme.darkGreen.withOpacity(0.6),
-                                        fontSize: 11,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppTheme.tertiary.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.bolt,
-                                    color: AppTheme.tertiary, size: 14),
-                                const SizedBox(width: 3),
-                                Text(
-                                  '10',
-                                  style: TextStyle(
-                                    color: AppTheme.tertiary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                );
-              }
-
-              return Column(
-                children: [
-                  ...items.map((item) {
-                    final text = (item['text'] ?? 'New activity') as String;
-                    final subtitle = (item['subtitle'] ?? 'Update') as String;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppTheme.lightGreen.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppTheme.lightGreen.withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Icons.person_outline,
-                                color: AppTheme.primary, size: 20),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  text,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: AppTheme.darkGreen,
-                                        fontSize: 13,
-                                      ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  subtitle,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: AppTheme.darkGreen.withOpacity(0.6),
-                                        fontSize: 11,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppTheme.tertiary.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.bolt,
-                                    color: AppTheme.tertiary, size: 14),
-                                const SizedBox(width: 3),
-                                Text(
-                                  '10',
-                                  style: TextStyle(
-                                    color: AppTheme.tertiary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              );
-            },
+              ],
+            ),
           ),
+
+          // Quick Actions
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quick Actions',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.darkGreen,
+                        fontSize: 18,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _QuickActionCard(
+                        title: 'Log Work',
+                        icon: Icons.add_circle_outline,
+                        gradient: LinearGradient(
+                          colors: [AppTheme.primary, AppTheme.lightGreen],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        onTap: onLogContribution,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _QuickActionCard(
+                        title: 'Join Event',
+                        icon: Icons.event,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        onTap: onJoinActivity,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _QuickActionCard(
+                  title: 'View My Impact',
+                  icon: Icons.analytics,
+                  gradient: LinearGradient(
+                    colors: [AppTheme.tertiary, const Color(0xFFFF8E53)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  onTap: onViewImpact,
+                  expanded: true,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Community Updates Section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.campaign, color: AppTheme.darkGreen, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Community Updates',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.darkGreen,
+                            fontSize: 18,
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _CommunityNewsCard(
+                  title: 'New Recycling Center Opens in Kibera',
+                  description:
+                      'Community members can now drop off sorted materials at the new facility on Olympic Estate Road.',
+                  imageUrl:
+                      'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400',
+                  date: '2 days ago',
+                ),
+                const SizedBox(height: 12),
+                _CommunityNewsCard(
+                  title: 'Beach Cleanup Collects 2 Tons of Waste',
+                  description:
+                      'Volunteers gathered last weekend for the largest coastal cleanup event this year.',
+                  imageUrl:
+                      'https://images.unsplash.com/photo-1618477461853-cf6ed80faba5?w=400',
+                  date: '1 week ago',
+                ),
+                const SizedBox(height: 12),
+                _CommunityNewsCard(
+                  title: 'Blockchain Rewards Program Launches',
+                  description:
+                      'Earn ADA tokens for verified environmental contributions through our new platform.',
+                  imageUrl:
+                      'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400',
+                  date: '2 weeks ago',
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Recent Activity Section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Recent Activity',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.darkGreen,
+                              fontSize: 18,
+                            ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        // TODO: Navigate to all contributions
+                      },
+                      child: Text(
+                        'View All',
+                        style: TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (userId != null)
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('contributions')
+                        .where('userId', isEqualTo: userId)
+                        .orderBy('createdAt', descending: true)
+                        .limit(5)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32.0),
+                            child: CircularProgressIndicator(
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        );
+                      }
+
+                      // Always show placeholders (no empty state)
+                      if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                        return Column(
+                          children: List.generate(
+                            3,
+                            (index) => ContributionPlaceholders
+                                .buildPlaceholderCard(context, index),
+                          ),
+                        );
+                      }
+
+                      // Show actual contributions
+                      final contributions = snapshot.data!.docs;
+                      return Column(
+                        children: contributions.map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          return ContributionCard(
+                            contribution: {
+                              ...data,
+                              'id': doc.id,
+                            },
+                          );
+                        }).toList(),
+                      );
+                    },
+                  )
+                else
+                  Column(
+                    children: List.generate(
+                      3,
+                      (index) => ContributionPlaceholders
+                          .buildPlaceholderCard(context, index),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
         ],
       ),
     );
@@ -825,17 +664,15 @@ class _QuickActionCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         title,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               color: Colors.white,
                               fontSize: 15,
                             ),
                       ),
                     ),
-                    Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+                    const Icon(Icons.arrow_forward,
+                        color: Colors.white, size: 18),
                   ],
                 )
               : Column(
@@ -908,6 +745,138 @@ class _StatCard extends StatelessWidget {
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityNewsCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final String imageUrl;
+  final String date;
+
+  const _CommunityNewsCard({
+    required this.title,
+    required this.description,
+    required this.imageUrl,
+    required this.date,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppTheme.lightGreen.withOpacity(0.3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(14),
+              bottomLeft: Radius.circular(14),
+            ),
+            child: Image.network(
+              imageUrl,
+              width: 90,
+              height: 90,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 90,
+                  height: 90,
+                  color: AppTheme.lightGreen.withOpacity(0.2),
+                  child: Icon(
+                    Icons.image_outlined,
+                    color: AppTheme.primary.withOpacity(0.5),
+                    size: 32,
+                  ),
+                );
+              },
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: 90,
+                  height: 90,
+                  color: AppTheme.lightGreen.withOpacity(0.2),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.primary,
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.darkGreen,
+                          fontSize: 14,
+                        ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.darkGreen.withOpacity(0.6),
+                          fontSize: 12,
+                        ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        size: 12,
+                        color: AppTheme.accent,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        date,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.accent,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),

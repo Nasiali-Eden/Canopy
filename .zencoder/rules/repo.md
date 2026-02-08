@@ -3,10 +3,10 @@ description: Repository Information Overview
 alwaysApply: true
 ---
 
-# City Watch (Impact Ledger) Information
+Impact Ledger
 
 ## Summary
-City Watch (also referred to as Impact Ledger) is a decentralized platform built with Flutter and anchored on the Cardano blockchain. It aims to verify community environmental actions (like recycling or environmental cleanup) through a crowdsourced, reputation-based system. The app features multi-role support for Organizations and Users/Volunteers, integrating with Firebase for authentication and data storage, and Google Maps for location-based services.
+ Impact Ledger is a decentralized platform built with Flutter and anchored on the Cardano blockchain. It aims to verify community environmental actions (like recycling or environmental cleanup) through a crowdsourced, reputation-based system. The app features multi-role support for Organizations and Users/Volunteers, integrating with Firebase for authentication and data storage, and Google Maps for location-based services.
 
 ## Structure
 - **lib/**: The core Flutter application code.

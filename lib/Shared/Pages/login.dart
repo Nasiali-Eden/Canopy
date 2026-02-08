@@ -8,7 +8,6 @@ import '../../Services/Authentication/auth.dart';
 import '../../Services/Authentication/community_auth.dart';
 import '../../Community/Home/community_home.dart';
 import '../../Organization/Home/org_home.dart';
-import '../../Shared/Pages/community_guidelines.dart';
 import '../../Shared/Authentication/join_community.dart';
 
 class LoginPage extends StatefulWidget {
@@ -193,8 +192,8 @@ class _LoginPageState extends State<LoginPage> {
                               },
                               onFieldSubmitted: (value) {
                                 if (_formkey.currentState!.validate()) {
-                                  signIn(
-                                      emailController.text, passwordController.text);
+                                  signIn(emailController.text,
+                                      passwordController.text);
                                 }
                               },
                             ),
@@ -205,7 +204,8 @@ class _LoginPageState extends State<LoginPage> {
                               setState(() {
                                 visible = true;
                               });
-                              signIn(emailController.text, passwordController.text);
+                              signIn(emailController.text,
+                                  passwordController.text);
                             },
                             color: AppTheme.primary,
                             minWidth: double.infinity,
@@ -377,12 +377,12 @@ class _LoginPageState extends State<LoginPage> {
           if (kDebugMode) {
             print('Sign in successful, uid: ${user.uid}');
           }
-          
+
           // Wait a moment for auth state to propagate
           await Future.delayed(const Duration(milliseconds: 500));
-          
+
           if (!mounted) return;
-          
+
           // Route user based on their collection
           await route(user);
         } else {
@@ -429,7 +429,8 @@ class _LoginPageState extends State<LoginPage> {
           .get();
 
       if (kDebugMode) {
-        print('[LOGIN] Checked members collection - exists: ${memberSnapshot.exists}');
+        print(
+            '[LOGIN] Checked members collection - exists: ${memberSnapshot.exists}');
       }
 
       if (memberSnapshot.exists) {
@@ -451,7 +452,8 @@ class _LoginPageState extends State<LoginPage> {
           .get();
 
       if (kDebugMode) {
-        print('[LOGIN] Checked org_rep collection - exists: ${orgSnapshot.exists}');
+        print(
+            '[LOGIN] Checked org_rep collection - exists: ${orgSnapshot.exists}');
       }
 
       if (orgSnapshot.exists) {
@@ -464,11 +466,12 @@ class _LoginPageState extends State<LoginPage> {
 
       // User not found in either collection
       if (kDebugMode) {
-        print('[LOGIN] User not found in members or org_rep collections - redirecting to join');
+        print(
+            '[LOGIN] User not found in members or org_rep collections - redirecting to join');
       }
 
       if (!mounted) return;
-      
+
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const JoinCommunityScreen()),
         (route) => false,
@@ -477,23 +480,21 @@ class _LoginPageState extends State<LoginPage> {
       if (kDebugMode) {
         print("[LOGIN] Error fetching user data: $error");
       }
-      
+
       if (!mounted) return;
-      
+
       setState(() {
         visible = false;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error fetching user data: $error')),
       );
     }
   }
 
-  Future<void> _routeUser(User user, DocumentSnapshot userDoc, String collectionName) async {
-    final data = userDoc.data() as Map<String, dynamic>?;
-    final acceptedAt = data?['guidelinesAcceptedAt'];
-
+  Future<void> _routeUser(
+      User user, DocumentSnapshot userDoc, String collectionName) async {
     // Determine role based on which collection user was found in
     final role = collectionName == 'org_rep' ? 'Org Rep' : 'Member';
 
@@ -502,8 +503,7 @@ class _LoginPageState extends State<LoginPage> {
       print('[LOGIN ROUTE] Collection: $collectionName');
       print('[LOGIN ROUTE] Role determined: $role');
       print('[LOGIN ROUTE] User UID: ${user.uid}');
-      print('[LOGIN ROUTE] Guidelines acceptedAt: $acceptedAt');
-      print('[LOGIN ROUTE] Full data: $data');
+      print('[LOGIN ROUTE] Skipping guidelines check for login');
       print('[LOGIN ROUTE] ========================================');
     }
 
@@ -512,47 +512,32 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    if (acceptedAt == null) {
+    // Route to appropriate home based on role (skip guidelines check for login)
+    if (role == 'Org Rep') {
       if (kDebugMode) {
-        print('[LOGIN ROUTE] ✅ Guidelines NOT accepted - routing to CommunityGuidelinesScreen');
+        print('[LOGIN ROUTE] ✅ Role is Org Rep - routing to OrganizationHome');
       }
-      
-      // Add a small delay to ensure proper navigation
+
       await Future.delayed(const Duration(milliseconds: 100));
-      
       if (!mounted) return;
-      
+
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const CommunityGuidelinesScreen()),
+        MaterialPageRoute(builder: (context) => const OrganizationHome()),
         (route) => false,
       );
     } else {
-      // Route to appropriate home based on role
-      if (role == 'Org Rep') {
-        if (kDebugMode) {
-          print('[LOGIN ROUTE] ✅ Role is Org Rep - routing to OrganizationHome');
-        }
-        
-        await Future.delayed(const Duration(milliseconds: 100));
-        if (!mounted) return;
-        
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const OrganizationHome()),
-          (route) => false,
-        );
-      } else {
-        if (kDebugMode) {
-          print('[LOGIN ROUTE] ✅ Role is Member - routing to CommunityHomeScreen');
-        }
-        
-        await Future.delayed(const Duration(milliseconds: 100));
-        if (!mounted) return;
-        
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const CommunityHomeScreen()),
-          (route) => false,
-        );
+      if (kDebugMode) {
+        print(
+            '[LOGIN ROUTE] ✅ Role is Member - routing to CommunityHomeScreen');
       }
+
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const CommunityHomeScreen()),
+        (route) => false,
+      );
     }
   }
 }

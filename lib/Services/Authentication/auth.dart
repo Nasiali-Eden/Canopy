@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../Models/user.dart';
 import '../database/database.dart'; // Import the database service
+import '../storage/user_persistence.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -30,13 +31,24 @@ class AuthService {
         password: password,
       );
 
-      // Ensure we have a valid token before proceeding
-      await _getValidToken();
+      User? user = result.user;
+      if (user != null) {
+        // Ensure we have a valid token before proceeding
+        await _getValidToken();
 
-      // Add a small delay to ensure token propagation
-      await Future.delayed(Duration(milliseconds: 500));
+        // Add a small delay to ensure token propagation
+        await Future.delayed(Duration(milliseconds: 500));
 
-      return result.user;
+        // Determine user role and save persistent login state
+        final role = await _databaseService.getUserRole(user.uid);
+        if (role != null) {
+          await UserPersistence.saveLoginState(user.uid, role);
+          // Cache user profile data
+          await UserPersistence.refreshUserProfile(user.uid);
+        }
+      }
+
+      return user;
     } catch (e) {
       print('Sign in error: $e');
       return null;
