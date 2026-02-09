@@ -364,7 +364,7 @@ class _HomeTab extends StatelessWidget {
                           snapshot.data?.data() as Map<String, dynamic>?;
                       final points = data?['totalPoints'] ?? 0;
                       final contributions = data?['contributions'] ?? 0;
-                      final rank = data?['rank'] ?? 'Member';
+                      final rank = data?['rank'] ?? '0';
 
                       return Row(
                         children: [

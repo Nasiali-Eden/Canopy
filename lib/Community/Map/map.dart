@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../Shared/theme/app_theme.dart';
@@ -11,10 +13,13 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   bool _showLegend = false;
   String _selectedFilter = 'All';
+  late AnimationController _pulseController;
+  Map<String, BitmapDescriptor> _customIcons = {};
+  bool _iconsLoaded = false;
 
   // Nairobi Olympic Estate Kibera bounding box
   final LatLngBounds nairobiBounds = LatLngBounds(
@@ -29,7 +34,7 @@ class _MapScreenState extends State<MapScreen> {
   );
 
   Set<Marker> _markers = {};
-  final List<String> _filterOptions = ['All', 'Cleanup', 'Collection Points', 'Verified'];
+  final List<String> _filterOptions = ['All', 'Cleanup', 'Collection', 'Water', 'Schools'];
 
   // Dummy cleanup activities and collection points
   final List<Map<String, dynamic>> _activities = [
@@ -115,20 +120,197 @@ class _MapScreenState extends State<MapScreen> {
       'status': 'verified',
       'date': '2024-01-22',
     },
+    {
+      'id': '9',
+      'type': 'water',
+      'title': 'Olympic Community Water Point',
+      'location': LatLng(-1.3125, 36.7825),
+      'description': 'Clean water access point',
+      'capacity': '5000L/day',
+      'status': 'active',
+      'hours': '6AM - 8PM',
+    },
+    {
+      'id': '10',
+      'type': 'water',
+      'title': 'Kibera Main Water Station',
+      'location': LatLng(-1.3155, 36.7855),
+      'description': 'Primary water distribution center',
+      'capacity': '10000L/day',
+      'status': 'active',
+      'hours': '24/7',
+    },
+    {
+      'id': '11',
+      'type': 'water',
+      'title': 'Community Tap - Lane 4',
+      'location': LatLng(-1.3105, 36.7805),
+      'description': 'Public water access',
+      'capacity': '3000L/day',
+      'status': 'active',
+      'hours': '6AM - 10PM',
+    },
+    {
+      'id': '12',
+      'type': 'school',
+      'title': 'Olympic Primary School',
+      'location': LatLng(-1.3145, 36.7815),
+      'description': 'Public primary school',
+      'students': 450,
+      'grades': 'Grade 1-8',
+      'programs': ['Environmental Club', 'Recycling Program'],
+    },
+    {
+      'id': '13',
+      'type': 'school',
+      'title': 'Kibera Secondary School',
+      'location': LatLng(-1.3170, 36.7870),
+      'description': 'Community secondary school',
+      'students': 320,
+      'grades': 'Form 1-4',
+      'programs': ['Green Initiative', 'Waste Management'],
+    },
+    {
+      'id': '14',
+      'type': 'school',
+      'title': 'Hope Academy',
+      'location': LatLng(-1.3115, 36.7790),
+      'description': 'Private primary and secondary',
+      'students': 280,
+      'grades': 'Grade 1 - Form 4',
+      'programs': ['Eco Club', 'Community Service'],
+    },
   ];
 
   @override
   void initState() {
     super.initState();
-    _buildMarkers();
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    _loadCustomIcons();
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadCustomIcons() async {
+    _customIcons['cleanup_verified'] = await _createCustomMarkerIcon(
+      Icons.check_circle,
+      AppTheme.primary,
+      Colors.white,
+      80.0, // Reduced size
+    );
+    _customIcons['cleanup_pending'] = await _createCustomMarkerIcon(
+      Icons.access_time,
+      AppTheme.tertiary,
+      Colors.white,
+      80.0,
+    );
+    _customIcons['collection'] = await _createCustomMarkerIcon(
+      Icons.recycling,
+      AppTheme.accent,
+      Colors.white,
+      80.0,
+    );
+    _customIcons['water'] = await _createCustomMarkerIcon(
+      Icons.water_drop,
+      Color(0xFF2196F3), // Blue
+      Colors.white,
+      80.0,
+    );
+    _customIcons['school'] = await _createCustomMarkerIcon(
+      Icons.school,
+      Color(0xFFFF9800), // Orange
+      Colors.white,
+      80.0,
+    );
+    
+    setState(() {
+      _iconsLoaded = true;
+      _buildMarkers();
+    });
+  }
+
+  Future<BitmapDescriptor> _createCustomMarkerIcon(
+    IconData iconData,
+    Color backgroundColor,
+    Color iconColor,
+    double size,
+  ) async {
+    final pictureRecorder = ui.PictureRecorder();
+    final canvas = Canvas(pictureRecorder);
+    
+    // Draw outer circle (shadow)
+    final shadowPaint = Paint()
+      ..color = backgroundColor.withOpacity(0.3)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6);
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      size / 2 - 4,
+      shadowPaint,
+    );
+    
+    // Draw main circle
+    final circlePaint = Paint()
+      ..color = backgroundColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      size / 2 - 8,
+      circlePaint,
+    );
+    
+    // Draw white border
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    canvas.drawCircle(
+      Offset(size / 2, size / 2),
+      size / 2 - 8,
+      borderPaint,
+    );
+    
+    // Draw icon
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    textPainter.text = TextSpan(
+      text: String.fromCharCode(iconData.codePoint),
+      style: TextStyle(
+        fontSize: size * 0.45,
+        fontFamily: iconData.fontFamily,
+        color: iconColor,
+      ),
+    );
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        (size - textPainter.width) / 2,
+        (size - textPainter.height) / 2,
+      ),
+    );
+    
+    final picture = pictureRecorder.endRecording();
+    final image = await picture.toImage(size.toInt(), size.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
   void _buildMarkers() {
+    if (!_iconsLoaded) return;
+    
     final filteredActivities = _activities.where((activity) {
       if (_selectedFilter == 'All') return true;
       if (_selectedFilter == 'Cleanup') return activity['type'] == 'cleanup';
-      if (_selectedFilter == 'Collection Points') return activity['type'] == 'collection';
-      if (_selectedFilter == 'Verified') return activity['status'] == 'verified';
+      if (_selectedFilter == 'Collection') return activity['type'] == 'collection';
+      if (_selectedFilter == 'Water') return activity['type'] == 'water';
+      if (_selectedFilter == 'Schools') return activity['type'] == 'school';
       return true;
     }).toList();
 
@@ -142,13 +324,17 @@ class _MapScreenState extends State<MapScreen> {
   BitmapDescriptor _getMarkerIcon(String type, String? status) {
     if (type == 'cleanup') {
       if (status == 'verified') {
-        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+        return _customIcons['cleanup_verified']!;
       }
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
-    } else {
-      // Collection points
-      return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+      return _customIcons['cleanup_pending']!;
+    } else if (type == 'collection') {
+      return _customIcons['collection']!;
+    } else if (type == 'water') {
+      return _customIcons['water']!;
+    } else if (type == 'school') {
+      return _customIcons['school']!;
     }
+    return _customIcons['collection']!;
   }
 
   Marker _buildMarker(Map<String, dynamic> activity) {
@@ -176,181 +362,195 @@ class _MapScreenState extends State<MapScreen> {
       builder: (context) {
         return Container(
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: Offset(0, -5),
+              ),
+            ],
           ),
-          padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: type == 'cleanup' 
-                          ? AppTheme.primary.withOpacity(0.1)
-                          : AppTheme.accent.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      type == 'cleanup' ? Icons.cleaning_services : Icons.recycling,
-                      color: type == 'cleanup' ? AppTheme.primary : AppTheme.accent,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              // Drag Handle
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.lightGreen.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header with Icon
+                    Row(
                       children: [
-                        Text(
-                          activity['title'],
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.darkGreen,
-                              ),
-                        ),
-                        if (activity['status'] != null)
-                          Container(
-                            margin: const EdgeInsets.only(top: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: activity['status'] == 'verified'
-                                  ? AppTheme.primary.withOpacity(0.15)
-                                  : AppTheme.tertiary.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: _getGradientColors(type),
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  activity['status'] == 'verified' 
-                                      ? Icons.verified 
-                                      : Icons.pending,
-                                  size: 14,
-                                  color: activity['status'] == 'verified'
-                                      ? AppTheme.primary
-                                      : AppTheme.tertiary,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  activity['status'] == 'verified' ? 'Verified' : 'Pending',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: activity['status'] == 'verified'
-                                        ? AppTheme.primary
-                                        : AppTheme.tertiary,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _getIconColor(type).withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            _getTypeIcon(type, activity['status']),
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                activity['title'],
+                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.darkGreen,
+                                    ),
+                              ),
+                              if (activity['status'] != null)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: activity['status'] == 'verified' || activity['status'] == 'active'
+                                        ? AppTheme.primary.withOpacity(0.15)
+                                        : AppTheme.tertiary.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: activity['status'] == 'verified' || activity['status'] == 'active'
+                                          ? AppTheme.primary.withOpacity(0.3)
+                                          : AppTheme.tertiary.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        activity['status'] == 'verified' || activity['status'] == 'active'
+                                            ? Icons.verified
+                                            : Icons.schedule,
+                                        size: 14,
+                                        color: activity['status'] == 'verified' || activity['status'] == 'active'
+                                            ? AppTheme.primary
+                                            : AppTheme.tertiary,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        activity['status'] == 'verified' || activity['status'] == 'active'
+                                            ? (activity['status'] == 'active' ? 'Active' : 'Verified')
+                                            : 'Pending',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: activity['status'] == 'verified' || activity['status'] == 'active'
+                                              ? AppTheme.primary
+                                              : AppTheme.tertiary,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            ),
+                            ],
                           ),
+                        ),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close, color: AppTheme.darkGreen),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              // Description
-              Text(
-                activity['description'],
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.darkGreen.withOpacity(0.7),
-                    ),
-              ),
-              const SizedBox(height: 16),
-              
-              // Details based on type
-              if (type == 'cleanup') ...[
-                _DetailRow(
-                  icon: Icons.people,
-                  label: 'Participants',
-                  value: '${activity['participants']}',
-                ),
-                const SizedBox(height: 8),
-                _DetailRow(
-                  icon: Icons.delete_outline,
-                  label: 'Waste Collected',
-                  value: activity['waste_collected'],
-                ),
-                const SizedBox(height: 8),
-                _DetailRow(
-                  icon: Icons.calendar_today,
-                  label: 'Date',
-                  value: activity['date'],
-                ),
-              ] else ...[
-                _DetailRow(
-                  icon: Icons.access_time,
-                  label: 'Operating Hours',
-                  value: activity['hours'],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Accepted Materials:',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.darkGreen,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: (activity['materials'] as List<String>).map((material) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Description Card
+                    Container(
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppTheme.accent.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: AppTheme.lightGreen.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: AppTheme.accent.withOpacity(0.3),
+                          color: AppTheme.lightGreen.withOpacity(0.3),
                         ),
                       ),
-                      child: Text(
-                        material,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.accent,
-                        ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.description_outlined,
+                            color: AppTheme.accent,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              activity['description'],
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppTheme.darkGreen.withOpacity(0.8),
+                                    height: 1.4,
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  }).toList(),
-                ),
-              ],
-              const SizedBox(height: 20),
-              
-              // Action button
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: type == 'cleanup' 
-                        ? AppTheme.primary 
-                        : AppTheme.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: Text(
-                    type == 'cleanup' ? 'View Details' : 'Get Directions',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
                     ),
-                  ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Details based on type
+                    ..._buildTypeSpecificDetails(context, type, activity),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {},
+                            icon: Icon(Icons.directions, size: 20),
+                            label: Text('Directions'),
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () {},
+                            icon: Icon(Icons.share, size: 20),
+                            label: Text('Share'),
+                            style: FilledButton.styleFrom(
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    SizedBox(height: MediaQuery.of(context).padding.bottom),
+                  ],
                 ),
               ),
-              SizedBox(height: MediaQuery.of(context).padding.bottom),
             ],
           ),
         );
@@ -358,89 +558,490 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _toggleLegend() {
-    setState(() {
-      _showLegend = !_showLegend;
-    });
+  List<Color> _getGradientColors(String type) {
+    switch (type) {
+      case 'cleanup':
+        return [AppTheme.primary, AppTheme.secondary];
+      case 'collection':
+        return [AppTheme.accent, AppTheme.accent.withOpacity(0.7)];
+      case 'water':
+        return [Color(0xFF2196F3), Color(0xFF1976D2)];
+      case 'school':
+        return [Color(0xFFFF9800), Color(0xFFF57C00)];
+      default:
+        return [AppTheme.primary, AppTheme.secondary];
+    }
+  }
+
+  Color _getIconColor(String type) {
+    switch (type) {
+      case 'cleanup':
+        return AppTheme.primary;
+      case 'collection':
+        return AppTheme.accent;
+      case 'water':
+        return Color(0xFF2196F3);
+      case 'school':
+        return Color(0xFFFF9800);
+      default:
+        return AppTheme.primary;
+    }
+  }
+
+  IconData _getTypeIcon(String type, String? status) {
+    switch (type) {
+      case 'cleanup':
+        return status == 'verified' ? Icons.check_circle : Icons.access_time;
+      case 'collection':
+        return Icons.recycling;
+      case 'water':
+        return Icons.water_drop;
+      case 'school':
+        return Icons.school;
+      default:
+        return Icons.place;
+    }
+  }
+
+  List<Widget> _buildTypeSpecificDetails(BuildContext context, String type, Map<String, dynamic> activity) {
+    if (type == 'cleanup') {
+      return [
+        _ModernDetailCard(
+          icon: Icons.groups,
+          iconColor: AppTheme.secondary,
+          label: 'Participants',
+          value: '${activity['participants']} people',
+        ),
+        const SizedBox(height: 12),
+        _ModernDetailCard(
+          icon: Icons.delete_outline,
+          iconColor: AppTheme.accent,
+          label: 'Waste Collected',
+          value: activity['waste_collected'],
+        ),
+        const SizedBox(height: 12),
+        _ModernDetailCard(
+          icon: Icons.calendar_today,
+          iconColor: AppTheme.tertiary,
+          label: 'Date',
+          value: activity['date'],
+        ),
+      ];
+    } else if (type == 'collection') {
+      return [
+        _ModernDetailCard(
+          icon: Icons.schedule,
+          iconColor: AppTheme.tertiary,
+          label: 'Operating Hours',
+          value: activity['hours'],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.accent.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppTheme.accent.withOpacity(0.3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.category,
+                    color: AppTheme.accent,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Accepted Materials',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.darkGreen,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: (activity['materials'] as List<String>)
+                    .map((material) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppTheme.accent.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _getMaterialIcon(material),
+                                size: 16,
+                                color: AppTheme.accent,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                material,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.darkGreen,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+          ),
+        ),
+      ];
+    } else if (type == 'water') {
+      return [
+        _ModernDetailCard(
+          icon: Icons.water,
+          iconColor: Color(0xFF2196F3),
+          label: 'Daily Capacity',
+          value: activity['capacity'],
+        ),
+        const SizedBox(height: 12),
+        _ModernDetailCard(
+          icon: Icons.schedule,
+          iconColor: AppTheme.tertiary,
+          label: 'Operating Hours',
+          value: activity['hours'],
+        ),
+      ];
+    } else if (type == 'school') {
+      return [
+        _ModernDetailCard(
+          icon: Icons.people,
+          iconColor: Color(0xFFFF9800),
+          label: 'Students',
+          value: '${activity['students']} enrolled',
+        ),
+        const SizedBox(height: 12),
+        _ModernDetailCard(
+          icon: Icons.school,
+          iconColor: AppTheme.secondary,
+          label: 'Grade Levels',
+          value: activity['grades'],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Color(0xFFFF9800).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Color(0xFFFF9800).withOpacity(0.3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.eco,
+                    color: Color(0xFFFF9800),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Environmental Programs',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.darkGreen,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: (activity['programs'] as List<String>)
+                    .map((program) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Color(0xFFFF9800).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.stars,
+                                size: 16,
+                                color: Color(0xFFFF9800),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                program,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.darkGreen,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+          ),
+        ),
+      ];
+    }
+    return [];
+  }
+
+  IconData _getMaterialIcon(String material) {
+    switch (material.toLowerCase()) {
+      case 'plastic':
+        return Icons.water_drop;
+      case 'paper':
+        return Icons.description;
+      case 'metal':
+        return Icons.hardware;
+      case 'glass':
+        return Icons.lightbulb_outline;
+      case 'e-waste':
+        return Icons.devices;
+      default:
+        return Icons.category;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-     body: Stack(
+      body: Stack(
         children: [
-          // Google Map
+          // Map
           GoogleMap(
-            mapType: MapType.normal,
             initialCameraPosition: _initialPosition,
+            mapType: MapType.normal,
             cameraTargetBounds: CameraTargetBounds(nairobiBounds),
             minMaxZoomPreference: const MinMaxZoomPreference(12, 18),
             myLocationEnabled: true,
-            myLocationButtonEnabled: true,
+            myLocationButtonEnabled: false,
             markers: _markers,
             onMapCreated: (controller) => _mapController = controller,
             zoomControlsEnabled: false,
+            style: '''
+              [
+                {
+                  "featureType": "poi",
+                  "elementType": "labels",
+                  "stylers": [{"visibility": "off"}]
+                }
+              ]
+            ''',
           ),
 
-          // Filter chips
+          // Modern Filter Chips with Glassmorphism
           Positioned(
-            top: 16,
+            top: MediaQuery.of(context).padding.top + 16,
             left: 16,
             right: 16,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _filterOptions.map((filter) {
-                  final isSelected = _selectedFilter == filter;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(filter),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilter = filter;
-                          _buildMarkers();
-                        });
-                      },
-                      backgroundColor: Colors.white,
-                      selectedColor: AppTheme.primary.withOpacity(0.2),
-                      checkmarkColor: AppTheme.primary,
-                      labelStyle: TextStyle(
-                        color: isSelected ? AppTheme.primary : AppTheme.darkGreen,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        fontSize: 13,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primary.withOpacity(0.15),
+                    blurRadius: 20,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _filterOptions.map((filter) {
+                    final isSelected = _selectedFilter == filter;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedFilter = filter;
+                              _buildMarkers();
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: AnimatedContainer(
+                            duration: Duration(milliseconds: 200),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: isSelected
+                                  ? LinearGradient(
+                                      colors: [AppTheme.primary, AppTheme.secondary],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    )
+                                  : null,
+                              color: isSelected ? null : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getFilterIcon(filter),
+                                  size: 18,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppTheme.darkGreen.withOpacity(0.7),
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  filter,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppTheme.darkGreen,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                      side: BorderSide(
-                        color: isSelected 
-                            ? AppTheme.primary 
-                            : AppTheme.lightGreen.withOpacity(0.5),
-                      ),
-                      elevation: 2,
-                      shadowColor: AppTheme.primary.withOpacity(0.1),
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
             ),
           ),
 
-          // Legend
+          // Custom Map Controls
+          Positioned(
+            bottom: 100,
+            right: 16,
+            child: Column(
+              children: [
+                // My Location Button
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withOpacity(0.2),
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () async {
+                        if (_mapController != null) {
+                          _mapController!.animateCamera(
+                            CameraUpdate.newCameraPosition(_initialPosition),
+                          );
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(28),
+                      child: Container(
+                        padding: EdgeInsets.all(14),
+                        child: Icon(
+                          Icons.my_location,
+                          color: AppTheme.primary,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // Legend Toggle
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.accent.withOpacity(0.2),
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _showLegend = !_showLegend;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(28),
+                      child: Container(
+                        padding: EdgeInsets.all(14),
+                        child: Icon(
+                          _showLegend ? Icons.close : Icons.info_outline,
+                          color: AppTheme.accent,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Modern Legend
           if (_showLegend)
             Positioned(
               bottom: 20,
               left: 16,
-              child: Container(
-                padding: const EdgeInsets.all(16),
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: 300),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withOpacity(0.98),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 30,
+                      offset: const Offset(0, 10),
                     ),
                   ],
                 ),
@@ -451,83 +1052,145 @@ class _MapScreenState extends State<MapScreen> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppTheme.primary, AppTheme.secondary],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.legend_toggle,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
                         Text(
-                          'Legend',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          'Map Legend',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
                                 color: AppTheme.darkGreen,
                               ),
                         ),
-                        const SizedBox(width: 8),
-                        Icon(Icons.info_outline, 
-                          size: 16, 
-                          color: AppTheme.accent,
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    _LegendItem(
+                    const SizedBox(height: 16),
+                    _ModernLegendItem(
+                      icon: Icons.check_circle,
                       color: AppTheme.primary,
                       label: 'Verified Cleanup',
                     ),
-                    const SizedBox(height: 6),
-                    _LegendItem(
+                    const SizedBox(height: 10),
+                    _ModernLegendItem(
+                      icon: Icons.access_time,
                       color: AppTheme.tertiary,
                       label: 'Pending Cleanup',
                     ),
-                    const SizedBox(height: 6),
-                    _LegendItem(
+                    const SizedBox(height: 10),
+                    _ModernLegendItem(
+                      icon: Icons.recycling,
                       color: AppTheme.accent,
                       label: 'Collection Point',
+                    ),
+                    const SizedBox(height: 10),
+                    _ModernLegendItem(
+                      icon: Icons.water_drop,
+                      color: Color(0xFF2196F3),
+                      label: 'Water Point',
+                    ),
+                    const SizedBox(height: 10),
+                    _ModernLegendItem(
+                      icon: Icons.school,
+                      color: Color(0xFFFF9800),
+                      label: 'School',
                     ),
                   ],
                 ),
               ),
             ),
 
-          // Stats Card
-          Positioned(
-            bottom: 20,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppTheme.primary, AppTheme.secondary],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+        ],
+      ),
+    );
+  }
+
+  IconData _getFilterIcon(String filter) {
+    switch (filter) {
+      case 'All':
+        return Icons.dashboard;
+      case 'Cleanup':
+        return Icons.cleaning_services;
+      case 'Collection':
+        return Icons.recycling;
+      case 'Water':
+        return Icons.water_drop;
+      case 'Schools':
+        return Icons.school;
+      default:
+        return Icons.filter_list;
+    }
+  }
+}
+
+class _ModernDetailCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+
+  const _ModernDetailCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: iconColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: iconColor.withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 20, color: iconColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.darkGreen.withOpacity(0.6),
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.darkGreen,
                   ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.eco, color: Colors.white, size: 24),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${_activities.where((a) => a['type'] == 'cleanup').length}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                  ),
-                  Text(
-                    'Cleanups',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -536,46 +1199,13 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
-class _DetailRow extends StatelessWidget {
+class _ModernLegendItem extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final String value;
-
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppTheme.accent),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: AppTheme.darkGreen,
-              ),
-        ),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.darkGreen.withOpacity(0.7),
-              ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LegendItem extends StatelessWidget {
   final Color color;
   final String label;
 
-  const _LegendItem({
+  const _ModernLegendItem({
+    required this.icon,
     required this.color,
     required this.label,
   });
@@ -586,19 +1216,30 @@ class _LegendItem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 14,
-          height: 14,
+          padding: EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: color,
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.4),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 16,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
             color: AppTheme.darkGreen,
           ),
         ),

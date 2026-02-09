@@ -22,7 +22,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
   final _titleController = TextEditingController();
   String _workType = 'Cleanup';
 
-  // Old fields (keeping for backward compatibility)
+  // Old fields
   String _type = 'Time';
   final _hoursController = TextEditingController();
   final _effortController = TextEditingController();
@@ -39,10 +39,9 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
   bool _locationVerified = false;
   Position? _currentPosition;
 
-  // Required location (you can make this dynamic based on activity)
-  final double _requiredLatitude = -1.286389; // Example: Nairobi coordinates
+  final double _requiredLatitude = -1.286389;
   final double _requiredLongitude = 36.817223;
-  final double _maxDistanceInMeters = 500; // 500 meters radius
+  final double _maxDistanceInMeters = 500;
 
   // Work type configurations
   static const List<Map<String, dynamic>> _workTypes = [
@@ -58,7 +57,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
       'icon': Icons.park,
       'description': 'Planting and nurturing trees',
       'maxBeforeImages': 3,
-      'maxAfterImages': 0, // Only first day, user updates monthly
+      'maxAfterImages': 0,
     },
     {
       'name': 'School Upgrading',
@@ -138,6 +137,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
   int _estimate() {
     return ContributionService().estimateImpactPoints(
       type: _type,
+      workType: _workType,
       hours: _parseHours(),
       effort: _effortController.text,
       materials: _parseMaterials(),
@@ -182,17 +182,17 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Row(
+              content: const Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Text('Location verified successfully!'),
                 ],
               ),
               backgroundColor: Colors.green.shade600,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           );
@@ -209,7 +209,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
             backgroundColor: Colors.red.shade600,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(12),
             ),
           ),
         );
@@ -234,7 +234,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
           backgroundColor: Colors.orange.shade600,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       );
@@ -276,11 +276,11 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
     if (!_locationVerified) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please verify your location first'),
+          content: const Text('Please verify your location first'),
           backgroundColor: Colors.orange.shade600,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       );
@@ -297,14 +297,13 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
           backgroundColor: Colors.orange.shade600,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       );
       return;
     }
 
-    // For tree planting, after photos are not required on first day
     if (!_isTreePlanting() && _afterPhotos.length < maxAfter) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -312,7 +311,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
           backgroundColor: Colors.orange.shade600,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       );
@@ -355,7 +354,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
           backgroundColor: Colors.red.shade600,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       );
@@ -373,7 +372,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
     final maxAfter = _getMaxAfterImages();
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -400,23 +399,23 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
             children: [
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // Location Verification Section
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: _locationVerified
-                              ? Colors.green.shade600.withOpacity(0.1)
-                              : Colors.orange.shade600.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(14),
+                              ? Colors.green.shade50
+                              : Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: _locationVerified
-                                ? Colors.green.shade600.withOpacity(0.3)
-                                : Colors.orange.shade600.withOpacity(0.3),
-                            width: 1.5,
+                                ? Colors.green.shade300
+                                : Colors.orange.shade300,
+                            width: 2,
                           ),
                         ),
                         child: Column(
@@ -425,8 +424,8 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                             Row(
                               children: [
                                 Container(
-                                  width: 40,
-                                  height: 40,
+                                  width: 48,
+                                  height: 48,
                                   decoration: BoxDecoration(
                                     color: _locationVerified
                                         ? Colors.green.shade600
@@ -438,10 +437,10 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                                         ? Icons.check_circle
                                         : Icons.location_on,
                                     color: Colors.white,
-                                    size: 22,
+                                    size: 26,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -450,18 +449,18 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                                       Text(
                                         'Location Verification',
                                         style: TextStyle(
-                                          fontSize: 15,
+                                          fontSize: 16,
                                           fontWeight: FontWeight.w700,
                                           color: AppTheme.darkGreen,
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
+                                      const SizedBox(height: 4),
                                       Text(
                                         _locationVerified
                                             ? 'Location verified ✓'
                                             : 'Required to log contribution',
                                         style: TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 13,
                                           color: AppTheme.darkGreen
                                               .withOpacity(0.6),
                                         ),
@@ -472,36 +471,42 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                               ],
                             ),
                             if (!_locationVerified) ...[
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               SizedBox(
                                 width: double.infinity,
+                                height: 50,
                                 child: ElevatedButton.icon(
                                   onPressed: _verifyingLocation
                                       ? null
                                       : _verifyLocation,
                                   icon: _verifyingLocation
-                                      ? SizedBox(
-                                          width: 16,
-                                          height: 16,
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
                                           child: CircularProgressIndicator(
-                                            strokeWidth: 2,
+                                            strokeWidth: 2.5,
                                             valueColor:
                                                 AlwaysStoppedAnimation<Color>(
                                                     Colors.white),
                                           ),
                                         )
-                                      : Icon(Icons.my_location, size: 18),
-                                  label: Text(_verifyingLocation
-                                      ? 'Verifying...'
-                                      : 'Verify Location'),
+                                      : const Icon(Icons.my_location, size: 20),
+                                  label: Text(
+                                    _verifyingLocation
+                                        ? 'Verifying...'
+                                        : 'Verify Location',
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppTheme.primary,
                                     foregroundColor: Colors.white,
-                                    padding:
-                                        const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
+                                    elevation: 0,
                                   ),
                                 ),
                               ),
@@ -509,45 +514,56 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
 
-                      // Title Field (NEW)
-                      Text(
+                      // Title Field
+                      _buildSectionLabel(
                         'Contribution Title',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.darkGreen,
-                        ),
+                        Icons.title,
+                        AppTheme.primary,
+                        badge: 'Max 50 chars',
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _titleController,
                         maxLength: 50,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
                         decoration: InputDecoration(
                           hintText: 'e.g., Kibera Street Cleanup',
                           hintStyle: TextStyle(
                             color: AppTheme.darkGreen.withOpacity(0.4),
+                            fontWeight: FontWeight.w500,
                           ),
                           filled: true,
                           fillColor: Colors.white,
                           counterText: '${_titleController.text.length}/50',
+                          counterStyle: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.primary.withOpacity(0.7),
+                          ),
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
+                            horizontal: 18,
+                            vertical: 16,
+                          ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                                color: AppTheme.lightGreen.withOpacity(0.3)),
+                              color: AppTheme.lightGreen.withOpacity(0.3),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                                color: AppTheme.lightGreen.withOpacity(0.3)),
+                              color: AppTheme.lightGreen.withOpacity(0.3),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide:
-                                BorderSide(color: AppTheme.primary, width: 2),
+                                BorderSide(color: AppTheme.primary, width: 2.5),
                           ),
                         ),
                         validator: (v) {
@@ -557,77 +573,64 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 28),
 
-                      // Work Type (NEW - replaces contribution type)
-                      Text(
+                      // Work Type
+                      _buildSectionLabel(
                         'Work Type',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.darkGreen,
-                        ),
+                        Icons.category,
+                        AppTheme.lightGreen,
+                        badge: '6 categories',
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         value: _workType,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
                         decoration: InputDecoration(
                           filled: true,
                           fillColor: Colors.white,
                           contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
+                            horizontal: 18,
+                            vertical: 16,
+                          ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                                color: AppTheme.lightGreen.withOpacity(0.3)),
+                              color: AppTheme.lightGreen.withOpacity(0.3),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                                color: AppTheme.lightGreen.withOpacity(0.3)),
+                              color: AppTheme.lightGreen.withOpacity(0.3),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide:
-                                BorderSide(color: AppTheme.primary, width: 2),
+                                BorderSide(color: AppTheme.primary, width: 2.5),
                           ),
                         ),
                         items: _workTypes.map((workType) {
                           return DropdownMenuItem(
                             value: workType['name'] as String,
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   workType['icon'] as IconData,
-                                  size: 20,
+                                  size: 22,
                                   color: AppTheme.primary,
                                 ),
-                                const SizedBox(width: 12),
-                                Flexible(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        workType['name'] as String,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        workType['description'] as String,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppTheme.darkGreen
-                                              .withOpacity(0.6),
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ],
+                                const SizedBox(width: 14),
+                                Text(
+                                  workType['name'] as String,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
                                   ),
                                 ),
                               ],
@@ -636,57 +639,134 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                         }).toList(),
                         onChanged: (v) => setState(() {
                           _workType = v ?? 'Cleanup';
-                          // Clear photos if switching work type
                           _beforePhotos.clear();
                           _afterPhotos.clear();
                         }),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 14),
 
-                      // Special note for Tree Planting
-                      if (_isTreePlanting())
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          margin: const EdgeInsets.only(bottom: 20),
-                          decoration: BoxDecoration(
-                            color: AppTheme.lightGreen.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppTheme.lightGreen.withOpacity(0.3),
-                            ),
+                      // Work Type Info Card
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.lightGreen.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppTheme.lightGreen.withOpacity(0.3),
+                            width: 1.5,
                           ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.info_outline,
-                                color: AppTheme.primary,
-                                size: 20,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'For tree planting: Add 3 before images on first day only. Update with after images monthly.',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppTheme.darkGreen,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                              child: Icon(
+                                _workTypes.firstWhere(
+                                  (w) => w['name'] == _workType,
+                                )['icon'] as IconData,
+                                color: AppTheme.primary,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(
+                                _workTypes.firstWhere(
+                                  (w) => w['name'] == _workType,
+                                )['description'] as String,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppTheme.darkGreen,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.3,
                                 ),
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      // Tree Planting Tip
+                      if (_isTreePlanting())
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 28),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppTheme.lightGreen.withOpacity(0.2),
+                                  AppTheme.primary.withOpacity(0.15),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: AppTheme.lightGreen.withOpacity(0.5),
+                                width: 2,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.lightGreen,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.tips_and_updates,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Tree Planting Tip',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: AppTheme.darkGreen,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Add 3 before images today. Update with after images monthly to track growth.',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color:
+                                              AppTheme.darkGreen.withOpacity(0.8),
+                                          fontWeight: FontWeight.w500,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
 
                       // Before Photos
-                      Text(
-                        'Before Photos ($maxBefore required)',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.darkGreen,
-                        ),
+                      _buildSectionLabel(
+                        'Before Photos',
+                        Icons.camera_alt,
+                        AppTheme.primary,
+                        badge: '$maxBefore required',
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 14),
                       _PhotoGrid(
                         photos: _beforePhotos,
                         maxPhotos: maxBefore,
@@ -694,21 +774,22 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                         onRemove: (i) => _removePhoto(true, i),
                         isBefore: true,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
 
-                      // After Photos (conditional for tree planting)
+                      // After Photos
                       if (!_isTreePlanting() || _afterPhotos.isNotEmpty) ...[
-                        Text(
-                          _isTreePlanting()
-                              ? 'After Photos (optional - add monthly updates)'
-                              : 'After Photos ($maxAfter required)',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.darkGreen,
-                          ),
+                        _buildSectionLabel(
+                          'After Photos',
+                          Icons.check_circle_outline,
+                          AppTheme.lightGreen,
+                          badge: _isTreePlanting()
+                              ? 'Optional - monthly'
+                              : '$maxAfter required',
+                          badgeColor: _isTreePlanting()
+                              ? Colors.orange.shade700
+                              : AppTheme.tertiary,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 14),
                         _PhotoGrid(
                           photos: _afterPhotos,
                           maxPhotos: maxAfter,
@@ -716,22 +797,25 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                           onRemove: (i) => _removePhoto(false, i),
                           isBefore: false,
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 28),
                       ],
 
-                      // Notes (Optional)
-                      Text(
-                        'Notes (Optional)',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.darkGreen,
-                        ),
+                      // Notes
+                      _buildSectionLabel(
+                        'Notes',
+                        Icons.edit_note,
+                        AppTheme.darkGreen,
+                        badge: 'Optional',
+                        badgeColor: Colors.grey.shade600,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       TextFormField(
                         controller: _notesController,
-                        maxLines: 3,
+                        maxLines: 4,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                         decoration: InputDecoration(
                           hintText: 'Add any additional details...',
                           hintStyle: TextStyle(
@@ -739,59 +823,61 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                           ),
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.all(16),
+                          contentPadding: const EdgeInsets.all(18),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                                color: AppTheme.lightGreen.withOpacity(0.3)),
+                              color: AppTheme.lightGreen.withOpacity(0.3),
+                            ),
                           ),
                           enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide: BorderSide(
-                                color: AppTheme.lightGreen.withOpacity(0.3)),
+                              color: AppTheme.lightGreen.withOpacity(0.3),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                             borderSide:
-                                BorderSide(color: AppTheme.primary, width: 2),
+                                BorderSide(color: AppTheme.primary, width: 2.5),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
 
                       // Impact Estimate
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [AppTheme.primary, AppTheme.lightGreen],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
                               color: AppTheme.primary.withOpacity(0.3),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
                           ],
                         ),
                         child: Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.25),
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(14),
                               ),
-                              child: Icon(
+                              child: const Icon(
                                 Icons.eco,
                                 color: Colors.white,
-                                size: 32,
+                                size: 36,
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 18),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -799,18 +885,19 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                                   Text(
                                     'Estimated Impact',
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.white.withOpacity(0.9),
+                                      color: Colors.white.withOpacity(0.95),
                                     ),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     '$points Points',
-                                    style: TextStyle(
-                                      fontSize: 28,
+                                    style: const TextStyle(
+                                      fontSize: 32,
                                       fontWeight: FontWeight.w800,
                                       color: Colors.white,
+                                      letterSpacing: -0.5,
                                     ),
                                   ),
                                 ],
@@ -819,7 +906,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 28),
                     ],
                   ),
                 ),
@@ -827,21 +914,21 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
 
               // Submit Button
               Container(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, -2),
+                      blurRadius: 16,
+                      offset: const Offset(0, -4),
                     ),
                   ],
                 ),
                 child: SafeArea(
                   child: SizedBox(
                     width: double.infinity,
-                    height: 54,
+                    height: 56,
                     child: ElevatedButton(
                       onPressed: _saving ? null : _submit,
                       style: ElevatedButton.styleFrom(
@@ -850,24 +937,24 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                         disabledBackgroundColor:
                             AppTheme.primary.withOpacity(0.5),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                         elevation: 0,
                       ),
                       child: _saving
-                          ? SizedBox(
-                              height: 22,
-                              width: 22,
+                          ? const SizedBox(
+                              height: 24,
+                              width: 24,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
+                                strokeWidth: 3,
                                 valueColor:
                                     AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             )
-                          : Text(
+                          : const Text(
                               'Submit Contribution',
                               style: TextStyle(
-                                fontSize: 16,
+                                fontSize: 17,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: 0.3,
                               ),
@@ -880,6 +967,69 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildSectionLabel(
+    String title,
+    IconData icon,
+    Color color, {
+    String? badge,
+    Color? badgeColor,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: color,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (badge != null) ...[
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: (badgeColor ?? AppTheme.tertiary).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              badge,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: badgeColor ?? AppTheme.tertiary,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -901,14 +1051,15 @@ class _PhotoGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Always use 2 columns for cleaner, taller tiles
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: maxPhotos == 3 ? 3 : 4,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 16 / 9, // Landscape aspect ratio
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2, // Always 2 columns for larger tiles
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 14,
+        childAspectRatio: 0.85, // Taller tiles (portrait-ish)
       ),
       itemCount: maxPhotos,
       itemBuilder: (context, index) {
@@ -947,14 +1098,21 @@ class _PhotoTile extends StatelessWidget {
       children: [
         Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: AppTheme.primary.withOpacity(0.3),
-              width: 2,
+              color: AppTheme.primary.withOpacity(0.4),
+              width: 2.5,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(11),
             child: Image.file(
               File(file.path),
               fit: BoxFit.cover,
@@ -964,47 +1122,54 @@ class _PhotoTile extends StatelessWidget {
           ),
         ),
         Positioned(
-          top: 4,
-          left: 4,
+          top: 8,
+          left: 8,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: AppTheme.primary,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Text(
               '$index',
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
         ),
         Positioned(
-          top: 4,
-          right: 4,
+          top: 8,
+          right: 8,
           child: GestureDetector(
             onTap: onRemove,
             child: Container(
-              width: 26,
-              height: 26,
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
                 color: Colors.red.shade600,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 4,
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.close,
                 color: Colors.white,
-                size: 16,
+                size: 18,
               ),
             ),
           ),
@@ -1029,14 +1194,14 @@ class _AddPhotoTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         decoration: BoxDecoration(
-          color: AppTheme.lightGreen.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
+          color: AppTheme.lightGreen.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: AppTheme.lightGreen.withOpacity(0.4),
-            width: 2,
+            width: 2.5,
             style: BorderStyle.solid,
           ),
         ),
@@ -1044,8 +1209,8 @@ class _AddPhotoTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: AppTheme.primary.withOpacity(0.15),
                 shape: BoxShape.circle,
@@ -1053,16 +1218,25 @@ class _AddPhotoTile extends StatelessWidget {
               child: Icon(
                 Icons.camera_alt,
                 color: AppTheme.primary,
-                size: 18,
+                size: 28,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 12),
             Text(
               'Photo $index',
               style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
                 color: AppTheme.darkGreen.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Tap to add',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.darkGreen.withOpacity(0.5),
               ),
             ),
           ],
