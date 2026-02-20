@@ -1,0 +1,660 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Master taxonomy for all organization types, sectors, beneficiary groups, and facility types. Used for registration, map filtering, and search indexing.",
+    "filterLevels": [
+      "sector",
+      "orgType",
+      "beneficiaryGroup",
+      "facilityType",
+      "subFacility"
+    ]
+  },
+
+  "sectors": [
+    {
+      "id": "sector_env",
+      "label": "Environmental & Waste",
+      "icon": "eco",
+      "color": "#2E7D32",
+      "description": "Organizations working in waste management, recycling, conservation, and environmental restoration.",
+      "orgTypes": [
+        {
+          "id": "ot_recycler",
+          "label": "Recycler",
+          "icon": "recycling",
+          "color": "#388E3C",
+          "description": "Organizations that collect, sort, and process recyclable waste materials.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_plastic_recycler", "label": "Plastic Recycler", "icon": "water_drop" },
+            { "id": "st_metal_recycler", "label": "Metal & Scrap Recycler", "icon": "hardware" },
+            { "id": "st_paper_recycler", "label": "Paper & Cardboard Recycler", "icon": "description" },
+            { "id": "st_glass_recycler", "label": "Glass Recycler", "icon": "wine_bar" },
+            { "id": "st_ewaste_recycler", "label": "E-Waste Recycler", "icon": "devices" },
+            { "id": "st_textile_recycler", "label": "Textile & Fabric Recycler", "icon": "checkroom" },
+            { "id": "st_organic_recycler", "label": "Organic Waste / Composter", "icon": "compost" },
+            { "id": "st_mixed_recycler", "label": "Mixed-Waste Recycler", "icon": "delete_sweep" }
+          ],
+          "facilities": ["facility_collection_point", "facility_sorting_facility", "facility_processing_plant", "facility_drop_off"]
+        },
+        {
+          "id": "ot_waste_art",
+          "label": "Waste-to-Art Creator",
+          "icon": "palette",
+          "color": "#00897B",
+          "description": "Organizations and artisans who transform waste materials into art, fashion, ornaments, furniture, and crafts.",
+          "mapMarkerStyle": "star",
+          "subTypes": [
+            { "id": "st_plastic_art", "label": "Plastic Art & Sculpture", "icon": "format_shapes" },
+            { "id": "st_ornament_maker", "label": "Ornament & Jewellery Maker", "icon": "diamond" },
+            { "id": "st_furniture_maker", "label": "Upcycled Furniture Maker", "icon": "chair" },
+            { "id": "st_fashion_upcycle", "label": "Upcycled Fashion Designer", "icon": "style" },
+            { "id": "st_mural_art", "label": "Mural & Street Art (Eco)", "icon": "brush" },
+            { "id": "st_mixed_craft", "label": "Mixed Waste Crafts", "icon": "auto_awesome" }
+          ],
+          "facilities": ["facility_workshop", "facility_gallery", "facility_market_stall", "facility_training_studio"]
+        },
+        {
+          "id": "ot_upcycler",
+          "label": "Upcycler / Repurposer",
+          "icon": "autorenew",
+          "color": "#0097A7",
+          "description": "Organizations that creatively repurpose waste into functional products.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_building_materials", "label": "Eco Building Materials", "icon": "foundation" },
+            { "id": "st_household_goods", "label": "Upcycled Household Goods", "icon": "home" },
+            { "id": "st_packaging", "label": "Eco Packaging Solutions", "icon": "inventory_2" }
+          ],
+          "facilities": ["facility_workshop", "facility_factory", "facility_market_stall"]
+        },
+        {
+          "id": "ot_cleanup_org",
+          "label": "Cleanup Organization",
+          "icon": "cleaning_services",
+          "color": "#43A047",
+          "description": "Organizations that coordinate community, river, ocean, or urban cleanup activities.",
+          "mapMarkerStyle": "pin",
+          "subTypes": [
+            { "id": "st_community_cleanup", "label": "Community Cleanup", "icon": "people" },
+            { "id": "st_river_cleanup", "label": "River & Waterway Cleanup", "icon": "waves" },
+            { "id": "st_beach_cleanup", "label": "Beach & Ocean Cleanup", "icon": "beach_access" },
+            { "id": "st_urban_cleanup", "label": "Urban & Street Cleanup", "icon": "location_city" },
+            { "id": "st_forest_cleanup", "label": "Forest & Nature Reserve Cleanup", "icon": "forest" }
+          ],
+          "facilities": ["facility_base_camp", "facility_equipment_store", "facility_meetup_point"]
+        },
+        {
+          "id": "ot_conservation",
+          "label": "Conservation & Restoration",
+          "icon": "park",
+          "color": "#2E7D32",
+          "description": "Organizations focused on ecosystem restoration, tree planting, and biodiversity.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_reforestation", "label": "Reforestation & Tree Planting", "icon": "nature" },
+            { "id": "st_wetland", "label": "Wetland & River Conservation", "icon": "water" },
+            { "id": "st_wildlife", "label": "Wildlife & Habitat Protection", "icon": "pets" },
+            { "id": "st_soil_conservation", "label": "Soil & Land Restoration", "icon": "landscape" }
+          ],
+          "facilities": ["facility_nursery", "facility_field_station", "facility_nature_center"]
+        },
+        {
+          "id": "ot_clean_energy",
+          "label": "Clean Energy from Waste",
+          "icon": "bolt",
+          "color": "#F9A825",
+          "description": "Organizations converting waste into energy — biogas, biomass, solar initiatives.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_biogas", "label": "Biogas Producer", "icon": "science" },
+            { "id": "st_biomass", "label": "Biomass Energy", "icon": "local_fire_department" },
+            { "id": "st_solar_waste", "label": "Solar & Renewables", "icon": "solar_power" }
+          ],
+          "facilities": ["facility_processing_plant", "facility_distribution_point", "facility_training_center"]
+        }
+      ]
+    },
+    {
+      "id": "sector_social",
+      "label": "Social Services & Welfare",
+      "icon": "volunteer_activism",
+      "color": "#C62828",
+      "description": "NGOs and CBOs providing welfare, protection, and empowerment to vulnerable populations.",
+      "orgTypes": [
+        {
+          "id": "ot_women_org",
+          "label": "Women's Organization",
+          "icon": "woman",
+          "color": "#E91E63",
+          "description": "Organizations focused on women's rights, empowerment, economic inclusion, and safety.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_women_empowerment", "label": "Women Empowerment", "icon": "group" },
+            { "id": "st_gbv", "label": "GBV / Domestic Violence Support", "icon": "shield" },
+            { "id": "st_women_enterprise", "label": "Women Enterprise & Cooperatives", "icon": "storefront" },
+            { "id": "st_maternal_health", "label": "Maternal & Reproductive Health", "icon": "pregnant_woman" },
+            { "id": "st_women_legal", "label": "Women's Legal Aid", "icon": "gavel" },
+            { "id": "st_women_education", "label": "Women's Education & Literacy", "icon": "school" }
+          ],
+          "facilities": ["facility_shelter", "facility_drop_in_center", "facility_training_center", "facility_clinic", "facility_safe_house"]
+        },
+        {
+          "id": "ot_girls_org",
+          "label": "Girls' Organization",
+          "icon": "girl",
+          "color": "#F06292",
+          "description": "Organizations focused specifically on girls — mentorship, education, safety, and health.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_girl_education", "label": "Girl Child Education", "icon": "school" },
+            { "id": "st_girl_menstrual_health", "label": "Menstrual Health & Hygiene", "icon": "health_and_safety" },
+            { "id": "st_girl_safety", "label": "Girl Safety & Anti-FGM", "icon": "shield" },
+            { "id": "st_girl_mentorship", "label": "Girls' Mentorship Programs", "icon": "star" },
+            { "id": "st_teen_mothers", "label": "Teen Mother Support", "icon": "family_restroom" }
+          ],
+          "facilities": ["facility_drop_in_center", "facility_safe_space", "facility_school", "facility_clinic"]
+        },
+        {
+          "id": "ot_children_org",
+          "label": "Children's Organization",
+          "icon": "child_care",
+          "color": "#FF7043",
+          "description": "Organizations working in child welfare, protection, development, and education.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_orphan_care", "label": "Orphan & OVC Care", "icon": "family_restroom" },
+            { "id": "st_child_protection", "label": "Child Protection", "icon": "shield" },
+            { "id": "st_child_education", "label": "Early Childhood Education", "icon": "school" },
+            { "id": "st_child_nutrition", "label": "Child Nutrition & Feeding", "icon": "restaurant" },
+            { "id": "st_child_abuse", "label": "Child Abuse Prevention", "icon": "health_and_safety" },
+            { "id": "st_street_children", "label": "Street Children Support", "icon": "home" }
+          ],
+          "facilities": ["facility_children_home", "facility_daycare", "facility_school", "facility_drop_in_center", "facility_feeding_program"]
+        },
+        {
+          "id": "ot_youth_org",
+          "label": "Youth Organization",
+          "icon": "group",
+          "color": "#7E57C2",
+          "description": "Organizations serving young people aged 15–35 — skills, leadership, employment, and wellness.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_youth_skills", "label": "Youth Skills & Vocational Training", "icon": "build" },
+            { "id": "st_youth_enterprise", "label": "Youth Entrepreneurship", "icon": "business_center" },
+            { "id": "st_youth_mental_health", "label": "Youth Mental Health", "icon": "psychology" },
+            { "id": "st_youth_sport", "label": "Sports & Physical Activity", "icon": "sports_soccer" },
+            { "id": "st_youth_arts", "label": "Youth Arts & Culture", "icon": "music_note" },
+            { "id": "st_youth_civic", "label": "Civic & Leadership Programs", "icon": "how_to_vote" }
+          ],
+          "facilities": ["facility_youth_center", "facility_training_center", "facility_sports_facility", "facility_studio"]
+        },
+        {
+          "id": "ot_pwd_org",
+          "label": "Persons with Disabilities (PWD)",
+          "icon": "accessible",
+          "color": "#0288D1",
+          "description": "Organizations supporting persons with physical, sensory, intellectual, or psychosocial disabilities.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_physical_disability", "label": "Physical Disability Support", "icon": "wheelchair_pickup" },
+            { "id": "st_visual_impairment", "label": "Visual Impairment Support", "icon": "visibility_off" },
+            { "id": "st_hearing_impairment", "label": "Hearing Impairment / Deaf Support", "icon": "hearing_disabled" },
+            { "id": "st_intellectual_disability", "label": "Intellectual & Developmental Disabilities", "icon": "psychology" },
+            { "id": "st_mental_health_pwd", "label": "Psychosocial Disability", "icon": "self_improvement" },
+            { "id": "st_autism", "label": "Autism Support", "icon": "diversity_2" },
+            { "id": "st_assistive_tech", "label": "Assistive Technology & Devices", "icon": "devices" }
+          ],
+          "facilities": ["facility_rehabilitation_center", "facility_special_school", "facility_workshop", "facility_clinic", "facility_drop_in_center"]
+        },
+        {
+          "id": "ot_elderly_org",
+          "label": "Elderly Care",
+          "icon": "elderly",
+          "color": "#5C6BC0",
+          "description": "Organizations providing care, companionship, and services to the elderly.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_elderly_home", "label": "Elder Care Homes", "icon": "home" },
+            { "id": "st_home_based_care", "label": "Home-Based Care Services", "icon": "medical_services" },
+            { "id": "st_elderly_livelihood", "label": "Elderly Livelihood & Pensions", "icon": "payments" }
+          ],
+          "facilities": ["facility_care_home", "facility_day_center", "facility_clinic"]
+        },
+        {
+          "id": "ot_refugee_org",
+          "label": "Refugees & Displaced Persons",
+          "icon": "transfer_within_a_station",
+          "color": "#FF8F00",
+          "description": "Organizations serving refugees, asylum seekers, IDPs, and stateless persons.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_refugee_legal", "label": "Legal Aid & Documentation", "icon": "gavel" },
+            { "id": "st_refugee_resettlement", "label": "Resettlement Support", "icon": "home" },
+            { "id": "st_refugee_livelihoods", "label": "Livelihoods & Integration", "icon": "work" },
+            { "id": "st_refugee_psychosocial", "label": "Psychosocial Support", "icon": "psychology" }
+          ],
+          "facilities": ["facility_reception_center", "facility_community_center", "facility_legal_aid_office"]
+        }
+      ]
+    },
+    {
+      "id": "sector_health",
+      "label": "Health & Medical",
+      "icon": "local_hospital",
+      "color": "#00695C",
+      "description": "Organizations providing health services, medical care, nutrition, sanitation, and WASH.",
+      "orgTypes": [
+        {
+          "id": "ot_clinic",
+          "label": "Clinic / Health Facility",
+          "icon": "local_hospital",
+          "color": "#E53935",
+          "description": "Health facilities providing outpatient, inpatient, or specialized care.",
+          "mapMarkerStyle": "cross",
+          "subTypes": [
+            { "id": "st_general_clinic", "label": "General Outpatient Clinic", "icon": "local_hospital" },
+            { "id": "st_maternal_clinic", "label": "Maternal & Child Health Clinic", "icon": "pregnant_woman" },
+            { "id": "st_dental", "label": "Dental Clinic", "icon": "medical_services" },
+            { "id": "st_eye_clinic", "label": "Eye / Vision Clinic", "icon": "remove_red_eye" },
+            { "id": "st_hiv_center", "label": "HIV/AIDS Care Center", "icon": "healing" },
+            { "id": "st_tb_center", "label": "TB Treatment Center", "icon": "medical_services" },
+            { "id": "st_mental_health_clinic", "label": "Mental Health Clinic", "icon": "psychology" },
+            { "id": "st_physiotherapy", "label": "Physiotherapy & Rehabilitation", "icon": "accessibility_new" }
+          ],
+          "facilities": ["facility_clinic", "facility_pharmacy", "facility_laboratory", "facility_inpatient_ward"]
+        },
+        {
+          "id": "ot_wash",
+          "label": "WASH Organization",
+          "icon": "water_drop",
+          "color": "#1E88E5",
+          "description": "Water, Sanitation, and Hygiene — access to clean water, latrines, and hygiene promotion.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_water_access", "label": "Clean Water Access", "icon": "water" },
+            { "id": "st_sanitation", "label": "Sanitation & Toilet Facilities", "icon": "wc" },
+            { "id": "st_hygiene_promo", "label": "Hygiene Promotion", "icon": "soap" }
+          ],
+          "facilities": ["facility_water_point", "facility_borehole", "facility_latrine_block", "facility_handwashing_station"]
+        },
+        {
+          "id": "ot_nutrition_org",
+          "label": "Nutrition & Food Security",
+          "icon": "restaurant",
+          "color": "#EF6C00",
+          "description": "Organizations addressing food insecurity, malnutrition, and food access.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_food_bank", "label": "Food Bank", "icon": "inventory" },
+            { "id": "st_feeding_program", "label": "Feeding Program", "icon": "fastfood" },
+            { "id": "st_school_feeding", "label": "School Feeding Program", "icon": "school" },
+            { "id": "st_nutrition_therapy", "label": "Therapeutic Nutrition Center", "icon": "medical_services" }
+          ],
+          "facilities": ["facility_food_bank", "facility_kitchen", "facility_nutrition_center", "facility_distribution_point"]
+        }
+      ]
+    },
+    {
+      "id": "sector_education",
+      "label": "Education & Skills",
+      "icon": "school",
+      "color": "#1565C0",
+      "description": "Organizations providing formal education, vocational training, literacy, and life skills.",
+      "orgTypes": [
+        {
+          "id": "ot_school",
+          "label": "School",
+          "icon": "school",
+          "color": "#1976D2",
+          "description": "Formal educational institutions — primary, secondary, tertiary.",
+          "mapMarkerStyle": "pin",
+          "subTypes": [
+            { "id": "st_early_childhood", "label": "Early Childhood / Nursery", "icon": "child_care" },
+            { "id": "st_primary_school", "label": "Primary School", "icon": "school" },
+            { "id": "st_secondary_school", "label": "Secondary School", "icon": "school" },
+            { "id": "st_special_needs_school", "label": "Special Needs School", "icon": "accessible" },
+            { "id": "st_adult_literacy", "label": "Adult Literacy Program", "icon": "menu_book" }
+          ],
+          "facilities": ["facility_school", "facility_library", "facility_computer_lab", "facility_sports_facility"]
+        },
+        {
+          "id": "ot_vocational",
+          "label": "Vocational & Skills Training",
+          "icon": "build",
+          "color": "#0277BD",
+          "description": "Technical and vocational education — tailoring, carpentry, mechanics, ICT, etc.",
+          "mapMarkerStyle": "pin",
+          "subTypes": [
+            { "id": "st_tailoring", "label": "Tailoring & Fashion", "icon": "checkroom" },
+            { "id": "st_carpentry", "label": "Carpentry & Woodwork", "icon": "carpenter" },
+            { "id": "st_mechanics", "label": "Motor Vehicle Mechanics", "icon": "car_repair" },
+            { "id": "st_ict_training", "label": "ICT & Digital Skills", "icon": "computer" },
+            { "id": "st_culinary", "label": "Culinary Arts", "icon": "restaurant" },
+            { "id": "st_construction", "label": "Construction & Plumbing", "icon": "construction" }
+          ],
+          "facilities": ["facility_training_center", "facility_workshop", "facility_computer_lab"]
+        }
+      ]
+    },
+    {
+      "id": "sector_economic",
+      "label": "Economic Empowerment",
+      "icon": "trending_up",
+      "color": "#E65100",
+      "description": "Organizations focused on financial inclusion, cooperatives, micro-enterprise, and market access.",
+      "orgTypes": [
+        {
+          "id": "ot_sacco",
+          "label": "SACCO / Microfinance",
+          "icon": "account_balance",
+          "color": "#BF360C",
+          "description": "Savings and credit organizations, microfinance institutions, and chamas.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_sacco", "label": "SACCO", "icon": "savings" },
+            { "id": "st_chama", "label": "Chama / Self-Help Group", "icon": "group" },
+            { "id": "st_mfi", "label": "Microfinance Institution", "icon": "account_balance" },
+            { "id": "st_cooperative", "label": "Cooperative Society", "icon": "diversity_3" }
+          ],
+          "facilities": ["facility_office", "facility_banking_hall"]
+        },
+        {
+          "id": "ot_market_org",
+          "label": "Market & Trade Organization",
+          "icon": "storefront",
+          "color": "#E65100",
+          "description": "Organizations facilitating market access, trade, and local commerce for producers.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_farmers_market", "label": "Farmers & Producers Market", "icon": "agriculture" },
+            { "id": "st_craft_market", "label": "Craft & Artisan Market", "icon": "palette" },
+            { "id": "st_digital_marketplace", "label": "Digital Marketplace / E-commerce", "icon": "shopping_cart" }
+          ],
+          "facilities": ["facility_market_stall", "facility_warehouse", "facility_office"]
+        }
+      ]
+    },
+    {
+      "id": "sector_legal",
+      "label": "Legal Aid & Advocacy",
+      "icon": "gavel",
+      "color": "#4A148C",
+      "description": "Organizations providing legal aid, human rights advocacy, and civic engagement.",
+      "orgTypes": [
+        {
+          "id": "ot_legal_aid",
+          "label": "Legal Aid Organization",
+          "icon": "gavel",
+          "color": "#6A1B9A",
+          "description": "Organizations offering free or subsidized legal counsel and representation.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_gbv_legal", "label": "GBV / SGBV Legal Aid", "icon": "shield" },
+            { "id": "st_land_rights", "label": "Land Rights Advocacy", "icon": "map" },
+            { "id": "st_consumer_rights", "label": "Consumer Rights", "icon": "policy" },
+            { "id": "st_child_legal", "label": "Child Rights Legal Aid", "icon": "child_care" }
+          ],
+          "facilities": ["facility_legal_aid_office", "facility_drop_in_center"]
+        },
+        {
+          "id": "ot_advocacy",
+          "label": "Policy & Advocacy",
+          "icon": "campaign",
+          "color": "#4A148C",
+          "description": "Organizations engaging in policy change, civic education, and democratic participation.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_civic_education", "label": "Civic & Voter Education", "icon": "how_to_vote" },
+            { "id": "st_human_rights", "label": "Human Rights Monitoring", "icon": "security" },
+            { "id": "st_environment_advocacy", "label": "Environmental Advocacy", "icon": "eco" }
+          ],
+          "facilities": ["facility_office", "facility_community_center"]
+        }
+      ]
+    },
+    {
+      "id": "sector_faith",
+      "label": "Faith-Based Organizations",
+      "icon": "volunteer_activism",
+      "color": "#4E342E",
+      "description": "Churches, mosques, temples, and other faith groups providing social services.",
+      "orgTypes": [
+        {
+          "id": "ot_fbo",
+          "label": "Faith-Based Organization",
+          "icon": "church",
+          "color": "#5D4037",
+          "description": "Religious institutions and faith groups delivering community services.",
+          "mapMarkerStyle": "circle",
+          "subTypes": [
+            { "id": "st_church", "label": "Church / Christian Organization", "icon": "church" },
+            { "id": "st_mosque", "label": "Mosque / Islamic Organization", "icon": "mosque" },
+            { "id": "st_interfaith", "label": "Interfaith Organization", "icon": "diversity_1" }
+          ],
+          "facilities": ["facility_worship_center", "facility_community_hall", "facility_shelter", "facility_food_bank"]
+        }
+      ]
+    }
+  ],
+
+  "legalDesignations": [
+    { "id": "des_ngo", "acronym": "NGO", "fullForm": "Non-Governmental Organization", "description": "International or national charity groups operating independently of government." },
+    { "id": "des_npo", "acronym": "NPO", "fullForm": "Non-Profit Organization", "description": "Organizations that reinvest all revenues into their mission." },
+    { "id": "des_cbo", "acronym": "CBO", "fullForm": "Community-Based Organization", "description": "Locally formed grassroots organizations addressing local needs." },
+    { "id": "des_pbo", "acronym": "PBO", "fullForm": "Public Benefit Organization", "description": "Officially registered groups serving the public good." },
+    { "id": "des_trust", "acronym": "Trust", "fullForm": "Charitable Trust", "description": "Organizations managing funds or assets for community benefit." },
+    { "id": "des_society", "acronym": "Society", "fullForm": "Registered Society", "description": "Associations for cultural, social, or religious activities." },
+    { "id": "des_clg", "acronym": "CLG", "fullForm": "Company Limited by Guarantee", "description": "Non-profit companies running schools, clinics, or foundations." },
+    { "id": "des_fbo", "acronym": "FBO", "fullForm": "Faith-Based Organization", "description": "Religious groups providing social services to communities." },
+    { "id": "des_shg", "acronym": "SHG", "fullForm": "Self-Help Group", "description": "Small groups where members save money together and support each other." },
+    { "id": "des_sacco", "acronym": "SACCO", "fullForm": "Savings & Credit Cooperative", "description": "Member-owned financial cooperatives providing savings and credit." },
+    { "id": "des_cfa", "acronym": "CFA", "fullForm": "Community Forest Association", "description": "Groups managing and protecting local forest resources." },
+    { "id": "des_company", "acronym": "Social Enterprise", "fullForm": "Social Enterprise / Impact Business", "description": "Businesses with a primary social or environmental mission." },
+    { "id": "des_network", "acronym": "Network", "fullForm": "Coalition or Network", "description": "An umbrella body coordinating multiple member organizations." }
+  ],
+
+  "beneficiaryGroups": [
+    { "id": "bg_women", "label": "Women", "icon": "woman", "color": "#E91E63" },
+    { "id": "bg_girls", "label": "Girls (Under 18)", "icon": "girl", "color": "#F06292" },
+    { "id": "bg_men", "label": "Men", "icon": "man", "color": "#1E88E5" },
+    { "id": "bg_boys", "label": "Boys (Under 18)", "icon": "boy", "color": "#42A5F5" },
+    { "id": "bg_children", "label": "Children (All)", "icon": "child_care", "color": "#FF7043" },
+    { "id": "bg_youth", "label": "Youth (15–35)", "icon": "group", "color": "#7E57C2" },
+    { "id": "bg_elderly", "label": "Elderly (60+)", "icon": "elderly", "color": "#5C6BC0" },
+    { "id": "bg_pwd", "label": "Persons with Disabilities", "icon": "accessible", "color": "#0288D1" },
+    { "id": "bg_refugees", "label": "Refugees & IDPs", "icon": "transfer_within_a_station", "color": "#FF8F00" },
+    { "id": "bg_orphans", "label": "Orphans & Vulnerable Children", "icon": "family_restroom", "color": "#EF6C00" },
+    { "id": "bg_teen_mothers", "label": "Teen Mothers", "icon": "pregnant_woman", "color": "#AD1457" },
+    { "id": "bg_street_children", "label": "Street Children", "icon": "home", "color": "#BF360C" },
+    { "id": "bg_hiv_positive", "label": "PLHIV (HIV+)", "icon": "healing", "color": "#00897B" },
+    { "id": "bg_general", "label": "General Community", "icon": "people", "color": "#43A047" }
+  ],
+
+  "facilityTypes": [
+    {
+      "id": "facility_clinic",
+      "label": "Clinic / Health Facility",
+      "icon": "local_hospital",
+      "color": "#E53935",
+      "mapLayerColor": "#E53935",
+      "subFacilities": [
+        { "id": "sf_general_opd", "label": "General OPD", "icon": "medical_services" },
+        { "id": "sf_antenatal", "label": "Antenatal Care", "icon": "pregnant_woman" },
+        { "id": "sf_pharmacy", "label": "Pharmacy", "icon": "medication" },
+        { "id": "sf_laboratory", "label": "Laboratory / Testing", "icon": "science" },
+        { "id": "sf_hiv_testing", "label": "HIV Testing & Counseling", "icon": "healing" },
+        { "id": "sf_mental_health_services", "label": "Mental Health Services", "icon": "psychology" },
+        { "id": "sf_dental_unit", "label": "Dental Unit", "icon": "medical_services" },
+        { "id": "sf_eye_unit", "label": "Eye / Vision Unit", "icon": "remove_red_eye" },
+        { "id": "sf_inpatient", "label": "Inpatient Ward", "icon": "bed" },
+        { "id": "sf_theater", "label": "Operating Theater", "icon": "medical_services" }
+      ]
+    },
+    {
+      "id": "facility_school",
+      "label": "School / Learning Center",
+      "icon": "school",
+      "color": "#1976D2",
+      "mapLayerColor": "#1976D2",
+      "subFacilities": [
+        { "id": "sf_nursery", "label": "Nursery / Pre-Primary", "icon": "child_care" },
+        { "id": "sf_primary", "label": "Primary Classes", "icon": "school" },
+        { "id": "sf_secondary", "label": "Secondary Classes", "icon": "school" },
+        { "id": "sf_library", "label": "Library", "icon": "local_library" },
+        { "id": "sf_computer_lab", "label": "Computer Lab", "icon": "computer" },
+        { "id": "sf_special_needs_class", "label": "Special Needs Class", "icon": "accessible" },
+        { "id": "sf_sports_ground", "label": "Sports Ground", "icon": "sports_soccer" }
+      ]
+    },
+    {
+      "id": "facility_training_center",
+      "label": "Training / Vocational Center",
+      "icon": "build",
+      "color": "#0277BD",
+      "mapLayerColor": "#0277BD",
+      "subFacilities": [
+        { "id": "sf_tailoring_unit", "label": "Tailoring Unit", "icon": "checkroom" },
+        { "id": "sf_carpentry_unit", "label": "Carpentry Workshop", "icon": "carpenter" },
+        { "id": "sf_ict_lab", "label": "ICT Lab", "icon": "laptop" },
+        { "id": "sf_culinary_unit", "label": "Culinary Kitchen", "icon": "restaurant" },
+        { "id": "sf_arts_studio", "label": "Arts & Crafts Studio", "icon": "palette" },
+        { "id": "sf_mechanics_unit", "label": "Mechanics Workshop", "icon": "car_repair" }
+      ]
+    },
+    {
+      "id": "facility_collection_point",
+      "label": "Waste Collection Point",
+      "icon": "recycling",
+      "color": "#388E3C",
+      "mapLayerColor": "#388E3C",
+      "subFacilities": [
+        { "id": "sf_plastic_drop", "label": "Plastic Drop-Off", "icon": "water_drop" },
+        { "id": "sf_metal_drop", "label": "Metal & Scrap", "icon": "hardware" },
+        { "id": "sf_paper_drop", "label": "Paper & Cardboard", "icon": "description" },
+        { "id": "sf_ewaste_drop", "label": "E-Waste Drop-Off", "icon": "devices" },
+        { "id": "sf_glass_drop", "label": "Glass Drop-Off", "icon": "wine_bar" },
+        { "id": "sf_general_drop", "label": "General / Mixed Waste", "icon": "delete_sweep" }
+      ]
+    },
+    {
+      "id": "facility_shelter",
+      "label": "Shelter / Safe House",
+      "icon": "home",
+      "color": "#AD1457",
+      "mapLayerColor": "#AD1457",
+      "subFacilities": [
+        { "id": "sf_emergency_shelter", "label": "Emergency Shelter", "icon": "emergency" },
+        { "id": "sf_transitional_home", "label": "Transitional Housing", "icon": "house" },
+        { "id": "sf_gbv_safe_house", "label": "GBV Safe House", "icon": "shield" },
+        { "id": "sf_childrens_home", "label": "Children's Home", "icon": "family_restroom" }
+      ]
+    },
+    {
+      "id": "facility_community_center",
+      "label": "Community / Social Center",
+      "icon": "groups",
+      "color": "#00897B",
+      "mapLayerColor": "#00897B",
+      "subFacilities": [
+        { "id": "sf_meeting_hall", "label": "Meeting Hall", "icon": "meeting_room" },
+        { "id": "sf_counseling_room", "label": "Counseling Room", "icon": "psychology" },
+        { "id": "sf_resource_center", "label": "Resource & Information Center", "icon": "info" },
+        { "id": "sf_recreation_area", "label": "Recreation Area", "icon": "sports_esports" }
+      ]
+    },
+    {
+      "id": "facility_water_point",
+      "label": "Water Point / WASH",
+      "icon": "water_drop",
+      "color": "#1E88E5",
+      "mapLayerColor": "#1E88E5",
+      "subFacilities": [
+        { "id": "sf_borehole", "label": "Borehole", "icon": "water" },
+        { "id": "sf_public_tap", "label": "Public Tap / Standpipe", "icon": "faucet" },
+        { "id": "sf_water_kiosk", "label": "Water Kiosk", "icon": "storefront" },
+        { "id": "sf_latrine_block", "label": "Latrine Block", "icon": "wc" },
+        { "id": "sf_handwashing", "label": "Handwashing Station", "icon": "soap" }
+      ]
+    },
+    {
+      "id": "facility_workshop",
+      "label": "Workshop / Studio",
+      "icon": "palette",
+      "color": "#00897B",
+      "mapLayerColor": "#00897B",
+      "subFacilities": [
+        { "id": "sf_art_studio", "label": "Art Studio", "icon": "brush" },
+        { "id": "sf_fabrication_shop", "label": "Fabrication / Metal Shop", "icon": "hardware" },
+        { "id": "sf_sewing_studio", "label": "Sewing Studio", "icon": "checkroom" },
+        { "id": "sf_print_studio", "label": "Print & Screen Print Studio", "icon": "print" }
+      ]
+    },
+    {
+      "id": "facility_youth_center",
+      "label": "Youth Center",
+      "icon": "group",
+      "color": "#7E57C2",
+      "mapLayerColor": "#7E57C2",
+      "subFacilities": [
+        { "id": "sf_games_room", "label": "Games Room", "icon": "sports_esports" },
+        { "id": "sf_recording_studio", "label": "Recording Studio", "icon": "mic" },
+        { "id": "sf_entrepreneurship_hub", "label": "Entrepreneurship Hub", "icon": "business_center" },
+        { "id": "sf_counseling_youth", "label": "Youth Counseling", "icon": "psychology" }
+      ]
+    },
+    {
+      "id": "facility_office",
+      "label": "Administrative Office",
+      "icon": "business",
+      "color": "#546E7A",
+      "mapLayerColor": "#546E7A",
+      "subFacilities": [
+        { "id": "sf_reception", "label": "Reception / Front Desk", "icon": "desk" },
+        { "id": "sf_records_room", "label": "Records & Documentation", "icon": "folder" }
+      ]
+    }
+  ],
+
+  "mapFilterTree": {
+    "description": "Hierarchical filter structure for the map screen. Level 1 → Sector, Level 2 → Org Type, Level 3 → Beneficiary Group, Level 4 → Facility Type, Level 5 → Sub-Facility.",
+    "quickFilters": [
+      { "id": "qf_all", "label": "All", "icon": "dashboard", "color": "#37474F" },
+      { "id": "qf_recyclers", "label": "Recyclers", "icon": "recycling", "color": "#388E3C" },
+      { "id": "qf_waste_art", "label": "Waste Art", "icon": "palette", "color": "#00897B" },
+      { "id": "qf_women", "label": "Women's Orgs", "icon": "woman", "color": "#E91E63" },
+      { "id": "qf_children", "label": "Children", "icon": "child_care", "color": "#FF7043" },
+      { "id": "qf_girls", "label": "Girls", "icon": "girl", "color": "#F06292" },
+      { "id": "qf_pwd", "label": "PWD", "icon": "accessible", "color": "#0288D1" },
+      { "id": "qf_youth", "label": "Youth", "icon": "group", "color": "#7E57C2" },
+      { "id": "qf_health", "label": "Health", "icon": "local_hospital", "color": "#E53935" },
+      { "id": "qf_education", "label": "Education", "icon": "school", "color": "#1976D2" },
+      { "id": "qf_water", "label": "Water / WASH", "icon": "water_drop", "color": "#1E88E5" },
+      { "id": "qf_cleanup", "label": "Cleanup", "icon": "cleaning_services", "color": "#43A047" }
+    ]
+  },
+
+  "orgRegistrationFields": {
+    "common": [
+      { "id": "f_org_name", "label": "Organization Name", "type": "text", "required": true },
+      { "id": "f_org_logo", "label": "Organization Logo (transparent PNG)", "type": "image_png", "required": false, "hint": "Uploaded to appear on the map as your marker" },
+      { "id": "f_sector", "label": "Primary Sector", "type": "select", "source": "sectors", "required": true },
+      { "id": "f_org_type", "label": "Organization Type", "type": "select", "source": "orgTypes", "required": true, "dependsOn": "f_sector" },
+      { "id": "f_sub_types", "label": "Sub-Type(s)", "type": "multi_select", "source": "subTypes", "required": true, "dependsOn": "f_org_type" },
+      { "id": "f_legal_designation", "label": "Legal Designation", "type": "select", "source": "legalDesignations", "required": true },
+      { "id": "f_beneficiary_groups", "label": "Beneficiary Groups", "type": "multi_select", "source": "beneficiaryGroups", "required": true },
+      { "id": "f_facilities", "label": "Facilities Available", "type": "multi_select", "source": "facilityTypes", "required": false },
+      { "id": "f_sub_facilities", "label": "Specific Services in Each Facility", "type": "nested_multi_select", "source": "subFacilities", "required": false, "dependsOn": "f_facilities" },
+      { "id": "f_background", "label": "Organization Background (max 150 words)", "type": "textarea", "required": true },
+      { "id": "f_main_functions", "label": "Main Functions (up to 5)", "type": "text_list", "maxItems": 5, "required": true },
+      { "id": "f_country", "label": "Country", "type": "select", "source": "WorldCountries.json", "required": true },
+      { "id": "f_city", "label": "City / County", "type": "text", "required": true },
+      { "id": "f_area", "label": "Specific Area / Neighbourhood", "type": "text", "required": true },
+      { "id": "f_coordinates", "label": "Location (map pin)", "type": "geo_point", "required": false },
+      { "id": "f_website", "label": "Website (optional)", "type": "url", "required": false },
+      { "id": "f_phone", "label": "Contact Phone", "type": "phone", "required": false },
+      { "id": "f_verified", "label": "Verification Status", "type": "system", "default": "pending" }
+    ]
+  }
+}
