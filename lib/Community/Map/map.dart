@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -94,21 +95,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   bool _iconsLoaded = false;
-  bool _showFilterPanel = false;
   MapOrganization? _selectedOrg;
 
-  // Active filters — multi-select across all 5 levels
-  final Set<String> _activeSectorFilters = {};
-  final Set<String> _activeOrgTypeFilters = {};
-  final Set<String> _activeBeneficiaryFilters = {};
-  final Set<String> _activeFacilityFilters = {};
-  final Set<String> _activeSubFacilityFilters = {};
+  // ── Filter state: one active category at a time, subcategories within it ──
+  // activeCategory = sectorId of the selected category (null = show all)
+  String? _activeCategory;
+  // activeSubFilters = orgTypeIds chosen within the active category
+  final Set<String> _activeSubFilters = {};
 
-  // Icon cache: keyed by orgTypeId
-  final Map<String, BitmapDescriptor> _typeIcons = {};
+  // Icon cache: normal (light, small) + hero (dark, big, glittery)
+  final Map<String, BitmapDescriptor> _typeIconsNormal = {};
+  final Map<String, BitmapDescriptor> _typeIconsHero = {};
 
-  late AnimationController _filterPanelController;
   late AnimationController _bottomSheetController;
+
+  // Sidebar: subcategory panel open?
+  bool _subPanelOpen = false;
 
   final CameraPosition _initialPosition = const CameraPosition(
     target: LatLng(-1.2921, 36.8219),
@@ -441,10 +443,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _filterPanelController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
     _bottomSheetController = AnimationController(
       duration: const Duration(milliseconds: 350),
       vsync: this,
@@ -454,7 +452,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _filterPanelController.dispose();
     _bottomSheetController.dispose();
     _mapController?.dispose();
     super.dispose();
@@ -528,11 +525,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final typeIds = _allOrgs.map((o) => o.orgTypeId).toSet();
     for (final typeId in typeIds) {
       final org = _allOrgs.firstWhere((o) => o.orgTypeId == typeId);
-      _typeIcons[typeId] = await _makeMarkerIcon(
-        _orgTypeIcon(typeId),
-        _sectorColor(org.sectorId),
-        90.0,
-      );
+      final color = _sectorColor(org.sectorId);
+      final icon = _orgTypeIcon(typeId);
+      // Normal: lighter, smaller — Google Maps style
+      _typeIconsNormal[typeId] = await _makeMarkerIcon(icon, color, 80.0, hero: false);
+      // Hero: dark, bigger, glittery — for active filtered orgs
+      _typeIconsHero[typeId] = await _makeMarkerIcon(icon, color, 140.0, hero: true);
     }
     if (mounted) {
       setState(() {
@@ -543,48 +541,91 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Future<BitmapDescriptor> _makeMarkerIcon(
-      IconData iconData, Color color, double size) async {
+      IconData iconData, Color color, double size, {bool hero = false}) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
+    final cx = size / 2;
+    final cy = size / 2;
 
-    // Outer glow
+    // Normal markers: light pastel Google-Maps style (soft fill, subtle shadow)
+    // Hero markers: dark vivid, bigger, glittery sparkle ring
+
+    if (hero) {
+      // Outer bloom halo
+      canvas.drawCircle(
+        Offset(cx, cy),
+        size / 2 - 2,
+        Paint()
+          ..color = color.withOpacity(0.22)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
+      );
+      // Sparkle dot ring — 8 dots orbiting
+      final dotR = size / 2 - 11;
+      for (int d = 0; d < 8; d++) {
+        final angle = (d * math.pi * 2) / 8 - math.pi / 8;
+        final dx = cx + dotR * math.cos(angle);
+        final dy = cy + dotR * math.sin(angle);
+        canvas.drawCircle(
+          Offset(dx, dy),
+          d % 2 == 0 ? 3.8 : 2.4,
+          Paint()..color = d % 2 == 0 ? Colors.white.withOpacity(0.95) : color.withOpacity(0.75),
+        );
+      }
+    }
+
+    // Shadow
     canvas.drawCircle(
-      Offset(size / 2, size / 2),
-      size / 2 - 4,
+      Offset(cx, cy + (hero ? 5 : 3)),
+      size / 2 - (hero ? 18 : 8),
       Paint()
-        ..color = color.withOpacity(0.22)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        ..color = Colors.black.withOpacity(hero ? 0.28 : 0.12)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, hero ? 10 : 5),
     );
 
-    // Main filled circle
-    canvas.drawCircle(
-      Offset(size / 2, size / 2),
-      size / 2 - 9,
-      Paint()..color = color,
-    );
+    // Circle fill — dark vivid for hero, pastel for normal
+    final circleR = size / 2 - (hero ? 16 : 8);
+    final fillColor = hero
+        ? Color.lerp(color, Colors.black, 0.15)!   // darken for hero
+        : Color.lerp(color, Colors.white, 0.62)!;   // lighten to pastel for normal
 
-    // White ring
+    canvas.drawCircle(Offset(cx, cy), circleR, Paint()..color = fillColor);
+
+    if (hero) {
+      // Shimmer arc (glitter highlight)
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(cx, cy), radius: circleR - 3),
+        -2.5, 1.1, false,
+        Paint()
+          ..color = Colors.white.withOpacity(0.40)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+
+    // White ring border
     canvas.drawCircle(
-      Offset(size / 2, size / 2),
-      size / 2 - 11,
+      Offset(cx, cy),
+      circleR - 1,
       Paint()
-        ..color = Colors.white
+        ..color = hero ? Colors.white : Colors.white.withOpacity(0.70)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5,
+        ..strokeWidth = hero ? 3.0 : 1.8,
     );
 
-    // Icon
+    // Icon — dark on pastel, white on hero
+    final iconColor = hero ? Colors.white : color.withOpacity(0.85);
     final tp = TextPainter(textDirection: TextDirection.ltr)
       ..text = TextSpan(
         text: String.fromCharCode(iconData.codePoint),
         style: TextStyle(
-          fontSize: size * 0.36,
+          fontSize: circleR * (hero ? 0.82 : 0.75),
           fontFamily: iconData.fontFamily,
-          color: Colors.white,
+          color: iconColor,
         ),
       )
       ..layout();
-    tp.paint(canvas, Offset((size - tp.width) / 2, (size - tp.height) / 2));
+    tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
 
     final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
@@ -593,35 +634,73 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   // ── Filtering ────────────────────────────────────────────────────────────────
 
-  List<MapOrganization> get _filteredOrgs {
+  // Orgs that match the current active category (and subcategory filters)
+  List<MapOrganization> get _heroOrgs {
+    if (_activeCategory == null) return _allOrgs; // all = hero when nothing selected
     return _allOrgs.where((org) {
-      if (_activeSectorFilters.isNotEmpty &&
-          !_activeSectorFilters.contains(org.sectorId)) return false;
-      if (_activeOrgTypeFilters.isNotEmpty &&
-          !_activeOrgTypeFilters.contains(org.orgTypeId)) return false;
-      if (_activeBeneficiaryFilters.isNotEmpty &&
-          org.beneficiaryGroupIds.toSet().intersection(_activeBeneficiaryFilters).isEmpty) return false;
-      if (_activeFacilityFilters.isNotEmpty &&
-          org.facilityTypeIds.toSet().intersection(_activeFacilityFilters).isEmpty) return false;
-      if (_activeSubFacilityFilters.isNotEmpty &&
-          org.subFacilityIds.toSet().intersection(_activeSubFacilityFilters).isEmpty) return false;
+      if (org.sectorId != _activeCategory) return false;
+      if (_activeSubFilters.isNotEmpty && !_activeSubFilters.contains(org.orgTypeId)) return false;
       return true;
     }).toList();
   }
 
   void _rebuildMarkers() {
     final markers = <Marker>{};
-    for (final org in _filteredOrgs) {
-      final icon = _typeIcons[org.orgTypeId] ?? BitmapDescriptor.defaultMarker;
+    final heroIds = _heroOrgs.map((o) => o.id).toSet();
+    final hasCategory = _activeCategory != null;
+
+    for (final org in _allOrgs) {
+      final isHero = heroIds.contains(org.id);
+
+      if (hasCategory && !isHero) continue; // hide non-matching when filtered
+
+      final icon = isHero && hasCategory
+          ? (_typeIconsHero[org.orgTypeId] ?? _typeIconsNormal[org.orgTypeId] ?? BitmapDescriptor.defaultMarker)
+          : (_typeIconsNormal[org.orgTypeId] ?? BitmapDescriptor.defaultMarker);
+
       markers.add(Marker(
         markerId: MarkerId(org.id),
         position: org.location,
         icon: icon,
         infoWindow: InfoWindow.noText,
+        zIndex: isHero && hasCategory ? 2.0 : 1.0,
         onTap: () => _selectOrg(org),
       ));
     }
     setState(() => _markers = markers);
+  }
+
+  // Tap a category icon
+  void _selectCategory(String sectorId) {
+    setState(() {
+      if (_activeCategory == sectorId) {
+        // Deselect — back to show all
+        _activeCategory = null;
+        _activeSubFilters.clear();
+        _subPanelOpen = false;
+      } else {
+        _activeCategory = sectorId;
+        _activeSubFilters.clear();
+        _subPanelOpen = true;
+      }
+    });
+    _rebuildMarkers();
+  }
+
+  // Toggle a subcategory (orgType) within active category
+  void _toggleSubFilter(String orgTypeId) {
+    setState(() {
+      _activeSubFilters.contains(orgTypeId)
+          ? _activeSubFilters.remove(orgTypeId)
+          : _activeSubFilters.add(orgTypeId);
+    });
+    _rebuildMarkers();
+  }
+
+  // "Show All" in subcategory panel — clear sub filters, keep category
+  void _clearSubFilters() {
+    setState(() => _activeSubFilters.clear());
+    _rebuildMarkers();
   }
 
   void _selectOrg(MapOrganization org) {
@@ -638,27 +717,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     });
   }
 
-  bool get _hasActiveFilters =>
-      _activeSectorFilters.isNotEmpty ||
-      _activeOrgTypeFilters.isNotEmpty ||
-      _activeBeneficiaryFilters.isNotEmpty ||
-      _activeFacilityFilters.isNotEmpty ||
-      _activeSubFacilityFilters.isNotEmpty;
+  bool get _hasActiveFilters => _activeCategory != null;
 
-  int get _totalActiveCount =>
-      _activeSectorFilters.length +
-      _activeOrgTypeFilters.length +
-      _activeBeneficiaryFilters.length +
-      _activeFacilityFilters.length +
-      _activeSubFacilityFilters.length;
+  int get _totalActiveCount => _activeSubFilters.length;
 
   void _clearAllFilters() {
     setState(() {
-      _activeSectorFilters.clear();
-      _activeOrgTypeFilters.clear();
-      _activeBeneficiaryFilters.clear();
-      _activeFacilityFilters.clear();
-      _activeSubFacilityFilters.clear();
+      _activeCategory = null;
+      _activeSubFilters.clear();
+      _subPanelOpen = false;
     });
     _rebuildMarkers();
   }
@@ -669,6 +736,25 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
 
+    // Static mapping: which orgTypeIds belong to each sector
+    const sectorOrgTypes = {
+      'sector_env':       ['ot_recycler', 'ot_waste_art', 'ot_cleanup_org', 'ot_conservation', 'ot_clean_energy'],
+      'sector_social':    ['ot_women_org', 'ot_girls_org', 'ot_children_org', 'ot_youth_org', 'ot_pwd_org', 'ot_elderly_org', 'ot_refugee_org'],
+      'sector_health':    ['ot_clinic', 'ot_wash', 'ot_nutrition_org'],
+      'sector_education': ['ot_school', 'ot_vocational'],
+      'sector_economic':  ['ot_sacco'],
+      'sector_legal':     ['ot_legal_aid'],
+      'sector_faith':     ['ot_fbo'],
+    };
+
+    // OrgType filters for the active sector — always show all defined types
+    final orgTypesInSector = _activeCategory == null
+        ? <MapFilter>[]
+        : _filterLevels[1].options.where((f) {
+      final allowed = sectorOrgTypes[_activeCategory] ?? [];
+      return allowed.contains(f.id);
+    }).toList();
+
     return Scaffold(
       body: Stack(
         children: [
@@ -677,165 +763,70 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             initialCameraPosition: _initialPosition,
             markers: _markers,
             onMapCreated: (c) => _mapController = c,
-            onTap: (_) => _clearOrgSelection(),
+            onTap: (_) {
+              _clearOrgSelection();
+              if (_subPanelOpen) setState(() => _subPanelOpen = false);
+            },
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
           ),
 
-          // ── Scrim when filter panel open ──────────────────────────────────
-          if (_showFilterPanel)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _closeFilterPanel,
-                child: Container(color: Colors.black.withOpacity(0.38)),
-              ),
-            ),
-
-          // ── Top search / filter bar ───────────────────────────────────────
+          // ── Vertical filter sidebar (left edge) ───────────────────────────
           Positioned(
             top: topPad + 12,
-            left: 16,
-            right: 16,
-            child: Row(
+            left: 10,
+            bottom: 120,
+            child: _VerticalFilterSidebar(
+              filterLevels: _filterLevels,
+              activeCategory: _activeCategory,
+              activeSubFilters: _activeSubFilters,
+              subPanelOpen: _subPanelOpen,
+              orgTypesInSector: orgTypesInSector,
+              heroCount: _heroOrgs.length,
+              onSelectCategory: _selectCategory,
+              onToggleSubFilter: _toggleSubFilter,
+              onClearSubFilters: _clearSubFilters,
+              onToggleSubPanel: () => setState(() => _subPanelOpen = !_subPanelOpen),
+              onClearAll: _clearAllFilters,
+            ),
+          ),
+
+          // ── Top-right controls ────────────────────────────────────────────
+          Positioned(
+            top: topPad + 12,
+            right: 12,
+            child: Column(
               children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _openFilterPanel,
-                    child: Container(
-                      height: 50,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.10),
-                            blurRadius: 18,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.tune,
-                            size: 20,
-                            color: _hasActiveFilters ? AppTheme.primary : Colors.grey.shade400,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              _hasActiveFilters
-                                  ? '$_totalActiveCount filter${_totalActiveCount == 1 ? '' : 's'} active'
-                                  : 'Filter organizations…',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: _hasActiveFilters ? AppTheme.primary : Colors.grey.shade500,
-                                fontWeight: _hasActiveFilters ? FontWeight.w700 : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          if (_hasActiveFilters)
-                            GestureDetector(
-                              onTap: () {
-                                _clearAllFilters();
-                                setState(() {});
-                              },
-                              child: Icon(Icons.close, size: 18, color: Colors.red.shade400),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
                 _MapIconButton(
                   icon: Icons.my_location_outlined,
                   onTap: () => _mapController?.animateCamera(
                     CameraUpdate.newLatLngZoom(_initialPosition.target, 13),
                   ),
                 ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10)
+                    ],
+                  ),
+                  child: Text(
+                    '${_heroOrgs.length} shown',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.darkGreen,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-
-          // ── Active filter chips row ───────────────────────────────────────
-          if (_hasActiveFilters)
-            Positioned(
-              top: topPad + 74,
-              left: 0,
-              right: 0,
-              child: SizedBox(
-                height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  children: [
-                    ..._activeSectorFilters.map((id) => _buildActiveChip(id, 0)),
-                    ..._activeOrgTypeFilters.map((id) => _buildActiveChip(id, 1)),
-                    ..._activeBeneficiaryFilters.map((id) => _buildActiveChip(id, 2)),
-                    ..._activeFacilityFilters.map((id) => _buildActiveChip(id, 3)),
-                    ..._activeSubFacilityFilters.map((id) => _buildActiveChip(id, 4)),
-                  ],
-                ),
-              ),
-            ),
-
-          // ── Results badge ─────────────────────────────────────────────────
-          Positioned(
-            top: topPad + (_hasActiveFilters ? 120 : 74),
-            left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10)],
-              ),
-              child: Text(
-                '${_filteredOrgs.length} org${_filteredOrgs.length == 1 ? '' : 's'} shown',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.darkGreen,
-                ),
-              ),
-            ),
-          ),
-
-          // ── Filter panel (slides from right) ─────────────────────────────
-          if (_showFilterPanel)
-            Positioned(
-              top: 0,
-              bottom: 0,
-              right: 0,
-              width: MediaQuery.of(context).size.width * 0.88,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(1, 0),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(
-                  parent: _filterPanelController,
-                  curve: Curves.easeOutCubic,
-                )),
-                child: _FilterPanel(
-                  filterLevels: _filterLevels,
-                  activeSectorFilters: _activeSectorFilters,
-                  activeOrgTypeFilters: _activeOrgTypeFilters,
-                  activeBeneficiaryFilters: _activeBeneficiaryFilters,
-                  activeFacilityFilters: _activeFacilityFilters,
-                  activeSubFacilityFilters: _activeSubFacilityFilters,
-                  onChanged: () {
-                    setState(() {});
-                    _rebuildMarkers();
-                  },
-                  onClose: _closeFilterPanel,
-                  onClearAll: _clearAllFilters,
-                ),
-              ),
-            ),
 
           // ── Org detail bottom sheet ────────────────────────────────────────
           if (_selectedOrg != null)
@@ -865,284 +856,379 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _openFilterPanel() {
-    setState(() => _showFilterPanel = true);
-    _filterPanelController.forward(from: 0);
-  }
+  Set<String> _activeSetFor(int levelIndex) => {}; // legacy stub
+}
 
-  void _closeFilterPanel() {
-    _filterPanelController.reverse().then((_) {
-      if (mounted) setState(() => _showFilterPanel = false);
-    });
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// Vertical Filter Sidebar — category icons + subcategory popout
+// ─────────────────────────────────────────────────────────────────────────────
 
-  Widget _buildActiveChip(String id, int levelIndex) {
-    final options = _filterLevels[levelIndex].options;
-    final filter = options.firstWhere(
-      (f) => f.id == id,
-      orElse: () => MapFilter(id: id, label: id, icon: Icons.label, color: AppTheme.primary),
+class _VerticalFilterSidebar extends StatelessWidget {
+  final List<MapFilterLevel> filterLevels;
+  final String? activeCategory;
+  final Set<String> activeSubFilters;
+  final bool subPanelOpen;
+  final List<MapFilter> orgTypesInSector;
+  final int heroCount;
+  final void Function(String sectorId) onSelectCategory;
+  final void Function(String orgTypeId) onToggleSubFilter;
+  final VoidCallback onClearSubFilters;
+  final VoidCallback onToggleSubPanel;
+  final VoidCallback onClearAll;
+
+  const _VerticalFilterSidebar({
+    required this.filterLevels,
+    required this.activeCategory,
+    required this.activeSubFilters,
+    required this.subPanelOpen,
+    required this.orgTypesInSector,
+    required this.heroCount,
+    required this.onSelectCategory,
+    required this.onToggleSubFilter,
+    required this.onClearSubFilters,
+    required this.onToggleSubPanel,
+    required this.onClearAll,
+  });
+
+  // Category-level icons & colors (sectors)
+  static const _sectorColors = {
+    'sector_env':       Color(0xFF2E7D32),
+    'sector_social':    Color(0xFFC62828),
+    'sector_health':    Color(0xFF00695C),
+    'sector_education': Color(0xFF1565C0),
+    'sector_economic':  Color(0xFFE65100),
+    'sector_legal':     Color(0xFF4A148C),
+    'sector_faith':     Color(0xFF4E342E),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final sectors = filterLevels[0].options; // sector-level filters
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Category icon column ───────────────────────────────────────────
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...sectors.map((sector) {
+              final isActive = activeCategory == sector.id;
+              final color = _sectorColors[sector.id] ?? sector.color;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: GestureDetector(
+                  onTap: () => onSelectCategory(sector.id),
+                  child: _SidebarIconButton(
+                    icon: sector.icon,
+                    color: color,
+                    isActive: isActive,
+                    isExpanded: isActive && subPanelOpen,
+                    label: sector.label,
+                  ),
+                ),
+              );
+            }),
+
+            // ── "Show All" — only when a category is selected ─────────────
+            if (activeCategory != null) ...[
+              Container(
+                margin: const EdgeInsets.only(top: 2, bottom: 6),
+                height: 1,
+                width: 34,
+                color: Colors.grey.shade300,
+              ),
+              GestureDetector(
+                onTap: onClearAll,
+                child: const _ShowAllButton(),
+              ),
+            ],
+          ],
+        ),
+
+        // ── Subcategory panel ──────────────────────────────────────────────
+        if (activeCategory != null && subPanelOpen) ...[
+          const SizedBox(width: 8),
+          _SubcategoryPanel(
+            categoryLabel: filterLevels[0].options
+                .firstWhere((f) => f.id == activeCategory,
+                orElse: () => MapFilter(
+                    id: '', label: 'Types', icon: Icons.category, color: Colors.grey))
+                .label,
+            color: _sectorColors[activeCategory!] ?? Colors.grey,
+            orgTypes: orgTypesInSector,
+            activeSubFilters: activeSubFilters,
+            onToggle: onToggleSubFilter,
+            onClear: onClearSubFilters,
+            onClose: onToggleSubPanel,
+          ),
+        ],
+      ],
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Show All button — clears all filters
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ShowAllButton extends StatelessWidget {
+  const _ShowAllButton();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
-        color: filter.color,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Colors.grey.shade300, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(filter.icon, color: Colors.white, size: 13),
-          const SizedBox(width: 5),
-          Text(filter.label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-          const SizedBox(width: 5),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _activeSetFor(levelIndex).remove(id);
-              });
-              _rebuildMarkers();
-            },
-            child: const Icon(Icons.close, color: Colors.white, size: 13),
+          Icon(Icons.layers_clear_outlined, size: 16, color: Colors.grey.shade600),
+          const SizedBox(height: 1),
+          Text(
+            'All',
+            style: TextStyle(
+              fontSize: 8.5,
+              fontWeight: FontWeight.w800,
+              color: Colors.grey.shade600,
+              letterSpacing: 0.3,
+            ),
           ),
         ],
       ),
     );
   }
-
-  Set<String> _activeSetFor(int levelIndex) {
-    switch (levelIndex) {
-      case 0: return _activeSectorFilters;
-      case 1: return _activeOrgTypeFilters;
-      case 2: return _activeBeneficiaryFilters;
-      case 3: return _activeFacilityFilters;
-      case 4: return _activeSubFacilityFilters;
-      default: return {};
-    }
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Filter Panel
+// Sidebar icon button
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _FilterPanel extends StatefulWidget {
-  final List<MapFilterLevel> filterLevels;
-  final Set<String> activeSectorFilters;
-  final Set<String> activeOrgTypeFilters;
-  final Set<String> activeBeneficiaryFilters;
-  final Set<String> activeFacilityFilters;
-  final Set<String> activeSubFacilityFilters;
-  final VoidCallback onChanged;
-  final VoidCallback onClose;
-  final VoidCallback onClearAll;
+class _SidebarIconButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final bool isActive;
+  final bool isExpanded;
+  final String label;
 
-  const _FilterPanel({
-    required this.filterLevels,
-    required this.activeSectorFilters,
-    required this.activeOrgTypeFilters,
-    required this.activeBeneficiaryFilters,
-    required this.activeFacilityFilters,
-    required this.activeSubFacilityFilters,
-    required this.onChanged,
-    required this.onClose,
-    required this.onClearAll,
+  const _SidebarIconButton({
+    required this.icon,
+    required this.color,
+    required this.isActive,
+    required this.isExpanded,
+    required this.label,
   });
 
   @override
-  State<_FilterPanel> createState() => _FilterPanelState();
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: isExpanded
+            ? color
+            : isActive
+            ? color.withOpacity(0.92)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(
+          color: isExpanded || isActive ? color : Colors.grey.shade200,
+          width: isExpanded ? 2.5 : 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isActive || isExpanded
+                ? color.withOpacity(0.35)
+                : Colors.black.withOpacity(0.10),
+            blurRadius: isActive || isExpanded ? 14 : 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Icon(
+          icon,
+          size: 20,
+          color: isActive || isExpanded ? Colors.white : color,
+        ),
+      ),
+    );
+  }
 }
 
-class _FilterPanelState extends State<_FilterPanel> {
-  int _selectedLevelIndex = 0;
+// ─────────────────────────────────────────────────────────────────────────────
+// Subcategory panel — org types within selected sector, with checkboxes
+// ─────────────────────────────────────────────────────────────────────────────
 
-  Set<String> _activeSetFor(int i) {
-    switch (i) {
-      case 0: return widget.activeSectorFilters;
-      case 1: return widget.activeOrgTypeFilters;
-      case 2: return widget.activeBeneficiaryFilters;
-      case 3: return widget.activeFacilityFilters;
-      case 4: return widget.activeSubFacilityFilters;
-      default: return {};
-    }
-  }
+class _SubcategoryPanel extends StatelessWidget {
+  final String categoryLabel;
+  final Color color;
+  final List<MapFilter> orgTypes;
+  final Set<String> activeSubFilters;
+  final void Function(String id) onToggle;
+  final VoidCallback onClear;
+  final VoidCallback onClose;
 
-  void _toggle(int levelIndex, String id) {
-    final s = _activeSetFor(levelIndex);
-    setState(() => s.contains(id) ? s.remove(id) : s.add(id));
-    widget.onChanged();
-  }
-
-  int _countFor(int i) => _activeSetFor(i).length;
+  const _SubcategoryPanel({
+    required this.categoryLabel,
+    required this.color,
+    required this.orgTypes,
+    required this.activeSubFilters,
+    required this.onToggle,
+    required this.onClear,
+    required this.onClose,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final level = widget.filterLevels[_selectedLevelIndex];
-    final activeSet = _activeSetFor(_selectedLevelIndex);
+    final screenH = MediaQuery.of(context).size.height;
 
     return Material(
-      elevation: 0,
       color: Colors.transparent,
       child: Container(
-        decoration: const BoxDecoration(
+        width: 220,
+        constraints: BoxConstraints(maxHeight: screenH * 0.58),
+        decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            bottomLeft: Radius.circular(24),
-          ),
+          borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(color: Colors.black26, blurRadius: 30, offset: Offset(-4, 0)),
+            BoxShadow(color: color.withOpacity(0.18), blurRadius: 24, offset: const Offset(4, 4)),
+            BoxShadow(color: Colors.black.withOpacity(0.09), blurRadius: 12, offset: const Offset(0, 2)),
           ],
         ),
-        child: SafeArea(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Header row
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
+              // ── Header ────────────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
+                color: color,
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            categoryLabel,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            activeSubFilters.isEmpty
+                                ? 'All types shown'
+                                : '${activeSubFilters.length} type${activeSubFilters.length > 1 ? 's' : ''} selected',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.80),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Icon(Icons.tune, color: AppTheme.primary, size: 20),
                     ),
-                    const SizedBox(width: 10),
-                    const Text('Deep Filter', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () { widget.onClearAll(); setState(() {}); },
-                      child: Text('Clear all', style: TextStyle(color: Colors.red.shade400, fontSize: 12)),
-                    ),
-                    IconButton(
-                      onPressed: widget.onClose,
-                      icon: Icon(Icons.close, color: Colors.grey.shade500, size: 22),
+                    if (activeSubFilters.isNotEmpty)
+                      GestureDetector(
+                        onTap: onClear,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.22),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text('All',
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.95),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800)),
+                        ),
+                      ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: onClose,
+                      child: Icon(Icons.close, color: Colors.white.withOpacity(0.80), size: 17),
                     ),
                   ],
                 ),
               ),
 
-              // Level tabs
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 34,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: widget.filterLevels.length,
-                  itemBuilder: (_, i) {
-                    final isSelected = _selectedLevelIndex == i;
-                    final count = _countFor(i);
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedLevelIndex = i),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        margin: const EdgeInsets.only(right: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppTheme.primary : (count > 0 ? AppTheme.primary.withOpacity(0.08) : Colors.grey.shade100),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              widget.filterLevels[i].label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected ? Colors.white : (count > 0 ? AppTheme.primary : Colors.black54),
-                              ),
-                            ),
-                            if (count > 0 && !isSelected) ...[
-                              const SizedBox(width: 5),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primary,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text('$count', style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 10),
-              Divider(height: 1, color: Colors.grey.shade200),
-
-              // Filter options list
-              Expanded(
+              // ── Org type list ──────────────────────────────────────────────
+              Flexible(
                 child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                  itemCount: level.options.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 5),
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  itemCount: orgTypes.length,
+                  separatorBuilder: (_, __) =>
+                      Divider(height: 1, indent: 14, endIndent: 14, color: Colors.grey.shade100),
                   itemBuilder: (_, i) {
-                    final opt = level.options[i];
-                    final selected = activeSet.contains(opt.id);
+                    final opt = orgTypes[i];
+                    final selected = activeSubFilters.contains(opt.id);
                     return InkWell(
-                      onTap: () => _toggle(_selectedLevelIndex, opt.id),
-                      borderRadius: BorderRadius.circular(12),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: selected ? opt.color.withOpacity(0.08) : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: selected ? opt.color : Colors.transparent,
-                            width: 1.5,
-                          ),
-                        ),
+                      onTap: () => onToggle(opt.id),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         child: Row(
                           children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 160),
-                              padding: const EdgeInsets.all(7),
+                            Container(
+                              width: 30,
+                              height: 30,
                               decoration: BoxDecoration(
-                                color: selected ? opt.color : opt.color.withOpacity(0.1),
+                                color: selected ? color : color.withOpacity(0.09),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: Icon(opt.icon, size: 17, color: selected ? Colors.white : opt.color),
+                              child: Icon(opt.icon, size: 15,
+                                  color: selected ? Colors.white : color),
                             ),
-                            const SizedBox(width: 11),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 opt.label,
                                 style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
-                                  color: selected ? opt.color : Colors.black87,
+                                  fontSize: 12.5,
+                                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                                  color: selected ? color : Colors.black87,
                                 ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (selected) Icon(Icons.check_circle, color: opt.color, size: 19),
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: Checkbox(
+                                value: selected,
+                                activeColor: color,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                                side: BorderSide(
+                                    color: selected ? color : Colors.grey.shade300, width: 1.5),
+                                onChanged: (_) => onToggle(opt.id),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     );
                   },
-                ),
-              ),
-
-              // Apply button
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
-                child: FilledButton(
-                  onPressed: widget.onClose,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: const Text('Apply Filters', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 ),
               ),
             ],
@@ -1213,14 +1299,14 @@ class _OrgDetailSheet extends StatelessWidget {
                   ),
                   child: org.logoUrl != null
                       ? ClipRRect(
-                          borderRadius: BorderRadius.circular(14),
-                          child: Image.network(
-                            org.logoUrl!,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
-                                Icon(orgTypeIcon, color: Colors.white, size: 28),
-                          ),
-                        )
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.network(
+                      org.logoUrl!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) =>
+                          Icon(orgTypeIcon, color: Colors.white, size: 28),
+                    ),
+                  )
                       : Icon(orgTypeIcon, color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 13),

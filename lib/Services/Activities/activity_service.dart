@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../Models/activity.dart';
+import '../../Community/Activities/activity.dart';
 
 class ActivityService {
   final FirebaseFirestore _db;
@@ -24,21 +24,21 @@ class ActivityService {
     query = query.orderBy('dateTime', descending: false);
 
     return query.snapshots().map((snapshot) {
-      return snapshot.docs.map(Activity.fromDoc).toList();
+      return snapshot.docs.map(Activity.fromFirestore).toList();
     });
   }
 
   Future<Activity?> getActivity(String id) async {
     final doc = await _db.collection('activities').doc(id).get();
     if (!doc.exists) return null;
-    return Activity.fromDoc(doc);
+    return Activity.fromFirestore(doc);
   }
 
   Future<String> createActivity({
     required String type,
     required String title,
     required String description,
-    required String location,
+    required Map<String, dynamic> location,
     required DateTime dateTime,
     required int requiredParticipants,
     String? createdBy,

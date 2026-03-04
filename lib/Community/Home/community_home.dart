@@ -4,9 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../Models/user.dart';
-import '../../Services/Community/community_service.dart';
 import '../../Shared/theme/app_theme.dart';
-import '../Activities/activities_list.dart';
+import '../Activities/activity_home_logic.dart';
 import '../Impact/impact_dashboard.dart';
 import '../Profile/profile_screen.dart';
 import '../Map/map.dart';
@@ -14,7 +13,6 @@ import '../Contributions/log_contribution.dart';
 import '../Contributions/contribution_card.dart';
 import '../Contributions/contribution_placeholders.dart';
 import '../Communication/notification_center.dart';
-import '../Activities/create_activity.dart';
 
 class CommunityHomeScreen extends StatefulWidget {
   const CommunityHomeScreen({super.key});
@@ -25,16 +23,6 @@ class CommunityHomeScreen extends StatefulWidget {
 
 class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
   int _index = 0;
-
-  String _getInitials(String? name) {
-    if (name == null || name.trim().isEmpty) return '';
-    final trimmed = name.trim();
-    final words = trimmed.split(' ');
-    if (words.length == 1) {
-      return words[0][0].toUpperCase();
-    }
-    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +42,7 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
         },
         onViewImpact: () => setState(() => _index = 2),
       ),
-      const ActivitiesListScreen(embedded: true),
+      ActivityHomeLogic.buildActivityTab(),
       const ImpactDashboardScreen(embedded: true),
       const MapScreen(),
       const ProfileScreen(),
@@ -170,28 +158,7 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
      ],
         ),
         body: pages[_index],
-        floatingActionButton: _index != 1 || user == null
-            ? null
-            : FutureBuilder<String?>(
-                future: CommunityService().getUserRole(userId: user.uid),
-                builder: (context, snapshot) {
-                  final role = snapshot.data ?? 'Member';
-                  final isOrganizer = role == 'Organizer';
-                  if (!isOrganizer) return const SizedBox.shrink();
-
-                  return FloatingActionButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const CreateActivityScreen()),
-                    ),
-                    backgroundColor: AppTheme.tertiary,
-                    foregroundColor: Colors.white,
-                    elevation: 4,
-                    child: const Icon(Icons.add, size: 28),
-                  );
-                },
-              ),
+        floatingActionButton: _index == 1 ? ActivityHomeLogic.buildFloatingActionButton(context, user) : null,
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             color: Colors.white,
