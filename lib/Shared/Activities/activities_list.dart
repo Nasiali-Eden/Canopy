@@ -3,10 +3,10 @@ import 'package:provider/provider.dart';
 
 import 'activity.dart';
 import 'activity_placeholders.dart';
-import '../../../Models/user.dart';
-import '../../../Services/Activities/activity_service.dart';
-import '../../../Services/Community/community_service.dart';
-import '../../../Shared/theme/app_theme.dart';
+import '../../Models/user.dart';
+import '../../Services/Activities/activity_service.dart';
+import '../../Services/Community/community_service.dart';
+import '../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FILTER CONFIG
@@ -23,7 +23,9 @@ class _FilterOption {
 
 const List<_FilterOption> _filters = [
   _FilterOption(
-      label: 'All', icon: Icons.grid_view_rounded, color: AppTheme.primary),
+      label: 'All',
+      icon: Icons.grid_view_rounded,
+      color: AppTheme.primary),
   _FilterOption(
       label: 'Cleanup',
       icon: Icons.cleaning_services_outlined,
@@ -33,7 +35,9 @@ const List<_FilterOption> _filters = [
       icon: Icons.celebration_outlined,
       color: AppTheme.tertiary),
   _FilterOption(
-      label: 'Task', icon: Icons.task_alt_outlined, color: AppTheme.secondary),
+      label: 'Task',
+      icon: Icons.task_alt_outlined,
+      color: AppTheme.secondary),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +64,8 @@ class _ActivitiesListScreenState extends State<ActivitiesListScreen>
     _fadeController = AnimationController(
         duration: const Duration(milliseconds: 300), vsync: this)
       ..forward();
-    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
+    _fadeAnim =
+        CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
   }
 
   @override
@@ -160,7 +165,8 @@ class _ActivitiesListScreenState extends State<ActivitiesListScreen>
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(
-              height: 1, color: AppTheme.lightGreen.withOpacity(0.18)),
+              height: 1,
+              color: AppTheme.lightGreen.withOpacity(0.18)),
         ),
       ),
       floatingActionButton: _OrganizerFab(user: user),
@@ -194,8 +200,8 @@ class _FilterBar extends StatelessWidget {
               onTap: () => onSelect(f.label),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
                   color: isSelected ? f.color : Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -207,11 +213,11 @@ class _FilterBar extends StatelessWidget {
                   ),
                   boxShadow: isSelected
                       ? [
-                          BoxShadow(
-                              color: f.color.withOpacity(0.25),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3))
-                        ]
+                    BoxShadow(
+                        color: f.color.withOpacity(0.25),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3))
+                  ]
                       : [],
                 ),
                 child: Row(
@@ -220,8 +226,9 @@ class _FilterBar extends StatelessWidget {
                     Icon(
                       f.icon,
                       size: 14,
-                      color:
-                          isSelected ? Colors.white : f.color.withOpacity(0.7),
+                      color: isSelected
+                          ? Colors.white
+                          : f.color.withOpacity(0.7),
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -273,18 +280,8 @@ class _ActivityCard extends StatelessWidget {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
@@ -296,18 +293,21 @@ class _ActivityCard extends StatelessWidget {
     final cfg = ActivityTypeConfig.forType(activity.type);
     final pct = activity.requiredParticipants > 0
         ? (activity.currentParticipants / activity.requiredParticipants)
-            .clamp(0.0, 1.0)
+        .clamp(0.0, 1.0)
         : 0.0;
-    final coverUrl = activity.images.isNotEmpty ? activity.images.first : null;
+    final coverUrl =
+    activity.images.isNotEmpty ? activity.images.first : null;
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/activities/${activity.id}'),
+      onTap: () =>
+          Navigator.pushNamed(context, '/activities/${activity.id}'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppTheme.lightGreen.withOpacity(0.22)),
+          border:
+          Border.all(color: AppTheme.lightGreen.withOpacity(0.22)),
           boxShadow: [
             BoxShadow(
               color: cfg.color.withOpacity(0.07),
@@ -322,7 +322,7 @@ class _ActivityCard extends StatelessWidget {
             // ── Cover image ──────────────────────────────────────────
             ClipRRect(
               borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(18)),
+              const BorderRadius.vertical(top: Radius.circular(18)),
               child: SizedBox(
                 height: 140,
                 width: double.infinity,
@@ -332,15 +332,16 @@ class _ActivityCard extends StatelessWidget {
                     // Image or placeholder
                     coverUrl != null
                         ? Image.network(
-                            coverUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                _CoverPlaceholder(cfg: cfg),
-                            loadingBuilder: (_, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return _CoverPlaceholder(cfg: cfg);
-                            },
-                          )
+                      coverUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          _CoverPlaceholder(cfg: cfg),
+                      loadingBuilder:
+                          (_, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return _CoverPlaceholder(cfg: cfg);
+                      },
+                    )
                         : _CoverPlaceholder(cfg: cfg),
 
                     // Bottom scrim
@@ -367,8 +368,8 @@ class _ActivityCard extends StatelessWidget {
                     Positioned(
                       top: 10,
                       left: 10,
-                      child:
-                          _RegistrationBadge(state: activity.registrationState),
+                      child: _RegistrationBadge(
+                          state: activity.registrationState),
                     ),
 
                     // Type badge — top right
@@ -385,7 +386,8 @@ class _ActivityCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(cfg.icon, size: 11, color: Colors.white),
+                            Icon(cfg.icon,
+                                size: 11, color: Colors.white),
                             const SizedBox(width: 4),
                             Text(activity.type.label,
                                 style: const TextStyle(
@@ -504,7 +506,8 @@ class _ActivityCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text('participants',
-                        style: TextStyle(fontSize: 11, color: Colors.black38)),
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.black38)),
                     const Spacer(),
                     Text(
                       activity.isFull
@@ -525,7 +528,8 @@ class _ActivityCard extends StatelessWidget {
                       value: pct,
                       minHeight: 5,
                       backgroundColor: cfg.color.withOpacity(0.1),
-                      valueColor: AlwaysStoppedAnimation<Color>(cfg.color),
+                      valueColor:
+                      AlwaysStoppedAnimation<Color>(cfg.color),
                     ),
                   ),
 
@@ -547,12 +551,14 @@ class _ActivityCard extends StatelessWidget {
                           children: [
                             Icon(Icons.place_outlined,
                                 size: 11,
-                                color: AppTheme.darkGreen.withOpacity(0.55)),
+                                color: AppTheme.darkGreen
+                                    .withOpacity(0.55)),
                             const SizedBox(width: 3),
                             Text(activity.location.venue,
                                 style: TextStyle(
                                     fontSize: 10,
-                                    color: AppTheme.darkGreen.withOpacity(0.6),
+                                    color: AppTheme.darkGreen
+                                        .withOpacity(0.6),
                                     fontWeight: FontWeight.w500)),
                           ],
                         ),
@@ -622,7 +628,8 @@ class _CoverPlaceholder extends StatelessWidget {
     return Container(
       color: cfg.lightColor,
       child: Center(
-        child: Icon(cfg.icon, size: 40, color: cfg.color.withOpacity(0.3)),
+        child: Icon(cfg.icon,
+            size: 40, color: cfg.color.withOpacity(0.3)),
       ),
     );
   }
@@ -666,10 +673,12 @@ class _RegistrationBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOpen = state == RegistrationState.open;
-    final color = isOpen ? const Color(0xFF2E7D32) : Colors.red.shade700;
+    final color =
+    isOpen ? const Color(0xFF2E7D32) : Colors.red.shade700;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding:
+      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.92),
         borderRadius: BorderRadius.circular(20),
@@ -678,7 +687,8 @@ class _RegistrationBadge extends StatelessWidget {
         Container(
           width: 6,
           height: 6,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          decoration:
+          BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
         Text(
@@ -704,7 +714,7 @@ class _EmptyBanner extends StatelessWidget {
     final isFiltered = filter != 'All';
     final filterCfg = isFiltered
         ? _filters.firstWhere((f) => f.label == filter,
-            orElse: () => _filters.first)
+        orElse: () => _filters.first)
         : null;
 
     return Container(
@@ -712,7 +722,8 @@ class _EmptyBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.25)),
+        border: Border.all(
+            color: AppTheme.lightGreen.withOpacity(0.25)),
         boxShadow: [
           BoxShadow(
               color: AppTheme.primary.withOpacity(0.05),
@@ -724,11 +735,14 @@ class _EmptyBanner extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: (filterCfg?.color ?? AppTheme.primary).withOpacity(0.1),
+            color: (filterCfg?.color ?? AppTheme.primary)
+                .withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
-            isFiltered ? filterCfg!.icon : Icons.event_note_outlined,
+            isFiltered
+                ? filterCfg!.icon
+                : Icons.event_note_outlined,
             size: 22,
             color: filterCfg?.color ?? AppTheme.primary,
           ),
@@ -752,7 +766,8 @@ class _EmptyBanner extends StatelessWidget {
                 isFiltered
                     ? 'Be the first to create a ${filter.toLowerCase()} activity.'
                     : 'Activities will appear here once added by organizers.',
-                style: TextStyle(fontSize: 12, color: Colors.black38),
+                style: TextStyle(
+                    fontSize: 12, color: Colors.black38),
               ),
             ],
           ),
@@ -817,9 +832,11 @@ class _OrganizerFab extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
               borderRadius: BorderRadius.circular(18),
-              onTap: () => Navigator.pushNamed(context, '/activities/create'),
+              onTap: () =>
+                  Navigator.pushNamed(context, '/activities/create'),
               child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding: EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 14),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -839,49 +856,5 @@ class _OrganizerFab extends StatelessWidget {
         );
       },
     );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ACTIVITY TYPE CONFIG
-// ─────────────────────────────────────────────────────────────────────────────
-
-class ActivityTypeConfig {
-  final Color color;
-  final Color lightColor;
-  final IconData icon;
-  final List<Color> gradient;
-
-  const ActivityTypeConfig({
-    required this.color,
-    required this.lightColor,
-    required this.icon,
-    required this.gradient,
-  });
-
-  static ActivityTypeConfig forType(ActivityType type) {
-    switch (type) {
-      case ActivityType.cleanup:
-        return ActivityTypeConfig(
-          color: AppTheme.accent,
-          lightColor: AppTheme.accent.withOpacity(0.1),
-          icon: Icons.cleaning_services_outlined,
-          gradient: [AppTheme.accent, const Color(0xFF2EBFA5)],
-        );
-      case ActivityType.event:
-        return ActivityTypeConfig(
-          color: AppTheme.tertiary,
-          lightColor: AppTheme.tertiary.withOpacity(0.1),
-          icon: Icons.celebration_outlined,
-          gradient: [AppTheme.tertiary, const Color(0xFFE8A020)],
-        );
-      case ActivityType.task:
-        return ActivityTypeConfig(
-          color: AppTheme.secondary,
-          lightColor: AppTheme.secondary.withOpacity(0.1),
-          icon: Icons.task_alt_outlined,
-          gradient: [AppTheme.secondary, AppTheme.primary],
-        );
-    }
   }
 }

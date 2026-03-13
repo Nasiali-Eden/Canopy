@@ -85,11 +85,11 @@ class ActivityLocation {
   }
 
   Map<String, dynamic> toMap() => {
-        'area': area,
-        'city': city,
-        'venue': venue,
-        'coordinates': {'lat': lat, 'lng': lng},
-      };
+    'area': area,
+    'city': city,
+    'venue': venue,
+    'coordinates': {'lat': lat, 'lng': lng},
+  };
 
   /// Short label used in chips and cards
   String get shortLabel => area.isNotEmpty ? '$area, $city' : city;
@@ -161,9 +161,8 @@ class Activity {
   }
 
   /// First non-null image or null.
-  String? get coverImage => images.isNotEmpty
-      ? images.firstWhere((i) => i != null, orElse: () => null)
-      : null;
+  String? get coverImage =>
+      images.isNotEmpty ? images.firstWhere((i) => i != null, orElse: () => null) : null;
 
   // ── Serialisation ─────────────────────────────────────────────────────────
 
@@ -177,15 +176,16 @@ class Activity {
       location: ActivityLocation.fromMap(
           data['location'] as Map<String, dynamic>? ?? {}),
       images: (data['images'] as List<dynamic>?)
-              ?.map((e) => e as String?)
-              .toList() ??
+          ?.map((e) => e as String?)
+          .toList() ??
           [],
       registrationState: RegistrationState.fromString(
           data['registrationState'] as String? ?? 'open'),
-      participantIds:
-          (data['participantIds'] as List<dynamic>?)?.cast<String>() ?? [],
+      participantIds: (data['participantIds'] as List<dynamic>?)
+          ?.cast<String>() ??
+          [],
       requiredParticipants:
-          (data['requiredParticipants'] as num?)?.toInt() ?? 10,
+      (data['requiredParticipants'] as num?)?.toInt() ?? 10,
       dateTime: (data['dateTime'] as Timestamp?)?.toDate(),
       createdBy: data['createdBy'] as String?,
       status: data['status'] as String? ?? 'upcoming',
@@ -193,18 +193,19 @@ class Activity {
   }
 
   Map<String, dynamic> toFirestore() => {
-        'title': title,
-        'description': description,
-        'type': type.label,
-        'location': location.toMap(),
-        'images': images,
-        'registrationState': registrationState.name,
-        'participantIds': participantIds,
-        'requiredParticipants': requiredParticipants,
-        'dateTime': dateTime != null ? Timestamp.fromDate(dateTime!) : null,
-        'createdBy': createdBy,
-        'status': status,
-      };
+    'title': title,
+    'description': description,
+    'type': type.label,
+    'location': location.toMap(),
+    'images': images,
+    'registrationState': registrationState.name,
+    'participantIds': participantIds,
+    'requiredParticipants': requiredParticipants,
+    'dateTime':
+    dateTime != null ? Timestamp.fromDate(dateTime!) : null,
+    'createdBy': createdBy,
+    'status': status,
+  };
 
   Activity copyWith({
     String? id,

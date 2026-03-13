@@ -2,9 +2,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../Models/user.dart';
-import '../../../Services/Activities/activity_service.dart';
-import '../../../Shared/theme/app_theme.dart';
+import '../../Models/activity.dart' as ModelActivity;
+import '../../Models/user.dart';
+import '../../Services/Activities/activity_service.dart';
+import '../theme/app_theme.dart';
 import 'activity.dart';
 
 class ActivityDetailScreen extends StatefulWidget {
@@ -91,8 +92,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                   // Registration state badge
                   Padding(
                     padding: const EdgeInsets.only(right: 12, top: 8),
-                    child:
-                        _RegistrationBadge(state: activity.registrationState),
+                    child: _RegistrationBadge(state: activity.registrationState),
                   ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
@@ -109,18 +109,18 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                           final url = slots[i];
                           return url != null
                               ? CachedNetworkImage(
-                                  imageUrl: url,
-                                  fit: BoxFit.cover,
-                                  placeholder: (_, __) => Container(
-                                    color: cfg.lightColor,
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                          color: cfg.color, strokeWidth: 2),
-                                    ),
-                                  ),
-                                  errorWidget: (_, __, ___) =>
-                                      _ImagePlaceholder(cfg: cfg),
-                                )
+                            imageUrl: url,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              color: cfg.lightColor,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                    color: cfg.color, strokeWidth: 2),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) =>
+                                _ImagePlaceholder(cfg: cfg),
+                          )
                               : _ImagePlaceholder(cfg: cfg);
                         },
                       ),
@@ -152,7 +152,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: List.generate(
                             slots.length,
-                            (i) => AnimatedContainer(
+                                (i) => AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               margin: const EdgeInsets.symmetric(horizontal: 3),
                               width: _activeImageIndex == i ? 18 : 6,
@@ -201,8 +201,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             decoration: BoxDecoration(
                               color: cfg.lightColor,
                               borderRadius: BorderRadius.circular(20),
-                              border:
-                                  Border.all(color: cfg.color.withOpacity(0.3)),
+                              border: Border.all(
+                                  color: cfg.color.withOpacity(0.3)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -274,7 +274,7 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
                             color: AppTheme.secondary,
                             label: 'Participants',
                             value:
-                                '${activity.currentParticipants} / ${activity.requiredParticipants}',
+                            '${activity.currentParticipants} / ${activity.requiredParticipants}',
                             sub: activity.isFull ? 'Full' : 'Spots left',
                           ),
                         ),
@@ -360,18 +360,8 @@ class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
     ];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
@@ -473,31 +463,32 @@ class _ThumbnailStrip extends StatelessWidget {
                   ),
                   boxShadow: isActive
                       ? [
-                          BoxShadow(
-                              color: cfg.color.withOpacity(0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2))
-                        ]
+                    BoxShadow(
+                        color: cfg.color.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2))
+                  ]
                       : [],
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(9),
                   child: url != null
                       ? CachedNetworkImage(
-                          imageUrl: url,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) =>
-                              Container(color: cfg.lightColor),
-                          errorWidget: (_, __, ___) => Container(
-                              color: cfg.lightColor,
-                              child: Icon(cfg.icon,
-                                  size: 18, color: cfg.color.withOpacity(0.4))),
-                        )
+                    imageUrl: url,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) =>
+                        Container(color: cfg.lightColor),
+                    errorWidget: (_, __, ___) =>
+                        Container(color: cfg.lightColor,
+                            child: Icon(cfg.icon,
+                                size: 18,
+                                color: cfg.color.withOpacity(0.4))),
+                  )
                       : Container(
-                          color: cfg.lightColor,
-                          child: Icon(cfg.icon,
-                              size: 20, color: cfg.color.withOpacity(0.35)),
-                        ),
+                    color: cfg.lightColor,
+                    child: Icon(cfg.icon,
+                        size: 20, color: cfg.color.withOpacity(0.35)),
+                  ),
                 ),
               ),
             ),
@@ -552,8 +543,7 @@ class _InfoCard extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label,
                 style: TextStyle(
                     fontSize: 10,
@@ -586,13 +576,14 @@ class _InfoCard extends StatelessWidget {
 class _ParticipantProgress extends StatelessWidget {
   final Activity activity;
   final ActivityTypeConfig cfg;
-  const _ParticipantProgress({required this.activity, required this.cfg});
+  const _ParticipantProgress(
+      {required this.activity, required this.cfg});
 
   @override
   Widget build(BuildContext context) {
     final pct = activity.requiredParticipants > 0
         ? (activity.currentParticipants / activity.requiredParticipants)
-            .clamp(0.0, 1.0)
+        .clamp(0.0, 1.0)
         : 0.0;
 
     return Container(
@@ -600,7 +591,8 @@ class _ParticipantProgress extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.25)),
+        border:
+        Border.all(color: AppTheme.lightGreen.withOpacity(0.25)),
         boxShadow: [
           BoxShadow(
               color: AppTheme.primary.withOpacity(0.05),
@@ -614,7 +606,9 @@ class _ParticipantProgress extends StatelessWidget {
           const SizedBox(width: 6),
           Text("Who's Joining",
               style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w700, color: cfg.color)),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: cfg.color)),
           const Spacer(),
           Text(
             '${activity.currentParticipants} of ${activity.requiredParticipants}',
@@ -670,7 +664,9 @@ class _SectionLabel extends StatelessWidget {
       const SizedBox(width: 8),
       Text(label,
           style: TextStyle(
-              fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: color)),
       const SizedBox(width: 10),
       Expanded(child: Container(height: 1, color: color.withOpacity(0.12))),
     ]);
@@ -713,7 +709,8 @@ class _MapTile extends StatelessWidget {
                 ]),
                 const SizedBox(height: 4),
                 Text(location.city,
-                    style: TextStyle(fontSize: 12, color: Colors.black45)),
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.black45)),
                 if (location.venue.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(location.venue,
@@ -728,7 +725,8 @@ class _MapTile extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     '${location.lat.toStringAsFixed(4)}, ${location.lng.toStringAsFixed(4)}',
-                    style: const TextStyle(fontSize: 10, color: Colors.black38),
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.black38),
                   ),
                 ]),
               ],
@@ -739,15 +737,18 @@ class _MapTile extends StatelessWidget {
           width: 100,
           decoration: BoxDecoration(
             color: color.withOpacity(0.1),
-            borderRadius:
-                const BorderRadius.horizontal(right: Radius.circular(13)),
+            borderRadius: const BorderRadius.horizontal(
+                right: Radius.circular(13)),
           ),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          child: Column(
+              mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(Icons.map_outlined, size: 32, color: color.withOpacity(0.5)),
             const SizedBox(height: 6),
             Text('View Map',
                 style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: color)),
           ]),
         ),
       ]),
@@ -779,9 +780,10 @@ class _BottomAction extends StatelessWidget {
       return _GradientButton(
         label: 'Sign In to Join',
         icon: Icons.login,
-        gradient:
-            LinearGradient(colors: [AppTheme.darkGreen, AppTheme.primary]),
-        onPressed: () => Navigator.pushReplacementNamed(context, '/welcome'),
+        gradient: LinearGradient(
+            colors: [AppTheme.darkGreen, AppTheme.primary]),
+        onPressed: () =>
+            Navigator.pushReplacementNamed(context, '/welcome'),
       );
     }
 
@@ -790,8 +792,8 @@ class _BottomAction extends StatelessWidget {
         Expanded(
           child: OutlinedButton.icon(
             onPressed: () async {
-              await ActivityService()
-                  .leaveActivity(activityId: activityId, userId: user!.uid);
+              await ActivityService().leaveActivity(
+                  activityId: activityId, userId: user!.uid);
               if (context.mounted) Navigator.pop(context);
             },
             icon: const Icon(Icons.exit_to_app, size: 16),
@@ -811,7 +813,8 @@ class _BottomAction extends StatelessWidget {
           child: _GradientButton(
             label: 'Check In',
             icon: Icons.qr_code_scanner,
-            gradient: LinearGradient(colors: [cfg.color, cfg.gradient.last]),
+            gradient: LinearGradient(
+                colors: [cfg.color, cfg.gradient.last]),
             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Check-in coming soon')),
             ),
