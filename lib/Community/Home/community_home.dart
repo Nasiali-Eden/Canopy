@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../Models/user.dart';
 import '../../Shared/theme/app_theme.dart';
-import '../Activities/activity_home_logic.dart';
+import '../../Shared/Activities/activity_home_logic.dart';
 import '../Impact/impact_dashboard.dart';
 import '../Profile/profile_screen.dart';
 import '../Map/map.dart';
@@ -154,11 +154,12 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
                 ],
               ),
             ),
-           
-     ],
+          ],
         ),
         body: pages[_index],
-        floatingActionButton: _index == 1 ? ActivityHomeLogic.buildFloatingActionButton(context, user) : null,
+        floatingActionButton: _index == 1
+            ? ActivityHomeLogic.buildFloatingActionButton(context, user)
+            : null,
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -492,11 +493,12 @@ class _HomeTab extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Recent Activity',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.darkGreen,
-                              fontSize: 18,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.darkGreen,
+                                  fontSize: 18,
+                                ),
                       ),
                     ),
                     TextButton(
@@ -540,8 +542,9 @@ class _HomeTab extends StatelessWidget {
                         return Column(
                           children: List.generate(
                             3,
-                            (index) => ContributionPlaceholders
-                                .buildPlaceholderCard(context, index),
+                            (index) =>
+                                ContributionPlaceholders.buildPlaceholderCard(
+                                    context, index),
                           ),
                         );
                       }
@@ -565,8 +568,8 @@ class _HomeTab extends StatelessWidget {
                   Column(
                     children: List.generate(
                       3,
-                      (index) => ContributionPlaceholders
-                          .buildPlaceholderCard(context, index),
+                      (index) => ContributionPlaceholders.buildPlaceholderCard(
+                          context, index),
                     ),
                   ),
               ],

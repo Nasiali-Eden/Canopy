@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import '../../Shared/theme/app_theme.dart';
+
+import '../../Shared/Activities/activities_list.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SellerActivitiesPage
+//
+//  IDENTICAL to the community activities page.
+//  Sellers are community members and see all community activities.
+//  No seller-specific content. Use existing activities list widget.
+// ─────────────────────────────────────────────────────────────────────────────
 
 class SellerActivitiesPage extends StatelessWidget {
   const SellerActivitiesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Seller Activities'),
-        backgroundColor: AppTheme.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: const Center(
-        child: Text('Seller Activities - Add your data here'),
-      ),
-    );
+    return ActivitiesListScreen(embedded: true);
   }
 }

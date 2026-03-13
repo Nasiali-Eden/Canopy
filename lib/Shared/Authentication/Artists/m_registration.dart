@@ -9,7 +9,6 @@ import '../../../Services/Authentication/community_auth.dart';
 import '../../Pages/login.dart';
 import '../../theme/app_theme.dart';
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  MarketplaceRegisterScreen
 //
@@ -40,13 +39,19 @@ class MarketplaceRegisterScreen extends StatefulWidget {
 // ── Marketplace role enum ─────────────────────────────────────────────────────
 
 enum MarketplaceRole {
-  collector('Collector', Icons.recycling_outlined,
+  collector(
+      'Collector',
+      Icons.recycling_outlined,
       'Gather and sell recovered materials directly to processors.',
       Color(0xFF2D7A4F)),
-  processor('Processor', Icons.factory_outlined,
+  processor(
+      'Processor',
+      Icons.factory_outlined,
       'Buy raw materials, refine them, and supply the creative market.',
       Color(0xFF0097A7)),
-  maker('Maker / Artisan', Icons.palette_outlined,
+  maker(
+      'Maker / Artisan',
+      Icons.palette_outlined,
       'Create original works from recycled and recovered materials.',
       Color(0xFFC4A961));
 
@@ -96,8 +101,7 @@ const _creativeCategories = [
 //  State
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _MarketplaceRegisterScreenState
-    extends State<MarketplaceRegisterScreen>
+class _MarketplaceRegisterScreenState extends State<MarketplaceRegisterScreen>
     with SingleTickerProviderStateMixin {
   // Entry animation
   late AnimationController _entryCtrl;
@@ -176,8 +180,8 @@ class _MarketplaceRegisterScreenState
 
   Future<void> _loadCities() async {
     try {
-      final js = await rootBundle
-          .loadString('assets/Cities/African/KenyaCities.json');
+      final js =
+          await rootBundle.loadString('assets/Cities/African/KenyaCities.json');
       final data = json.decode(js) as Map<String, dynamic>;
       final map = data['kenyaCitiesAndLocations'] as Map<String, dynamic>;
       final parsed = <String, List<Map<String, dynamic>>>{};
@@ -211,7 +215,9 @@ class _MarketplaceRegisterScreenState
       content: Row(children: [
         const Icon(Icons.error_outline, color: Colors.white, size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text(msg, style: const TextStyle(fontWeight: FontWeight.w500))),
+        Expanded(
+            child:
+                Text(msg, style: const TextStyle(fontWeight: FontWeight.w500))),
       ]),
       backgroundColor: Colors.red.shade700,
       behavior: SnackBarBehavior.floating,
@@ -223,20 +229,38 @@ class _MarketplaceRegisterScreenState
   // ── Validations ───────────────────────────────────────────────────────────
 
   bool _validateS1() {
-    if (_role == null) { _showError('Please select your marketplace role.'); return false; }
+    if (_role == null) {
+      _showError('Please select your marketplace role.');
+      return false;
+    }
     return true;
   }
 
   bool _validateS2() {
-    if (_nameCtrl.text.trim().isEmpty) { _showError('Name is required.'); return false; }
-    if (!_emailCtrl.text.contains('@')) { _showError('Enter a valid email address.'); return false; }
-    if (_passCtrl.text.length < 6) { _showError('Password must be at least 6 characters.'); return false; }
-    if (_passCtrl.text != _confirmCtrl.text) { _showError('Passwords do not match.'); return false; }
+    if (_nameCtrl.text.trim().isEmpty) {
+      _showError('Name is required.');
+      return false;
+    }
+    if (!_emailCtrl.text.contains('@')) {
+      _showError('Enter a valid email address.');
+      return false;
+    }
+    if (_passCtrl.text.length < 6) {
+      _showError('Password must be at least 6 characters.');
+      return false;
+    }
+    if (_passCtrl.text != _confirmCtrl.text) {
+      _showError('Passwords do not match.');
+      return false;
+    }
     return true;
   }
 
   bool _validateS3() {
-    if (_shopNameCtrl.text.trim().isEmpty) { _showError('Shop name is required.'); return false; }
+    if (_shopNameCtrl.text.trim().isEmpty) {
+      _showError('Shop name is required.');
+      return false;
+    }
     if (_role != MarketplaceRole.collector && !_logoSelected) {
       _showError('Please upload a shop logo.');
       return false;
@@ -246,20 +270,24 @@ class _MarketplaceRegisterScreenState
 
   bool _validateS4() {
     if (_role == MarketplaceRole.collector && _selectedPlastics.isEmpty) {
-      _showError('Please select at least one plastic type.'); return false;
+      _showError('Please select at least one plastic type.');
+      return false;
     }
     if (_role == MarketplaceRole.processor && _selectedMaterials.isEmpty) {
-      _showError('Please select at least one material category.'); return false;
+      _showError('Please select at least one material category.');
+      return false;
     }
     if (_role == MarketplaceRole.maker && _selectedMaterials.isEmpty) {
-      _showError('Please select at least one material you work with.'); return false;
+      _showError('Please select at least one material you work with.');
+      return false;
     }
     return true;
   }
 
   bool _validateS5() {
     if (_selectedCity == null || _selectedCity!.isEmpty) {
-      _showError('Please select a city.'); return false;
+      _showError('Please select a city.');
+      return false;
     }
     return true;
   }
@@ -297,8 +325,8 @@ class _MarketplaceRegisterScreenState
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const SellerHomeScreen()),
-            (route) => false,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (route) => false,
       );
     } on FirebaseAuthException catch (e) {
       setState(() => _submitting = false);
@@ -375,7 +403,13 @@ class _MarketplaceRegisterScreenState
                   _MarketplaceBanner(),
                   const SizedBox(height: 20),
                   _ProgressBar(
-                    completedSections: [_s1Done, _s2Done, _s3Done, _s4Done, _s5Done],
+                    completedSections: [
+                      _s1Done,
+                      _s2Done,
+                      _s3Done,
+                      _s4Done,
+                      _s5Done
+                    ],
                     label: 'Marketplace Registration',
                     color: AppTheme.tertiary,
                   ),
@@ -391,9 +425,14 @@ class _MarketplaceRegisterScreenState
                     isLocked: false,
                     isDone: _s1Done,
                     child: _buildRoleSection(),
-                    onComplete: _s1Done ? null : () {
-                      if (_validateS1()) { setState(() => _s1Done = true); _scrollTo(1); }
-                    },
+                    onComplete: _s1Done
+                        ? null
+                        : () {
+                            if (_validateS1()) {
+                              setState(() => _s1Done = true);
+                              _scrollTo(1);
+                            }
+                          },
                   ),
                   const SizedBox(height: 16),
 
@@ -407,9 +446,14 @@ class _MarketplaceRegisterScreenState
                     isLocked: !_s1Done,
                     isDone: _s2Done,
                     child: _buildAccountSection(),
-                    onComplete: _s2Done ? null : () {
-                      if (_validateS2()) { setState(() => _s2Done = true); _scrollTo(2); }
-                    },
+                    onComplete: _s2Done
+                        ? null
+                        : () {
+                            if (_validateS2()) {
+                              setState(() => _s2Done = true);
+                              _scrollTo(2);
+                            }
+                          },
                   ),
                   const SizedBox(height: 16),
 
@@ -423,9 +467,14 @@ class _MarketplaceRegisterScreenState
                     isLocked: !_s2Done,
                     isDone: _s3Done,
                     child: _buildShopIdentitySection(),
-                    onComplete: _s3Done ? null : () {
-                      if (_validateS3()) { setState(() => _s3Done = true); _scrollTo(3); }
-                    },
+                    onComplete: _s3Done
+                        ? null
+                        : () {
+                            if (_validateS3()) {
+                              setState(() => _s3Done = true);
+                              _scrollTo(3);
+                            }
+                          },
                   ),
                   const SizedBox(height: 16),
 
@@ -433,15 +482,22 @@ class _MarketplaceRegisterScreenState
                   _MpSectionWrapper(
                     key: _sectionKeys[3],
                     index: 4,
-                    title: _role == null ? 'Marketplace Profile' : '${_role!.label} Profile',
+                    title: _role == null
+                        ? 'Marketplace Profile'
+                        : '${_role!.label} Profile',
                     icon: Icons.badge_outlined,
                     subtitle: 'Specialisations, materials & bio',
                     isLocked: !_s3Done,
                     isDone: _s4Done,
                     child: _buildProfileSection(),
-                    onComplete: _s4Done ? null : () {
-                      if (_validateS4()) { setState(() => _s4Done = true); _scrollTo(4); }
-                    },
+                    onComplete: _s4Done
+                        ? null
+                        : () {
+                            if (_validateS4()) {
+                              setState(() => _s4Done = true);
+                              _scrollTo(4);
+                            }
+                          },
                   ),
                   const SizedBox(height: 16),
 
@@ -455,9 +511,14 @@ class _MarketplaceRegisterScreenState
                     isLocked: !_s4Done,
                     isDone: _s5Done,
                     child: _buildLocationSection(),
-                    onComplete: _s5Done ? null : () {
-                      if (_validateS5()) { setState(() => _s5Done = true); _scrollTo(5); }
-                    },
+                    onComplete: _s5Done
+                        ? null
+                        : () {
+                            if (_validateS5()) {
+                              setState(() => _s5Done = true);
+                              _scrollTo(5);
+                            }
+                          },
                   ),
                   const SizedBox(height: 16),
 
@@ -489,13 +550,13 @@ class _MarketplaceRegisterScreenState
   Widget _buildRoleSection() {
     return Column(children: [
       ...MarketplaceRole.values.map((r) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: _RoleCard(
-          role: r,
-          selected: _role == r,
-          onTap: () => setState(() => _role = r),
-        ),
-      )),
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _RoleCard(
+              role: r,
+              selected: _role == r,
+              onTap: () => setState(() => _role = r),
+            ),
+          )),
       const SizedBox(height: 4),
       Container(
         padding: const EdgeInsets.all(12),
@@ -511,7 +572,8 @@ class _MarketplaceRegisterScreenState
           Expanded(
             child: Text(
               'Buying is open to everyone — no registration needed. Only register if you want to list, sell, or supply.',
-              style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.65)),
+              style: TextStyle(
+                  fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.65)),
             ),
           ),
         ]),
@@ -522,22 +584,44 @@ class _MarketplaceRegisterScreenState
   Widget _buildAccountSection() {
     const accent = AppTheme.primary;
     return Column(children: [
-      _Field(controller: _nameCtrl, label: 'Full Name', icon: Icons.person_outline, accent: accent,
+      _Field(
+          controller: _nameCtrl,
+          label: 'Full Name',
+          icon: Icons.person_outline,
+          accent: accent,
           validator: (v) => v!.trim().isEmpty ? 'Required' : null),
       const SizedBox(height: 14),
-      _Field(controller: _emailCtrl, label: 'Email Address', icon: Icons.email_outlined, accent: accent,
+      _Field(
+          controller: _emailCtrl,
+          label: 'Email Address',
+          icon: Icons.email_outlined,
+          accent: accent,
           keyboardType: TextInputType.emailAddress,
           validator: (v) => v!.contains('@') ? null : 'Enter a valid email'),
       const SizedBox(height: 14),
-      _Field(controller: _phoneCtrl, label: 'Phone Number (M-Pesa)', icon: Icons.phone_outlined, accent: accent,
-          keyboardType: TextInputType.phone, hint: '+254 700 000 000'),
+      _Field(
+          controller: _phoneCtrl,
+          label: 'Phone Number (M-Pesa)',
+          icon: Icons.phone_outlined,
+          accent: accent,
+          keyboardType: TextInputType.phone,
+          hint: '+254 700 000 000'),
       const SizedBox(height: 14),
-      _PasswordField(controller: _passCtrl, label: 'Password', obscure: _obscurePass, accent: accent,
+      _PasswordField(
+          controller: _passCtrl,
+          label: 'Password',
+          obscure: _obscurePass,
+          accent: accent,
           onToggle: () => setState(() => _obscurePass = !_obscurePass)),
       const SizedBox(height: 14),
-      _PasswordField(controller: _confirmCtrl, label: 'Confirm Password', obscure: _obscureConfirm, accent: accent,
+      _PasswordField(
+          controller: _confirmCtrl,
+          label: 'Confirm Password',
+          obscure: _obscureConfirm,
+          accent: accent,
           onToggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
-          validator: (v) => v != _passCtrl.text ? 'Passwords do not match' : null),
+          validator: (v) =>
+              v != _passCtrl.text ? 'Passwords do not match' : null),
     ]);
   }
 
@@ -546,42 +630,60 @@ class _MarketplaceRegisterScreenState
     final isLogoRequired = _role != MarketplaceRole.collector;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _Field(controller: _shopNameCtrl, label: 'Shop Name', icon: Icons.storefront_outlined, accent: accent,
+      _Field(
+          controller: _shopNameCtrl,
+          label: 'Shop Name',
+          icon: Icons.storefront_outlined,
+          accent: accent,
           validator: (v) => v!.trim().isEmpty ? 'Shop name is required' : null),
       const SizedBox(height: 4),
       Padding(
         padding: const EdgeInsets.only(left: 4),
         child: Text(
           'Displayed on all your listings, your profile, and the map.',
-          style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5)),
+          style: TextStyle(
+              fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5)),
         ),
       ),
       const SizedBox(height: 18),
-
       _sectionLabel('Account Type', accent),
       const SizedBox(height: 10),
       Row(children: [
-        Expanded(child: _ToggleOption(label: 'Individual', icon: Icons.person_outline,
-            selected: !_isBusiness, color: accent, onTap: () => setState(() => _isBusiness = false))),
+        Expanded(
+            child: _ToggleOption(
+                label: 'Individual',
+                icon: Icons.person_outline,
+                selected: !_isBusiness,
+                color: accent,
+                onTap: () => setState(() => _isBusiness = false))),
         const SizedBox(width: 10),
-        Expanded(child: _ToggleOption(label: 'Business', icon: Icons.business_outlined,
-            selected: _isBusiness, color: accent, onTap: () => setState(() => _isBusiness = true))),
+        Expanded(
+            child: _ToggleOption(
+                label: 'Business',
+                icon: Icons.business_outlined,
+                selected: _isBusiness,
+                color: accent,
+                onTap: () => setState(() => _isBusiness = true))),
       ]),
-
       if (_isBusiness) ...[
         const SizedBox(height: 14),
-        _Field(controller: _businessRegCtrl, label: 'Business Registration No. (optional)',
-            icon: Icons.numbers_outlined, accent: accent),
+        _Field(
+            controller: _businessRegCtrl,
+            label: 'Business Registration No. (optional)',
+            icon: Icons.numbers_outlined,
+            accent: accent),
         const SizedBox(height: 4),
         Padding(
           padding: const EdgeInsets.only(left: 4),
-          child: Text('Used for trust signalling — not validated by the platform.',
-              style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
+          child: Text(
+              'Used for trust signalling — not validated by the platform.',
+              style: TextStyle(
+                  fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
         ),
       ],
-
       const SizedBox(height: 20),
-      _sectionLabel(isLogoRequired ? 'Shop Logo *' : 'Shop Logo (optional)', accent),
+      _sectionLabel(
+          isLogoRequired ? 'Shop Logo *' : 'Shop Logo (optional)', accent),
       const SizedBox(height: 10),
       _LogoUploadTile(
         selected: _logoSelected,
@@ -593,8 +695,10 @@ class _MarketplaceRegisterScreenState
       const SizedBox(height: 4),
       Padding(
         padding: const EdgeInsets.only(left: 4),
-        child: Text('Square PNG or JPG · minimum 200×200 px · shown on listings, profile, and map pin.',
-            style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
+        child: Text(
+            'Square PNG or JPG · minimum 200×200 px · shown on listings, profile, and map pin.',
+            style: TextStyle(
+                fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
       ),
     ]);
   }
@@ -607,47 +711,78 @@ class _MarketplaceRegisterScreenState
       if (_role == MarketplaceRole.collector) ...[
         _sectionLabel('Plastic Types You Collect', roleColor),
         const SizedBox(height: 10),
-        Wrap(spacing: 8, runSpacing: 8,
-            children: _plasticTypes.map((p) => _Chip(
-              label: p.$1, emoji: p.$2,
-              selected: _selectedPlastics.contains(p.$1), color: roleColor,
-              onTap: () => setState(() => _selectedPlastics.contains(p.$1)
-                  ? _selectedPlastics.remove(p.$1) : _selectedPlastics.add(p.$1)),
-            )).toList()),
+        Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _plasticTypes
+                .map((p) => _Chip(
+                      label: p.$1,
+                      emoji: p.$2,
+                      selected: _selectedPlastics.contains(p.$1),
+                      color: roleColor,
+                      onTap: () => setState(() =>
+                          _selectedPlastics.contains(p.$1)
+                              ? _selectedPlastics.remove(p.$1)
+                              : _selectedPlastics.add(p.$1)),
+                    ))
+                .toList()),
       ],
       if (_role == MarketplaceRole.processor) ...[
         _sectionLabel('Material Categories', roleColor),
         const SizedBox(height: 10),
-        Wrap(spacing: 8, runSpacing: 8,
-            children: _materialCategories.map((m) => _Chip(
-              label: m.$1, emoji: m.$2,
-              selected: _selectedMaterials.contains(m.$1), color: roleColor,
-              onTap: () => setState(() => _selectedMaterials.contains(m.$1)
-                  ? _selectedMaterials.remove(m.$1) : _selectedMaterials.add(m.$1)),
-            )).toList()),
+        Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _materialCategories
+                .map((m) => _Chip(
+                      label: m.$1,
+                      emoji: m.$2,
+                      selected: _selectedMaterials.contains(m.$1),
+                      color: roleColor,
+                      onTap: () => setState(() =>
+                          _selectedMaterials.contains(m.$1)
+                              ? _selectedMaterials.remove(m.$1)
+                              : _selectedMaterials.add(m.$1)),
+                    ))
+                .toList()),
       ],
       if (_role == MarketplaceRole.maker) ...[
         _sectionLabel('Materials You Work With', roleColor),
         const SizedBox(height: 10),
-        Wrap(spacing: 8, runSpacing: 8,
-            children: _materialCategories.map((m) => _Chip(
-              label: m.$1, emoji: m.$2,
-              selected: _selectedMaterials.contains(m.$1), color: roleColor,
-              onTap: () => setState(() => _selectedMaterials.contains(m.$1)
-                  ? _selectedMaterials.remove(m.$1) : _selectedMaterials.add(m.$1)),
-            )).toList()),
+        Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _materialCategories
+                .map((m) => _Chip(
+                      label: m.$1,
+                      emoji: m.$2,
+                      selected: _selectedMaterials.contains(m.$1),
+                      color: roleColor,
+                      onTap: () => setState(() =>
+                          _selectedMaterials.contains(m.$1)
+                              ? _selectedMaterials.remove(m.$1)
+                              : _selectedMaterials.add(m.$1)),
+                    ))
+                .toList()),
         const SizedBox(height: 18),
         _sectionLabel('Creative Categories', roleColor),
         const SizedBox(height: 10),
-        Wrap(spacing: 8, runSpacing: 8,
-            children: _creativeCategories.map((c) => _Chip(
-              label: c.$1, emoji: c.$2,
-              selected: _selectedCreative.contains(c.$1), color: roleColor,
-              onTap: () => setState(() => _selectedCreative.contains(c.$1)
-                  ? _selectedCreative.remove(c.$1) : _selectedCreative.add(c.$1)),
-            )).toList()),
+        Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _creativeCategories
+                .map((c) => _Chip(
+                      label: c.$1,
+                      emoji: c.$2,
+                      selected: _selectedCreative.contains(c.$1),
+                      color: roleColor,
+                      onTap: () => setState(() =>
+                          _selectedCreative.contains(c.$1)
+                              ? _selectedCreative.remove(c.$1)
+                              : _selectedCreative.add(c.$1)),
+                    ))
+                .toList()),
       ],
-
       const SizedBox(height: 18),
       _sectionLabel('Short Bio (optional)', roleColor),
       const SizedBox(height: 6),
@@ -655,7 +790,8 @@ class _MarketplaceRegisterScreenState
         _role == MarketplaceRole.maker
             ? 'This becomes the foundation of your story-driven listings. Write richly.'
             : 'Shown on your seller profile and listing pages.',
-        style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5)),
+        style:
+            TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5)),
       ),
       const SizedBox(height: 10),
       TextFormField(
@@ -663,7 +799,9 @@ class _MarketplaceRegisterScreenState
         maxLines: 3,
         maxLength: 500,
         style: const TextStyle(
-            color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
+            color: AppTheme.darkGreen,
+            fontSize: 14,
+            fontWeight: FontWeight.w500),
         decoration: _inputDec(
           label: _role == MarketplaceRole.maker
               ? 'Tell the story of your craft and materials...'
@@ -677,11 +815,12 @@ class _MarketplaceRegisterScreenState
 
   Widget _buildLocationSection() {
     final cities = _kenyaCities.keys.toList()..sort();
-    final areas = (_selectedCity != null && _kenyaCities[_selectedCity!] != null)
-        ? _kenyaCities[_selectedCity!]!
-        .map((e) => (e['area'] ?? e['name']).toString())
-        .toList()
-        : <String>[];
+    final areas =
+        (_selectedCity != null && _kenyaCities[_selectedCity!] != null)
+            ? _kenyaCities[_selectedCity!]!
+                .map((e) => (e['area'] ?? e['name']).toString())
+                .toList()
+            : <String>[];
     const accent = AppTheme.accent;
 
     return Column(children: [
@@ -696,14 +835,21 @@ class _MarketplaceRegisterScreenState
           _IconPill(icon: Icons.public, color: accent),
           const SizedBox(width: 12),
           const Text('Kenya',
-              style: TextStyle(color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w600)),
+              style: TextStyle(
+                  color: AppTheme.darkGreen,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600)),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.08), borderRadius: BorderRadius.circular(6)),
+                color: AppTheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(6)),
             child: const Text('Fixed',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.primary)),
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primary)),
           ),
         ]),
       ),
@@ -712,11 +858,21 @@ class _MarketplaceRegisterScreenState
         value: _selectedCity,
         dropdownColor: Colors.white,
         menuMaxHeight: 280,
-        style: const TextStyle(color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
-        icon: Icon(Icons.keyboard_arrow_down_rounded, color: accent.withOpacity(0.6), size: 20),
-        decoration: _inputDec(label: 'City / County', icon: Icons.location_city, accent: accent),
-        items: cities.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-        onChanged: (v) => setState(() { _selectedCity = v; _selectedArea = null; }),
+        style: const TextStyle(
+            color: AppTheme.darkGreen,
+            fontSize: 14,
+            fontWeight: FontWeight.w500),
+        icon: Icon(Icons.keyboard_arrow_down_rounded,
+            color: accent.withOpacity(0.6), size: 20),
+        decoration: _inputDec(
+            label: 'City / County', icon: Icons.location_city, accent: accent),
+        items: cities
+            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+            .toList(),
+        onChanged: (v) => setState(() {
+          _selectedCity = v;
+          _selectedArea = null;
+        }),
         validator: (v) => (v == null || v.isEmpty) ? 'City is required' : null,
       ),
       const SizedBox(height: 14),
@@ -724,11 +880,19 @@ class _MarketplaceRegisterScreenState
         value: _selectedArea,
         dropdownColor: Colors.white,
         menuMaxHeight: 280,
-        style: const TextStyle(color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
-        icon: Icon(Icons.keyboard_arrow_down_rounded, color: accent.withOpacity(0.6), size: 20),
+        style: const TextStyle(
+            color: AppTheme.darkGreen,
+            fontSize: 14,
+            fontWeight: FontWeight.w500),
+        icon: Icon(Icons.keyboard_arrow_down_rounded,
+            color: accent.withOpacity(0.6), size: 20),
         decoration: _inputDec(
-            label: 'Area / Neighbourhood (optional)', icon: Icons.pin_drop_outlined, accent: accent),
-        items: areas.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
+            label: 'Area / Neighbourhood (optional)',
+            icon: Icons.pin_drop_outlined,
+            accent: accent),
+        items: areas
+            .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+            .toList(),
         onChanged: (v) => setState(() => _selectedArea = v),
       ),
     ]);
@@ -758,10 +922,14 @@ class _MarketplaceRegisterScreenState
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: _logoSelected ? roleColor.withOpacity(0.15) : Colors.grey.shade100,
+                color: _logoSelected
+                    ? roleColor.withOpacity(0.15)
+                    : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                    color: _logoSelected ? roleColor.withOpacity(0.4) : Colors.grey.shade300),
+                    color: _logoSelected
+                        ? roleColor.withOpacity(0.4)
+                        : Colors.grey.shade300),
               ),
               child: Icon(
                 _logoSelected ? Icons.store : Icons.image_outlined,
@@ -771,18 +939,26 @@ class _MarketplaceRegisterScreenState
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(
-                  _shopNameCtrl.text.isNotEmpty ? _shopNameCtrl.text : 'Your Shop',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Wrap(spacing: 6, children: [
-                  if (_role != null) _RoleBadge(role: _role!),
-                  if (_isBusiness)
-                    _ReviewTag(label: 'Business', icon: Icons.business_outlined, color: AppTheme.accent),
-                ]),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _shopNameCtrl.text.isNotEmpty
+                          ? _shopNameCtrl.text
+                          : 'Your Shop',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(spacing: 6, children: [
+                      if (_role != null) _RoleBadge(role: _role!),
+                      if (_isBusiness)
+                        _ReviewTag(
+                            label: 'Business',
+                            icon: Icons.business_outlined,
+                            color: AppTheme.accent),
+                    ]),
+                  ]),
             ),
           ]),
           const Divider(height: 22),
@@ -791,8 +967,11 @@ class _MarketplaceRegisterScreenState
           if (_phoneCtrl.text.isNotEmpty)
             _reviewRow(Icons.phone_outlined, 'Phone', _phoneCtrl.text),
           if (_isBusiness && _businessRegCtrl.text.isNotEmpty)
-            _reviewRow(Icons.numbers_outlined, 'Reg No.', _businessRegCtrl.text),
-          _reviewRow(Icons.location_on_outlined, 'Location',
+            _reviewRow(
+                Icons.numbers_outlined, 'Reg No.', _businessRegCtrl.text),
+          _reviewRow(
+              Icons.location_on_outlined,
+              'Location',
               [_selectedArea, _selectedCity, 'Kenya']
                   .where((s) => s != null && s!.isNotEmpty)
                   .join(', ')),
@@ -814,7 +993,8 @@ class _MarketplaceRegisterScreenState
           Expanded(
             child: Text(
               'Your marketplace profile is public. Your Canopy transaction history builds over time — verified proof of work that becomes pricing leverage.',
-              style: TextStyle(fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.7)),
+              style: TextStyle(
+                  fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.7)),
             ),
           ),
         ]),
@@ -834,13 +1014,16 @@ class _MarketplaceRegisterScreenState
       // Sign in link
       Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text('Already have an account? ',
-            style: TextStyle(color: AppTheme.darkGreen.withOpacity(0.6), fontSize: 13)),
+            style: TextStyle(
+                color: AppTheme.darkGreen.withOpacity(0.6), fontSize: 13)),
         GestureDetector(
           onTap: () => Navigator.pushReplacement(
               context, MaterialPageRoute(builder: (_) => const LoginPage())),
           child: const Text('Sign In',
               style: TextStyle(
-                  color: AppTheme.primary, fontWeight: FontWeight.w700, fontSize: 13)),
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13)),
         ),
       ]),
     ]);
@@ -849,24 +1032,34 @@ class _MarketplaceRegisterScreenState
   // ── helpers ───────────────────────────────────────────────────────────────
 
   Widget _sectionLabel(String text, Color color) => Text(text,
-      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color));
+      style:
+          TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color));
 
   Widget _reviewRow(IconData icon, String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(children: [
-      Icon(icon, size: 15, color: AppTheme.primary.withOpacity(0.7)),
-      const SizedBox(width: 8),
-      SizedBox(
-        width: 72,
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.5), fontWeight: FontWeight.w600)),
-      ),
-      Expanded(child: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
-    ]),
-  );
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(children: [
+          Icon(icon, size: 15, color: AppTheme.primary.withOpacity(0.7)),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 72,
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.darkGreen.withOpacity(0.5),
+                    fontWeight: FontWeight.w600)),
+          ),
+          Expanded(
+              child: Text(value,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700))),
+        ]),
+      );
 
-  InputDecoration _inputDec({required String label, required IconData icon, required Color accent, String? hint}) {
+  InputDecoration _inputDec(
+      {required String label,
+      required IconData icon,
+      required Color accent,
+      String? hint}) {
     return InputDecoration(
       labelText: hint == null ? label : null,
       hintText: hint,
@@ -874,7 +1067,9 @@ class _MarketplaceRegisterScreenState
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      prefixIcon: Padding(padding: const EdgeInsets.all(10), child: _IconPill(icon: icon, color: accent)),
+      prefixIcon: Padding(
+          padding: const EdgeInsets.all(10),
+          child: _IconPill(icon: icon, color: accent)),
       prefixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 52),
       border: _border(accent.withOpacity(0.2)),
       enabledBorder: _border(accent.withOpacity(0.22)),
@@ -901,27 +1096,45 @@ class _MarketplaceBanner extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppTheme.darkGreen, AppTheme.primary, AppTheme.tertiary.withOpacity(0.85)],
+          colors: [
+            AppTheme.darkGreen,
+            AppTheme.primary,
+            AppTheme.tertiary.withOpacity(0.85)
+          ],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+              color: AppTheme.primary.withOpacity(0.25),
+              blurRadius: 20,
+              offset: const Offset(0, 6))
+        ],
       ),
       child: Row(children: [
         Container(
-          width: 52, height: 52,
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(14)),
-          child: const Icon(Icons.storefront_outlined, color: Colors.white, size: 26),
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(14)),
+          child: const Icon(Icons.storefront_outlined,
+              color: Colors.white, size: 26),
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Canopy Marketplace',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15)),
             const SizedBox(height: 3),
             Text('Connect directly. No middlemen. Build your verified history.',
-                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11)),
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.8), fontSize: 11)),
           ]),
         ),
       ]),
@@ -934,7 +1147,10 @@ class _ProgressBar extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _ProgressBar({required this.completedSections, required this.label, required this.color});
+  const _ProgressBar(
+      {required this.completedSections,
+      required this.label,
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -943,10 +1159,14 @@ class _ProgressBar extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         Text('$done of $total steps complete',
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.darkGreen)),
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.darkGreen)),
         const Spacer(),
         Text('${((done / total) * 100).round()}%',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w700, color: color)),
       ]),
       const SizedBox(height: 8),
       ClipRRect(
@@ -967,7 +1187,8 @@ class _RoleCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _RoleCard({required this.role, required this.selected, required this.onTap});
+  const _RoleCard(
+      {required this.role, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -979,33 +1200,48 @@ class _RoleCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? role.color.withOpacity(0.07) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? role.color : Colors.grey.withOpacity(0.22), width: selected ? 2 : 1),
+          border: Border.all(
+              color: selected ? role.color : Colors.grey.withOpacity(0.22),
+              width: selected ? 2 : 1),
           boxShadow: selected
-              ? [BoxShadow(color: role.color.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4))]
+              ? [
+                  BoxShadow(
+                      color: role.color.withOpacity(0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4))
+                ]
               : [],
         ),
         child: Row(children: [
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: 44, height: 44,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               color: selected ? role.color : role.color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(role.icon, color: selected ? Colors.white : role.color, size: 22),
+            child: Icon(role.icon,
+                color: selected ? Colors.white : role.color, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(role.label,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
                       color: selected ? role.color : AppTheme.darkGreen)),
               const SizedBox(height: 2),
               Text(role.description,
-                  style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.55))),
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.darkGreen.withOpacity(0.55))),
             ]),
           ),
-          if (selected) Icon(Icons.check_circle_rounded, color: role.color, size: 20),
+          if (selected)
+            Icon(Icons.check_circle_rounded, color: role.color, size: 20),
         ]),
       ),
     );
@@ -1053,7 +1289,8 @@ class _MpSectionWrapperState extends State<_MpSectionWrapper>
   void initState() {
     super.initState();
     _wasLocked = widget.isLocked;
-    _anim = AnimationController(duration: const Duration(milliseconds: 450), vsync: this);
+    _anim = AnimationController(
+        duration: const Duration(milliseconds: 450), vsync: this);
     _fade = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
     _scale = Tween<double>(begin: 0.97, end: 1.0)
         .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutBack));
@@ -1063,11 +1300,17 @@ class _MpSectionWrapperState extends State<_MpSectionWrapper>
   @override
   void didUpdateWidget(_MpSectionWrapper old) {
     super.didUpdateWidget(old);
-    if (_wasLocked && !widget.isLocked) { _wasLocked = false; _anim.forward(from: 0); }
+    if (_wasLocked && !widget.isLocked) {
+      _wasLocked = false;
+      _anim.forward(from: 0);
+    }
   }
 
   @override
-  void dispose() { _anim.dispose(); super.dispose(); }
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1076,7 +1319,9 @@ class _MpSectionWrapperState extends State<_MpSectionWrapper>
     const gold = AppTheme.tertiary;
     final borderColor = isDone
         ? gold.withOpacity(0.5)
-        : isLocked ? Colors.grey.withOpacity(0.15) : gold.withOpacity(0.3);
+        : isLocked
+            ? Colors.grey.withOpacity(0.15)
+            : gold.withOpacity(0.3);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -1084,10 +1329,15 @@ class _MpSectionWrapperState extends State<_MpSectionWrapper>
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: borderColor, width: isDone ? 1.5 : 1),
-        boxShadow: [BoxShadow(
-          color: isDone ? gold.withOpacity(0.08) : Colors.black.withOpacity(0.04),
-          blurRadius: isDone ? 16 : 8, offset: const Offset(0, 3),
-        )],
+        boxShadow: [
+          BoxShadow(
+            color: isDone
+                ? gold.withOpacity(0.08)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: isDone ? 16 : 8,
+            offset: const Offset(0, 3),
+          )
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // Header
@@ -1096,42 +1346,75 @@ class _MpSectionWrapperState extends State<_MpSectionWrapper>
           child: Row(children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              width: 40, height: 40,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: isDone ? gold : isLocked ? Colors.grey.withOpacity(0.12) : gold.withOpacity(0.15),
+                color: isDone
+                    ? gold
+                    : isLocked
+                        ? Colors.grey.withOpacity(0.12)
+                        : gold.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                isDone ? Icons.check_rounded : isLocked ? Icons.lock_outline_rounded : widget.icon,
-                color: isDone ? Colors.white : isLocked ? Colors.grey.withOpacity(0.45) : gold,
+                isDone
+                    ? Icons.check_rounded
+                    : isLocked
+                        ? Icons.lock_outline_rounded
+                        : widget.icon,
+                color: isDone
+                    ? Colors.white
+                    : isLocked
+                        ? Colors.grey.withOpacity(0.45)
+                        : gold,
                 size: 20,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Text('Step ${widget.index}',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                          color: isLocked ? Colors.grey.withOpacity(0.4) : gold.withOpacity(0.7),
-                          letterSpacing: 0.5)),
-                  if (isDone) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(color: gold.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
-                      child: const Text('Done', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.tertiary)),
-                    ),
-                  ],
-                ]),
-                const SizedBox(height: 2),
-                Text(widget.title,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
-                        color: isLocked ? Colors.grey.withOpacity(0.35) : AppTheme.darkGreen)),
-                Text(widget.subtitle,
-                    style: TextStyle(fontSize: 11,
-                        color: isLocked ? Colors.grey.withOpacity(0.3) : AppTheme.darkGreen.withOpacity(0.55))),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Text('Step ${widget.index}',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isLocked
+                                  ? Colors.grey.withOpacity(0.4)
+                                  : gold.withOpacity(0.7),
+                              letterSpacing: 0.5)),
+                      if (isDone) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                              color: gold.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6)),
+                          child: const Text('Done',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.tertiary)),
+                        ),
+                      ],
+                    ]),
+                    const SizedBox(height: 2),
+                    Text(widget.title,
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: isLocked
+                                ? Colors.grey.withOpacity(0.35)
+                                : AppTheme.darkGreen)),
+                    Text(widget.subtitle,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: isLocked
+                                ? Colors.grey.withOpacity(0.3)
+                                : AppTheme.darkGreen.withOpacity(0.55))),
+                  ]),
             ),
           ]),
         ),
@@ -1148,11 +1431,13 @@ class _MpSectionWrapperState extends State<_MpSectionWrapper>
                 border: Border.all(color: Colors.grey.withOpacity(0.1)),
               ),
               child: Column(children: [
-                Icon(Icons.lock_outline_rounded, size: 24, color: Colors.grey.withOpacity(0.3)),
+                Icon(Icons.lock_outline_rounded,
+                    size: 24, color: Colors.grey.withOpacity(0.3)),
                 const SizedBox(height: 6),
                 Text('Complete the previous step first',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.withOpacity(0.5))),
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.grey.withOpacity(0.5))),
               ]),
             ),
           )
@@ -1161,33 +1446,42 @@ class _MpSectionWrapperState extends State<_MpSectionWrapper>
             opacity: _fade,
             child: ScaleTransition(
               scale: _scale,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const Divider(height: 1, thickness: 1),
-                Padding(padding: const EdgeInsets.fromLTRB(16, 18, 16, 0), child: widget.child),
-                if (widget.showCompleteButton && !isDone) ...[
-                  const SizedBox(height: 20),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-                    child: FilledButton(
-                      onPressed: widget.onComplete,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppTheme.tertiary,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(50),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Divider(height: 1, thickness: 1),
+                    Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                        child: widget.child),
+                    if (widget.showCompleteButton && !isDone) ...[
+                      const SizedBox(height: 20),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                        child: FilledButton(
+                          onPressed: widget.onComplete,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.tertiary,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(50),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(widget.completeLabel ?? 'Continue',
+                                    style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700)),
+                                const SizedBox(width: 8),
+                                const Icon(Icons.arrow_forward, size: 18),
+                              ]),
+                        ),
                       ),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Text(widget.completeLabel ?? 'Continue',
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.arrow_forward, size: 18),
-                      ]),
-                    ),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 18),
-                ],
-              ]),
+                    ] else ...[
+                      const SizedBox(height: 18),
+                    ],
+                  ]),
             ),
           ),
       ]),
@@ -1203,8 +1497,11 @@ class _LogoUploadTile extends StatelessWidget {
   final Color accent;
 
   const _LogoUploadTile({
-    required this.selected, required this.isRequired,
-    required this.onTap, required this.onRemove, required this.accent,
+    required this.selected,
+    required this.isRequired,
+    required this.onTap,
+    required this.onRemove,
+    required this.accent,
   });
 
   @override
@@ -1217,36 +1514,57 @@ class _LogoUploadTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? accent.withOpacity(0.06) : Colors.grey.shade50,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? accent.withOpacity(0.4) : Colors.grey.shade200, width: selected ? 1.5 : 1),
+          border: Border.all(
+              color: selected ? accent.withOpacity(0.4) : Colors.grey.shade200,
+              width: selected ? 1.5 : 1),
         ),
         child: Row(children: [
           Container(
-            width: 60, height: 60,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
               color: selected ? accent.withOpacity(0.12) : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: selected ? accent.withOpacity(0.3) : Colors.grey.shade200),
+              border: Border.all(
+                  color: selected
+                      ? accent.withOpacity(0.3)
+                      : Colors.grey.shade200),
             ),
-            child: Icon(selected ? Icons.store_rounded : Icons.add_photo_alternate_outlined,
-                color: selected ? accent : Colors.grey.shade400, size: 28),
+            child: Icon(
+                selected
+                    ? Icons.store_rounded
+                    : Icons.add_photo_alternate_outlined,
+                color: selected ? accent : Colors.grey.shade400,
+                size: 28),
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(selected ? 'Logo uploaded' : 'Upload shop logo',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                       color: selected ? accent : AppTheme.darkGreen)),
               const SizedBox(height: 3),
-              Text(selected ? 'Tap × to remove' : 'PNG or JPG · min 200×200 px · square',
-                  style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
+              Text(
+                  selected
+                      ? 'Tap × to remove'
+                      : 'PNG or JPG · min 200×200 px · square',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.darkGreen.withOpacity(0.5))),
             ]),
           ),
           if (selected)
             GestureDetector(
               onTap: onRemove,
               child: Container(
-                width: 28, height: 28,
-                decoration: BoxDecoration(color: Colors.red.shade50, shape: BoxShape.circle,
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    shape: BoxShape.circle,
                     border: Border.all(color: Colors.red.shade200)),
                 child: Icon(Icons.close, size: 14, color: Colors.red.shade400),
               ),
@@ -1254,8 +1572,14 @@ class _LogoUploadTile extends StatelessWidget {
           else
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: accent.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-              child: Text('Choose', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: accent)),
+              decoration: BoxDecoration(
+                  color: accent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Text('Choose',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: accent)),
             ),
         ]),
       ),
@@ -1270,7 +1594,12 @@ class _ToggleOption extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _ToggleOption({required this.label, required this.icon, required this.selected, required this.color, required this.onTap});
+  const _ToggleOption(
+      {required this.label,
+      required this.icon,
+      required this.selected,
+      required this.color,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1282,14 +1611,25 @@ class _ToggleOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? color.withOpacity(0.08) : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? color : Colors.grey.withOpacity(0.22), width: selected ? 2 : 1),
+          border: Border.all(
+              color: selected ? color : Colors.grey.withOpacity(0.22),
+              width: selected ? 2 : 1),
         ),
         child: Column(children: [
-          Icon(icon, size: 22, color: selected ? color : AppTheme.darkGreen.withOpacity(0.4)),
+          Icon(icon,
+              size: 22,
+              color: selected ? color : AppTheme.darkGreen.withOpacity(0.4)),
           const SizedBox(height: 6),
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-              color: selected ? color : AppTheme.darkGreen.withOpacity(0.55))),
-          if (selected) ...[const SizedBox(height: 4), Icon(Icons.check_circle_rounded, size: 14, color: color)],
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color:
+                      selected ? color : AppTheme.darkGreen.withOpacity(0.55))),
+          if (selected) ...[
+            const SizedBox(height: 4),
+            Icon(Icons.check_circle_rounded, size: 14, color: color)
+          ],
         ]),
       ),
     );
@@ -1304,11 +1644,15 @@ class _RoleBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: role.color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+          color: role.color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(role.icon, size: 11, color: role.color),
         const SizedBox(width: 4),
-        Text(role.label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: role.color)),
+        Text(role.label,
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, color: role.color)),
       ]),
     );
   }
@@ -1319,17 +1663,22 @@ class _ReviewTag extends StatelessWidget {
   final IconData icon;
   final Color color;
 
-  const _ReviewTag({required this.label, required this.icon, required this.color});
+  const _ReviewTag(
+      {required this.label, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 11, color: color),
         const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, color: color)),
       ]),
     );
   }
@@ -1344,28 +1693,50 @@ class _Field extends StatelessWidget {
   final String? hint;
   final String? Function(String?)? validator;
 
-  const _Field({required this.controller, required this.label, required this.icon, required this.accent,
-    this.keyboardType, this.hint, this.validator});
+  const _Field(
+      {required this.controller,
+      required this.label,
+      required this.icon,
+      required this.accent,
+      this.keyboardType,
+      this.hint,
+      this.validator});
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      style: const TextStyle(color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+          color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         labelText: hint == null ? label : null,
         hintText: hint,
         labelStyle: TextStyle(color: accent.withOpacity(0.75), fontSize: 13),
-        filled: true, fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        prefixIcon: Padding(padding: const EdgeInsets.all(10), child: _IconPill(icon: icon, color: accent)),
-        prefixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 52),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: accent.withOpacity(0.2))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: accent.withOpacity(0.22))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: accent, width: 2)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.red.shade300)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.red.shade400, width: 2)),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        prefixIcon: Padding(
+            padding: const EdgeInsets.all(10),
+            child: _IconPill(icon: icon, color: accent)),
+        prefixIconConstraints:
+            const BoxConstraints(minWidth: 52, minHeight: 52),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent.withOpacity(0.2))),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent.withOpacity(0.22))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent, width: 2)),
+        errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.red.shade300)),
+        focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.red.shade400, width: 2)),
       ),
       validator: validator,
     );
@@ -1380,34 +1751,60 @@ class _PasswordField extends StatelessWidget {
   final Color accent;
   final String? Function(String?)? validator;
 
-  const _PasswordField({required this.controller, required this.label, required this.obscure,
-    required this.onToggle, required this.accent, this.validator});
+  const _PasswordField(
+      {required this.controller,
+      required this.label,
+      required this.obscure,
+      required this.onToggle,
+      required this.accent,
+      this.validator});
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
       obscureText: obscure,
-      style: const TextStyle(color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
+      style: const TextStyle(
+          color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: accent.withOpacity(0.75), fontSize: 13),
-        filled: true, fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        prefixIcon: Padding(padding: const EdgeInsets.all(10), child: _IconPill(icon: Icons.lock_outline, color: accent)),
-        prefixIconConstraints: const BoxConstraints(minWidth: 52, minHeight: 52),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        prefixIcon: Padding(
+            padding: const EdgeInsets.all(10),
+            child: _IconPill(icon: Icons.lock_outline, color: accent)),
+        prefixIconConstraints:
+            const BoxConstraints(minWidth: 52, minHeight: 52),
         suffixIcon: IconButton(
-          icon: Icon(obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-              color: accent.withOpacity(0.55), size: 18),
+          icon: Icon(
+              obscure
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: accent.withOpacity(0.55),
+              size: 18),
           onPressed: onToggle,
         ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: accent.withOpacity(0.2))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: accent.withOpacity(0.22))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: accent, width: 2)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.red.shade300)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.red.shade400, width: 2)),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent.withOpacity(0.2))),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent.withOpacity(0.22))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: accent, width: 2)),
+        errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.red.shade300)),
+        focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.red.shade400, width: 2)),
       ),
-      validator: validator ?? (v) => v!.length < 6 ? 'At least 6 characters' : null,
+      validator:
+          validator ?? (v) => v!.length < 6 ? 'At least 6 characters' : null,
     );
   }
 }
@@ -1419,7 +1816,12 @@ class _Chip extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _Chip({required this.label, required this.emoji, required this.selected, required this.color, required this.onTap});
+  const _Chip(
+      {required this.label,
+      required this.emoji,
+      required this.selected,
+      required this.color,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1431,13 +1833,18 @@ class _Chip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? color.withOpacity(0.1) : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? color : Colors.grey.withOpacity(0.25), width: selected ? 1.5 : 1),
+          border: Border.all(
+              color: selected ? color : Colors.grey.withOpacity(0.25),
+              width: selected ? 1.5 : 1),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Text(emoji, style: const TextStyle(fontSize: 13)),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? color : AppTheme.darkGreen)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected ? color : AppTheme.darkGreen)),
         ]),
       ),
     );
@@ -1453,8 +1860,11 @@ class _IconPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 30, height: 30,
-      decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8)),
       child: Icon(icon, size: 16, color: color),
     );
   }
@@ -1467,8 +1877,12 @@ class _GradientButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final List<Color> gradientColors;
 
-  const _GradientButton({required this.label, required this.icon, required this.isLoading,
-    required this.onPressed, required this.gradientColors});
+  const _GradientButton(
+      {required this.label,
+      required this.icon,
+      required this.isLoading,
+      required this.onPressed,
+      required this.gradientColors});
 
   @override
   Widget build(BuildContext context) {
@@ -1476,8 +1890,16 @@ class _GradientButton extends StatelessWidget {
       height: 56,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(colors: gradientColors, begin: Alignment.centerLeft, end: Alignment.centerRight),
-        boxShadow: [BoxShadow(color: gradientColors.last.withOpacity(0.3), blurRadius: 18, offset: const Offset(0, 7))],
+        gradient: LinearGradient(
+            colors: gradientColors,
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight),
+        boxShadow: [
+          BoxShadow(
+              color: gradientColors.last.withOpacity(0.3),
+              blurRadius: 18,
+              offset: const Offset(0, 7))
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -1488,19 +1910,30 @@ class _GradientButton extends StatelessWidget {
           splashColor: Colors.white.withOpacity(0.08),
           child: Center(
             child: isLoading
-                ? const SizedBox(width: 22, height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.5, color: Colors.white))
                 : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 10),
-              Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.2)),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.arrow_forward, size: 13, color: Colors.white),
-              ),
-            ]),
+                    Icon(icon, color: Colors.white, size: 18),
+                    const SizedBox(width: 10),
+                    Text(label,
+                        style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.2)),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.arrow_forward,
+                          size: 13, color: Colors.white),
+                    ),
+                  ]),
           ),
         ),
       ),
