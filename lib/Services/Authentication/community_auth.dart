@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:uuid/uuid.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,6 +22,137 @@ class CommunityAuthService {
         _db = db ?? FirebaseFirestore.instance,
         _storage = storage ?? FirebaseStorage.instance;
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Marketplace Seller Registration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Registers a new marketplace seller.
+  /// Writes to [marketplace_sellers] (primary) and [Users] (compatibility).
+  Future<F_User?> registerAsMarketplaceSeller({
+    // Account details
+    required String email,
+    required String password,
+    required String name,
+    required String phone,
+    // Shop identity
+    required String shopName,
+    required String marketplaceRole, // 'Collector' | 'Processor' | 'Maker'
+    required bool isBusiness,
+    String? businessRegNo,
+    XFile? shopLogo,
+    // Marketplace profile
+    required List<String>
+        specialisations, // plastics (Collector) or materials (Processor/Maker)
+    List<String> creativeCategories = const [], // Maker only
+    String bio = '',
+    // Location
+    required String city,
+    String area = '',
+  }) async {
+    try {
+      debugPrint('[CommunityAuth] registerAsMarketplaceSeller start');
+
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final user = credential.user;
+      if (user == null) {
+        debugPrint(
+            '[CommunityAuth] createUserWithEmailAndPassword returned null user');
+        return null;
+      }
+      debugPrint('[CommunityAuth] seller registered uid=${user.uid}');
+
+      // Upload shop logo if provided
+      String? shopLogoUrl;
+      if (shopLogo != null) {
+        try {
+          final ref = _storage.ref().child(
+              'marketplace_sellers/${user.uid}/shop_logo_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          debugPrint('[CommunityAuth] uploading shop logo to ${ref.fullPath}');
+          await ref.putFile(File(shopLogo.path));
+          shopLogoUrl = await ref.getDownloadURL();
+          debugPrint('[CommunityAuth] shop logo uploaded');
+        } catch (e) {
+          debugPrint('[CommunityAuth] logo upload error: $e');
+          // Continue without logo — not critical
+        }
+      }
+
+      // Primary document in marketplace_sellers collection
+      final sellerData = {
+        'uid': user.uid,
+        'email': email,
+        'name': name,
+        'phone': phone,
+        // Shop identity
+        'shop_name': shopName,
+        'marketplace_role': marketplaceRole,
+        'is_business': isBusiness,
+        if (isBusiness && businessRegNo != null && businessRegNo.isNotEmpty)
+          'business_reg_no': businessRegNo,
+        'shop_logo_url': shopLogoUrl,
+        // Marketplace profile
+        'specialisations': specialisations,
+        if (creativeCategories.isNotEmpty)
+          'creative_categories': creativeCategories,
+        'bio': bio,
+        // Location
+        'city': city,
+        'area': area,
+        'country': 'Kenya',
+        // Platform metrics
+        'impact_points': 0,
+        'kg_diverted': 0.0,
+        'active_listings': 0,
+        // Meta
+        'type': 'Marketplace Seller',
+        'createdAt': FieldValue.serverTimestamp(),
+        'guidelinesAcceptedAt': null,
+        'communityId': 'default',
+      };
+
+      debugPrint(
+          '[CommunityAuth] writing seller doc to marketplace_sellers/${user.uid}');
+      await _db.collection('marketplace_sellers').doc(user.uid).set(sellerData);
+
+      // Mirror to Users collection for backwards compatibility
+      await _db.collection('Users').doc(user.uid).set(
+        {
+          'name': name,
+          'email': email,
+          'role': 'Marketplace Seller',
+          'marketplace_role': marketplaceRole,
+          'shop_name': shopName,
+          'city': city,
+          'impact_points': 0,
+          'createdAt': FieldValue.serverTimestamp(),
+          'guidelinesAcceptedAt': null,
+          'communityId': 'default',
+          'isPrototypeMode': true,
+        },
+        SetOptions(merge: true),
+      );
+
+      debugPrint(
+          '[CommunityAuth] seller registration completed for uid=${user.uid}');
+      return F_User(uid: user.uid);
+    } on FirebaseException catch (e, st) {
+      debugPrint('[CommunityAuth] FirebaseException: ${e.code} ${e.message}');
+      debugPrint('$st');
+      rethrow;
+    } catch (e, st) {
+      debugPrint('[CommunityAuth] error: $e');
+      debugPrint('$st');
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Organization Registration
+  // ─────────────────────────────────────────────────────────────────────────
+
   Future<F_User?> registerAsOrganization({
     required String email,
     required String password,
@@ -32,20 +164,19 @@ class CommunityAuthService {
     XFile? profilePhoto,
   }) async {
     try {
-      print('[CommunityAuth] registerAsOrganization start');
+      debugPrint('[CommunityAuth] registerAsOrganization start');
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
       final user = credential.user;
       if (user == null) {
-        print(
+        debugPrint(
             '[CommunityAuth] createUserWithEmailAndPassword returned null user');
         return null;
       }
-      print('[CommunityAuth] organization registered uid=${user.uid}');
+      debugPrint('[CommunityAuth] organization registered uid=${user.uid}');
 
-      // Generate UUID for organization ID
       const uuid = Uuid();
       final orgId = uuid.v4();
 
@@ -54,19 +185,16 @@ class CommunityAuthService {
         try {
           final ref = _storage.ref().child(
               'organizations/$orgId/profile_${DateTime.now().millisecondsSinceEpoch}.jpg');
-          print(
+          debugPrint(
               '[CommunityAuth] uploading org profile photo to ${ref.fullPath}');
           await ref.putFile(File(profilePhoto.path));
           profilePhotoUrl = await ref.getDownloadURL();
-          print('[CommunityAuth] org profile photo uploaded');
-        } catch (e, st) {
-          print('[CommunityAuth] photo upload error: $e');
-          print(st);
-          // Continue without photo
+          debugPrint('[CommunityAuth] org profile photo uploaded');
+        } catch (e) {
+          debugPrint('[CommunityAuth] photo upload error: $e');
         }
       }
 
-      // Save to org_rep collection (indexed by uid)
       final orgRepData = {
         'uid': user.uid,
         'email': email,
@@ -74,12 +202,8 @@ class CommunityAuthService {
         'org_name': orgName,
         'createdAt': FieldValue.serverTimestamp(),
       };
-
-      print(
-          '[CommunityAuth] writing org rep doc to org_rep/${user.uid} => $orgRepData');
       await _db.collection('org_rep').doc(user.uid).set(orgRepData);
 
-      // Save to organizations collection (full organization data)
       final organizationsData = {
         'orgId': orgId,
         'org_name': orgName,
@@ -96,12 +220,8 @@ class CommunityAuthService {
         'impact_points': 0,
         'communityId': 'default',
       };
-
-      print(
-          '[CommunityAuth] writing organization doc to organizations/$orgId => $organizationsData');
       await _db.collection('organizations').doc(orgId).set(organizationsData);
 
-      // Also update the Users collection for backwards compatibility
       await _db.collection('Users').doc(user.uid).set(
         {
           'name': orgRepName,
@@ -118,19 +238,23 @@ class CommunityAuthService {
         SetOptions(merge: true),
       );
 
-      print(
+      debugPrint(
           '[CommunityAuth] organization registration completed for uid=${user.uid}');
       return F_User(uid: user.uid);
     } on FirebaseException catch (e, st) {
-      print('[CommunityAuth] FirebaseException: ${e.code} ${e.message}');
-      print(st);
+      debugPrint('[CommunityAuth] FirebaseException: ${e.code} ${e.message}');
+      debugPrint('$st');
       rethrow;
     } catch (e, st) {
-      print('[CommunityAuth] error: $e');
-      print(st);
+      debugPrint('[CommunityAuth] error: $e');
+      debugPrint('$st');
       rethrow;
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Community Member Registration
+  // ─────────────────────────────────────────────────────────────────────────
 
   Future<F_User?> registerWithEmail({
     required String name,
@@ -139,20 +263,19 @@ class CommunityAuthService {
     required String role,
   }) async {
     try {
-      print('[CommunityAuth] registerWithEmail start');
+      debugPrint('[CommunityAuth] registerWithEmail start');
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
       final user = credential.user;
       if (user == null) {
-        print(
+        debugPrint(
             '[CommunityAuth] createUserWithEmailAndPassword returned null user');
         return null;
       }
-      print('[CommunityAuth] registered uid=${user.uid}');
+      debugPrint('[CommunityAuth] registered uid=${user.uid}');
 
-      // Save to members collection ordered by UID
       final data = {
         'name': name,
         'email': email,
@@ -164,30 +287,28 @@ class CommunityAuthService {
         'communityId': 'default',
       };
 
-      print('[CommunityAuth] writing user doc to members/${user.uid} => $data');
       await _db.collection('members').doc(user.uid).set(data);
-
-      // Also update the Users collection for backwards compatibility
       await _db.collection('Users').doc(user.uid).set(
-        {
-          ...data,
-          'isPrototypeMode': true,
-        },
+        {...data, 'isPrototypeMode': true},
         SetOptions(merge: true),
       );
 
-      print('[CommunityAuth] registration completed for uid=${user.uid}');
+      debugPrint('[CommunityAuth] registration completed for uid=${user.uid}');
       return F_User(uid: user.uid);
     } on FirebaseException catch (e, st) {
-      print('[CommunityAuth] FirebaseException: ${e.code} ${e.message}');
-      print(st);
+      debugPrint('[CommunityAuth] FirebaseException: ${e.code} ${e.message}');
+      debugPrint('$st');
       rethrow;
     } catch (e, st) {
-      print('[CommunityAuth] error: $e');
-      print(st);
+      debugPrint('[CommunityAuth] error: $e');
+      debugPrint('$st');
       rethrow;
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Anonymous Community Join
+  // ─────────────────────────────────────────────────────────────────────────
 
   Future<F_User?> joinCommunity({
     required String name,
@@ -196,28 +317,24 @@ class CommunityAuthService {
     XFile? profilePhoto,
   }) async {
     try {
-      print('[CommunityAuth] join start');
+      debugPrint('[CommunityAuth] join start');
       final credential = await _auth.signInAnonymously();
       final user = credential.user;
       if (user == null) {
-        print('[CommunityAuth] signInAnonymously returned null user');
+        debugPrint('[CommunityAuth] signInAnonymously returned null user');
         return null;
       }
-      print('[CommunityAuth] signed in uid=${user.uid}');
+      debugPrint('[CommunityAuth] signed in uid=${user.uid}');
 
       String? photoUrl;
       if (profilePhoto != null) {
         try {
           final ref = _storage.ref().child(
               'users/${user.uid}/profile_${DateTime.now().millisecondsSinceEpoch}.jpg');
-          print('[CommunityAuth] uploading profile photo to ${ref.fullPath}');
           await ref.putFile(File(profilePhoto.path));
           photoUrl = await ref.getDownloadURL();
-          print('[CommunityAuth] profile photo uploaded');
-        } catch (e, st) {
-          print('[CommunityAuth] photo upload error: $e');
-          print(st);
-          // Continue without photo, but surface error to caller
+        } catch (e) {
+          debugPrint('[CommunityAuth] photo upload error: $e');
           rethrow;
         }
       }
@@ -233,66 +350,80 @@ class CommunityAuthService {
         'communityId': 'default',
         'isPrototypeMode': true,
       };
-      print('[CommunityAuth] writing user doc to Users/${user.uid} => $data');
-      await _db.collection('Users').doc(user.uid).set(
-            data,
-            SetOptions(merge: true),
-          );
+      await _db
+          .collection('Users')
+          .doc(user.uid)
+          .set(data, SetOptions(merge: true));
 
-      print('[CommunityAuth] join completed for uid=${user.uid}');
+      debugPrint('[CommunityAuth] join completed for uid=${user.uid}');
       return F_User(uid: user.uid);
     } on FirebaseException catch (e, st) {
-      print('[CommunityAuth] FirebaseException: ${e.code} ${e.message}');
-      print(st);
+      debugPrint('[CommunityAuth] FirebaseException: ${e.code} ${e.message}');
+      debugPrint('$st');
       rethrow;
     } catch (e, st) {
-      print('[CommunityAuth] error: $e');
-      print(st);
+      debugPrint('[CommunityAuth] error: $e');
+      debugPrint('$st');
       rethrow;
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Guidelines
+  // ─────────────────────────────────────────────────────────────────────────
+
   Future<void> setGuidelinesAccepted({required String uid}) async {
     final timestamp = FieldValue.serverTimestamp();
-    
-    // Update Users collection (backwards compatibility)
-    await _db.collection('Users').doc(uid).set({
-      'guidelinesAcceptedAt': timestamp,
-    }, SetOptions(merge: true));
 
-    // Check which collection the user is in and update accordingly
+    await _db
+        .collection('Users')
+        .doc(uid)
+        .set({'guidelinesAcceptedAt': timestamp}, SetOptions(merge: true));
+
     final memberDoc = await _db.collection('members').doc(uid).get();
     if (memberDoc.exists) {
-      // Update members collection
-      await _db.collection('members').doc(uid).set({
-        'guidelinesAcceptedAt': timestamp,
-      }, SetOptions(merge: true));
-    } else {
-      // Check org_rep collection  
-      final orgDoc = await _db.collection('org_rep').doc(uid).get();
-      if (orgDoc.exists) {
-        // Update org_rep collection
-        await _db.collection('org_rep').doc(uid).set({
-          'guidelinesAcceptedAt': timestamp,
-        }, SetOptions(merge: true));
-        
-        // Also update the organizations collection
-        final orgRepData = orgDoc.data() as Map<String, dynamic>?;
-        final orgName = orgRepData?['org_name'];
-        if (orgName != null) {
-          final orgQuery = await _db.collection('organizations')
-              .where('org_name', isEqualTo: orgName)
-              .where('org_rep_uid', isEqualTo: uid)
-              .limit(1)
-              .get();
-          
-          if (orgQuery.docs.isNotEmpty) {
-            await _db.collection('organizations').doc(orgQuery.docs.first.id).set({
-              'guidelinesAcceptedAt': timestamp,
-            }, SetOptions(merge: true));
-          }
+      await _db
+          .collection('members')
+          .doc(uid)
+          .set({'guidelinesAcceptedAt': timestamp}, SetOptions(merge: true));
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_guidelinesKey(uid), true);
+      return;
+    }
+
+    final orgDoc = await _db.collection('org_rep').doc(uid).get();
+    if (orgDoc.exists) {
+      await _db
+          .collection('org_rep')
+          .doc(uid)
+          .set({'guidelinesAcceptedAt': timestamp}, SetOptions(merge: true));
+      final orgRepData = orgDoc.data() as Map<String, dynamic>?;
+      final orgName = orgRepData?['org_name'];
+      if (orgName != null) {
+        final orgQuery = await _db
+            .collection('organizations')
+            .where('org_name', isEqualTo: orgName)
+            .where('org_rep_uid', isEqualTo: uid)
+            .limit(1)
+            .get();
+        if (orgQuery.docs.isNotEmpty) {
+          await _db.collection('organizations').doc(orgQuery.docs.first.id).set(
+              {'guidelinesAcceptedAt': timestamp}, SetOptions(merge: true));
         }
       }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_guidelinesKey(uid), true);
+      return;
+    }
+
+    // Check marketplace_sellers
+    final sellerDoc =
+        await _db.collection('marketplace_sellers').doc(uid).get();
+    if (sellerDoc.exists) {
+      await _db
+          .collection('marketplace_sellers')
+          .doc(uid)
+          .set({'guidelinesAcceptedAt': timestamp}, SetOptions(merge: true));
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -301,40 +432,22 @@ class CommunityAuthService {
 
   Future<bool> hasAcceptedGuidelines({required String uid}) async {
     final prefs = await SharedPreferences.getInstance();
-    final local = prefs.getBool(_guidelinesKey(uid));
-    if (local == true) return true;
+    if (prefs.getBool(_guidelinesKey(uid)) == true) return true;
 
-    // Check members collection first
-    final memberDoc = await _db.collection('members').doc(uid).get();
-    if (memberDoc.exists) {
-      final acceptedAt = memberDoc.data()?['guidelinesAcceptedAt'];
-      final hasAccepted = acceptedAt != null;
-      if (hasAccepted) {
-        await prefs.setBool(_guidelinesKey(uid), true);
+    for (final collection in [
+      'members',
+      'org_rep',
+      'marketplace_sellers',
+      'Users'
+    ]) {
+      final doc = await _db.collection(collection).doc(uid).get();
+      if (doc.exists) {
+        final hasAccepted = doc.data()?['guidelinesAcceptedAt'] != null;
+        if (hasAccepted) await prefs.setBool(_guidelinesKey(uid), true);
+        return hasAccepted;
       }
-      return hasAccepted;
     }
-
-    // Check org_rep collection
-    final orgDoc = await _db.collection('org_rep').doc(uid).get();
-    if (orgDoc.exists) {
-      final acceptedAt = orgDoc.data()?['guidelinesAcceptedAt'];
-      final hasAccepted = acceptedAt != null;
-      if (hasAccepted) {
-        await prefs.setBool(_guidelinesKey(uid), true);
-      }
-      return hasAccepted;
-    }
-
-    // Fallback to Users collection for backwards compatibility
-    final doc = await _db.collection('Users').doc(uid).get();
-    if (!doc.exists) return false;
-    final acceptedAt = doc.data()?['guidelinesAcceptedAt'];
-    final hasAccepted = acceptedAt != null;
-    if (hasAccepted) {
-      await prefs.setBool(_guidelinesKey(uid), true);
-    }
-    return hasAccepted;
+    return false;
   }
 
   String _guidelinesKey(String uid) => 'guidelines_accepted_$uid';
