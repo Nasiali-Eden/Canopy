@@ -29,7 +29,12 @@ class _OrgMapState extends State<OrgMap> {
   );
 
   Set<Marker> _markers = {};
-  final List<String> _filterOptions = ['All', 'Cleanup', 'Collection Points', 'Verified'];
+  final List<String> _filterOptions = [
+    'All',
+    'Cleanup',
+    'Collection Points',
+    'Verified'
+  ];
 
   // Dummy cleanup activities and collection points
   final List<Map<String, dynamic>> _activities = [
@@ -127,8 +132,10 @@ class _OrgMapState extends State<OrgMap> {
     final filteredActivities = _activities.where((activity) {
       if (_selectedFilter == 'All') return true;
       if (_selectedFilter == 'Cleanup') return activity['type'] == 'cleanup';
-      if (_selectedFilter == 'Collection Points') return activity['type'] == 'collection';
-      if (_selectedFilter == 'Verified') return activity['status'] == 'verified';
+      if (_selectedFilter == 'Collection Points')
+        return activity['type'] == 'collection';
+      if (_selectedFilter == 'Verified')
+        return activity['status'] == 'verified';
       return true;
     }).toList();
 
@@ -154,7 +161,7 @@ class _OrgMapState extends State<OrgMap> {
   Marker _buildMarker(Map<String, dynamic> activity) {
     final type = activity['type'] as String;
     final status = activity['status'] as String?;
-    
+
     return Marker(
       markerId: MarkerId(activity['id']),
       position: activity['location'] as LatLng,
@@ -168,7 +175,7 @@ class _OrgMapState extends State<OrgMap> {
 
   void _showActivityPopup(BuildContext context, Map<String, dynamic> activity) {
     final type = activity['type'] as String;
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -190,14 +197,18 @@ class _OrgMapState extends State<OrgMap> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: type == 'cleanup' 
+                      color: type == 'cleanup'
                           ? AppTheme.primary.withOpacity(0.1)
                           : AppTheme.accent.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      type == 'cleanup' ? Icons.cleaning_services : Icons.recycling,
-                      color: type == 'cleanup' ? AppTheme.primary : AppTheme.accent,
+                      type == 'cleanup'
+                          ? Icons.cleaning_services
+                          : Icons.recycling,
+                      color: type == 'cleanup'
+                          ? AppTheme.primary
+                          : AppTheme.accent,
                       size: 24,
                     ),
                   ),
@@ -208,15 +219,17 @@ class _OrgMapState extends State<OrgMap> {
                       children: [
                         Text(
                           activity['title'],
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.darkGreen,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.darkGreen,
+                                  ),
                         ),
                         if (activity['status'] != null)
                           Container(
                             margin: const EdgeInsets.only(top: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: activity['status'] == 'verified'
                                   ? AppTheme.primary.withOpacity(0.15)
@@ -227,8 +240,8 @@ class _OrgMapState extends State<OrgMap> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  activity['status'] == 'verified' 
-                                      ? Icons.verified 
+                                  activity['status'] == 'verified'
+                                      ? Icons.verified
                                       : Icons.pending,
                                   size: 14,
                                   color: activity['status'] == 'verified'
@@ -237,7 +250,9 @@ class _OrgMapState extends State<OrgMap> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  activity['status'] == 'verified' ? 'Verified' : 'Pending',
+                                  activity['status'] == 'verified'
+                                      ? 'Verified'
+                                      : 'Pending',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -259,7 +274,7 @@ class _OrgMapState extends State<OrgMap> {
                 ],
               ),
               const SizedBox(height: 16),
-              
+
               // Description
               Text(
                 activity['description'],
@@ -268,7 +283,7 @@ class _OrgMapState extends State<OrgMap> {
                     ),
               ),
               const SizedBox(height: 16),
-              
+
               // Details based on type
               if (type == 'cleanup') ...[
                 _DetailRow(
@@ -306,9 +321,11 @@ class _OrgMapState extends State<OrgMap> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: (activity['materials'] as List<String>).map((material) {
+                  children:
+                      (activity['materials'] as List<String>).map((material) {
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: AppTheme.accent.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -329,16 +346,15 @@ class _OrgMapState extends State<OrgMap> {
                 ),
               ],
               const SizedBox(height: 20),
-              
+
               // Action button
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   onPressed: () => Navigator.pop(context),
                   style: FilledButton.styleFrom(
-                    backgroundColor: type == 'cleanup' 
-                        ? AppTheme.primary 
-                        : AppTheme.accent,
+                    backgroundColor:
+                        type == 'cleanup' ? AppTheme.primary : AppTheme.accent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   child: Text(
@@ -378,23 +394,7 @@ class _OrgMapState extends State<OrgMap> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        toolbarHeight: 68,
-        centerTitle: true,
-      
-        title: Text(
-          'Canopy',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.darkGreen,
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-              ),
-        ),
-    ),
-     body: Stack(
+      body: Stack(
         children: [
           // Google Map
           GoogleMap(
@@ -434,13 +434,15 @@ class _OrgMapState extends State<OrgMap> {
                       selectedColor: AppTheme.primary.withOpacity(0.2),
                       checkmarkColor: AppTheme.primary,
                       labelStyle: TextStyle(
-                        color: isSelected ? AppTheme.primary : AppTheme.darkGreen,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        color:
+                            isSelected ? AppTheme.primary : AppTheme.darkGreen,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
                         fontSize: 13,
                       ),
                       side: BorderSide(
-                        color: isSelected 
-                            ? AppTheme.primary 
+                        color: isSelected
+                            ? AppTheme.primary
                             : AppTheme.lightGreen.withOpacity(0.5),
                       ),
                       elevation: 2,
@@ -479,14 +481,16 @@ class _OrgMapState extends State<OrgMap> {
                       children: [
                         Text(
                           'Legend',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.darkGreen,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.darkGreen,
+                                  ),
                         ),
                         const SizedBox(width: 8),
-                        Icon(Icons.info_outline, 
-                          size: 16, 
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
                           color: AppTheme.accent,
                         ),
                       ],

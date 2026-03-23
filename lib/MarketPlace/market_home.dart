@@ -64,19 +64,7 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
           index: _index,
           children: pages,
         ),
-        // FAB only on Shop tab (index 1)
-        floatingActionButton: _index == 1
-            ? FloatingActionButton.extended(
-                onPressed: _onCreateListing,
-                backgroundColor: AppTheme.tertiary,
-                icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text(
-                  'New Listing',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-              )
-            : null,
+        
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             color: Colors.white,

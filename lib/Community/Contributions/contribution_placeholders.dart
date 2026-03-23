@@ -81,7 +81,7 @@ class ContributionPlaceholders {
 
   static Widget buildPlaceholderCard(BuildContext context, int index) {
     final placeholderData = _getPlaceholderData(index);
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -166,7 +166,7 @@ class ContributionPlaceholders {
               ],
             ),
           ),
-          
+
           // Image comparison section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -188,7 +188,7 @@ class ContributionPlaceholders {
               ],
             ),
           ),
-          
+
           // Footer with date and points
           Padding(
             padding: const EdgeInsets.all(16),
@@ -268,7 +268,8 @@ class ContributionPlaceholders {
             imageUrls.length,
             (index) => Expanded(
               child: Container(
-                margin: EdgeInsets.only(right: index < imageUrls.length - 1 ? 8 : 0),
+                margin: EdgeInsets.only(
+                    right: index < imageUrls.length - 1 ? 8 : 0),
                 height: 80,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
@@ -334,7 +335,7 @@ class ContributionPlaceholders {
         'beforeImages': [
           'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?w=400',
           'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400',
-          'https://images.unsplash.com/photo-1607964733527-db7d2e9e6a99?w=400',
+          'https://images.unsplash.com/photo-1531746790731-6c087fecd65b?w=400',
         ],
         'afterImages': [
           'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=400',

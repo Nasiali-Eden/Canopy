@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:impact_trail/Community/Contributions/eco_shop.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../MarketPlace/The Market/eco_shop.dart';
 import '../../Models/user.dart';
 import '../../Shared/theme/app_theme.dart';
 import '../../Shared/Activities/activity_home_logic.dart';
