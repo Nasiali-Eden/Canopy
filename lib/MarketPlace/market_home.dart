@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../Shared/theme/app_theme.dart';
 import 'Feed/seller_feed.dart';
-import 'Activities/seller_activities.dart';
 import 'Shop/seller_shop.dart';
-import 'Map/seller_map.dart';
+import 'Learn/learn.dart';
 import 'Profile/seller_profile.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12,12 +11,11 @@ import 'Profile/seller_profile.dart';
 //  Root shell for the Canopy Marketplace seller.
 //  Mirrors OrganizationHome structure exactly.
 //
-//  Tabs (spec Section 3.1):
+//  Tabs:
 //    0 · Feed        — community feed + seller impact strip
-//    1 · Activities  — shared with all community members (unchanged)
-//    2 · Shop        — listings, orders, browse  [FAB: New Listing]
-//    3 · Map         — community map + marketplace layers
-//    4 · Profile     — seller storefront + verified history
+//    1 · Shop        — listings, orders, browse  [FAB: New Listing]
+//    2 · Learn       — blockchain articles for organizations and artisans
+//    3 · Profile     — seller storefront + verified history
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SellerHomeScreen extends StatefulWidget {
@@ -53,9 +51,8 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
   Widget build(BuildContext context) {
     final pages = [
       const SellerFeedPage(),
-      const SellerActivitiesPage(),
       const SellerShopPage(),
-      const SellerMapPage(),
+      const LearnPage(),
       const SellerProfilePage(),
     ];
 
@@ -67,18 +64,18 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
           index: _index,
           children: pages,
         ),
-        // FAB only on Shop tab (index 2)
-        floatingActionButton: _index == 2
+        // FAB only on Shop tab (index 1)
+        floatingActionButton: _index == 1
             ? FloatingActionButton.extended(
-          onPressed: _onCreateListing,
-          backgroundColor: AppTheme.tertiary,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text(
-            'New Listing',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w600),
-          ),
-        )
+                onPressed: _onCreateListing,
+                backgroundColor: AppTheme.tertiary,
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text(
+                  'New Listing',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              )
             : null,
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
@@ -97,7 +94,7 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
                 labelTextStyle: WidgetStateProperty.resolveWith((states) {
                   if (states.contains(WidgetState.selected)) {
                     return TextStyle(
-                      color: _index == 2 ? AppTheme.tertiary : AppTheme.primary,
+                      color: _index == 1 ? AppTheme.tertiary : AppTheme.primary,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     );
@@ -114,7 +111,7 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
                 surfaceTintColor: Colors.transparent,
                 selectedIndex: _index,
                 onDestinationSelected: (i) => setState(() => _index = i),
-                indicatorColor: _index == 2
+                indicatorColor: _index == 1
                     ? AppTheme.tertiary.withOpacity(0.15)
                     : AppTheme.primary.withOpacity(0.15),
                 height: 70,
@@ -124,36 +121,29 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
                     icon: Icon(Icons.home_outlined,
                         color: AppTheme.darkGreen.withOpacity(0.5)),
                     selectedIcon:
-                    Icon(Icons.home_rounded, color: AppTheme.primary),
+                        Icon(Icons.home_rounded, color: AppTheme.primary),
                     label: 'Feed',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.calendar_today_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon: Icon(Icons.calendar_today_rounded,
-                        color: AppTheme.primary),
-                    label: 'Activities',
                   ),
                   // Centre tab — Shop, gold accent
                   NavigationDestination(
                     icon: Icon(Icons.storefront_outlined,
                         color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon:
-                    Icon(Icons.storefront_rounded, color: AppTheme.tertiary),
+                    selectedIcon: Icon(Icons.storefront_rounded,
+                        color: AppTheme.tertiary),
                     label: 'Shop',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.map_outlined,
+                    icon: Icon(Icons.school_outlined,
                         color: AppTheme.darkGreen.withOpacity(0.5)),
                     selectedIcon:
-                    Icon(Icons.map_rounded, color: AppTheme.primary),
-                    label: 'Map',
+                        Icon(Icons.school_rounded, color: AppTheme.primary),
+                    label: 'Learn',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.person_outline_rounded,
                         color: AppTheme.darkGreen.withOpacity(0.5)),
                     selectedIcon:
-                    Icon(Icons.person_rounded, color: AppTheme.primary),
+                        Icon(Icons.person_rounded, color: AppTheme.primary),
                     label: 'Profile',
                   ),
                 ],

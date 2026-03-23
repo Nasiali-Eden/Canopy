@@ -10,7 +10,6 @@ import '../../Organization/Home/org_home.dart';
 import '../../Shared/Pages/welcome_screen.dart';
 import '../../Services/Demo/demo_seeder.dart';
 
-
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -74,28 +73,90 @@ class _SplashScreenState extends State<SplashScreen>
     final completer = Completer<User?>();
     StreamSubscription? sub;
     sub = auth.authStateChanges().listen((user) {
-      if (!completer.isCompleted) { completer.complete(user); sub?.cancel(); }
+      if (!completer.isCompleted) {
+        completer.complete(user);
+        sub?.cancel();
+      }
     });
     await Future.delayed(const Duration(seconds: 5));
-    if (!completer.isCompleted) { sub.cancel(); completer.complete(auth.currentUser); }
+    if (!completer.isCompleted) {
+      sub.cancel();
+      completer.complete(auth.currentUser);
+    }
     return completer.future;
+  }
+
+  /// Wait for Firestore to be ready with retry logic
+  Future<bool> _ensureFirestoreReady() async {
+    const maxRetries = 3;
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        final db = FirebaseFirestore.instance;
+        await db.enableNetwork();
+        await Future.delayed(const Duration(milliseconds: 500));
+        return true;
+      } catch (e) {
+        debugPrint(
+            'Firestore ready check attempt ${i + 1}/$maxRetries failed: $e');
+        if (i < maxRetries - 1) {
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
+    }
+    return false;
   }
 
   /// Check collections in priority order and route accordingly.
   Future<void> _routeByCollection(String uid) async {
     final db = FirebaseFirestore.instance;
     try {
+      // Ensure Firestore is ready before making queries
+      await _ensureFirestoreReady();
+
       // 1 — Marketplace Seller
-      final sellerDoc = await db.collection('marketplace_sellers').doc(uid).get();
-      if (sellerDoc.exists) { _go(const SellerHomeScreen()); return; }
+      try {
+        final sellerDoc = await db
+            .collection('marketplace_sellers')
+            .doc(uid)
+            .get(const GetOptions(source: Source.serverAndCache))
+            .timeout(const Duration(seconds: 10));
+        if (sellerDoc.exists) {
+          _go(const SellerHomeScreen());
+          return;
+        }
+      } catch (e) {
+        debugPrint('[Splash] marketplace check error: $e');
+      }
 
       // 2 — Org Rep
-      final orgDoc = await db.collection('org_rep').doc(uid).get();
-      if (orgDoc.exists) { _go(const OrganizationHome()); return; }
+      try {
+        final orgDoc = await db
+            .collection('org_rep')
+            .doc(uid)
+            .get(const GetOptions(source: Source.serverAndCache))
+            .timeout(const Duration(seconds: 10));
+        if (orgDoc.exists) {
+          _go(const OrganizationHome());
+          return;
+        }
+      } catch (e) {
+        debugPrint('[Splash] org rep check error: $e');
+      }
 
       // 3 — Community Member
-      final memberDoc = await db.collection('members').doc(uid).get();
-      if (memberDoc.exists) { _go(const CommunityHomeScreen()); return; }
+      try {
+        final memberDoc = await db
+            .collection('members')
+            .doc(uid)
+            .get(const GetOptions(source: Source.serverAndCache))
+            .timeout(const Duration(seconds: 10));
+        if (memberDoc.exists) {
+          _go(const CommunityHomeScreen());
+          return;
+        }
+      } catch (e) {
+        debugPrint('[Splash] member check error: $e');
+      }
 
       // Not found in any collection
       _go(const WelcomeScreen());
@@ -112,7 +173,7 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => destination),
-            (route) => false,
+        (route) => false,
       );
     });
   }
@@ -136,7 +197,8 @@ class _SplashScreenState extends State<SplashScreen>
                     curve: Curves.easeOutBack,
                     builder: (_, scale, child) =>
                         Transform.scale(scale: scale, child: child),
-                    child: Image.asset('pngs/logotext.png', width: 200, height: 120),
+                    child: Image.asset('pngs/logotext.png',
+                        width: 200, height: 120),
                   ),
                   const SizedBox(height: 16),
                   Padding(
@@ -145,10 +207,10 @@ class _SplashScreenState extends State<SplashScreen>
                       'Track real-world contributions.\nBuild community impact.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                        height: 1.4,
-                      ),
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w500,
+                            height: 1.4,
+                          ),
                     ),
                   ),
                   const SizedBox(height: 32),

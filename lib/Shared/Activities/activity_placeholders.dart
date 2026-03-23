@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../../Models/activity.dart';
 import 'activity.dart';
 
 /// Type-specific visual config used by both real cards and placeholders.
@@ -179,15 +178,12 @@ class _PlaceholderCardState extends State<_PlaceholderCard>
     return AnimatedBuilder(
       animation: _anim,
       builder: (context, _) {
-        final shimmerOpacity = 0.04 + _anim.value * 0.06;
-
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(18),
-            border:
-                Border.all(color: AppTheme.lightGreen.withOpacity(0.22)),
+            border: Border.all(color: AppTheme.lightGreen.withOpacity(0.22)),
             boxShadow: [
               BoxShadow(
                 color: cfg.color.withOpacity(0.08),
@@ -220,8 +216,8 @@ class _PlaceholderCardState extends State<_PlaceholderCard>
                                 end: Alignment.centerRight,
                                 colors: [
                                   cfg.lightColor,
-                                  cfg.color.withOpacity(
-                                      0.06 + _anim.value * 0.08),
+                                  cfg.color
+                                      .withOpacity(0.06 + _anim.value * 0.08),
                                   cfg.lightColor,
                                 ],
                                 stops: [
@@ -241,8 +237,7 @@ class _PlaceholderCardState extends State<_PlaceholderCard>
                         frameBuilder:
                             (context, child, frame, wasSynchronouslyLoaded) {
                           if (frame != null && !_imageLoaded) {
-                            WidgetsBinding.instance.addPostFrameCallback(
-                                (_) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
                               if (mounted) {
                                 setState(() => _imageLoaded = true);
                               }
@@ -258,8 +253,7 @@ class _PlaceholderCardState extends State<_PlaceholderCard>
                           color: cfg.lightColor,
                           child: Center(
                             child: Icon(cfg.icon,
-                                size: 36,
-                                color: cfg.color.withOpacity(0.35)),
+                                size: 36, color: cfg.color.withOpacity(0.35)),
                           ),
                         ),
                       ),
@@ -331,8 +325,7 @@ class _PlaceholderCardState extends State<_PlaceholderCard>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(cfg.icon,
-                                  size: 11, color: Colors.white),
+                              Icon(cfg.icon, size: 11, color: Colors.white),
                               const SizedBox(width: 4),
                               Text(
                                 data.type.label,
@@ -432,8 +425,7 @@ class _PlaceholderCardState extends State<_PlaceholderCard>
                         value: pct,
                         minHeight: 5,
                         backgroundColor: cfg.color.withOpacity(0.1),
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(cfg.color),
+                        valueColor: AlwaysStoppedAnimation<Color>(cfg.color),
                       ),
                     ),
                   ],

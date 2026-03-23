@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Services/Authentication/auth.dart';
 import '../../../Shared/Pages/login.dart';
 import '../../../Shared/theme/app_theme.dart';
@@ -12,6 +14,44 @@ class OrgProfile extends StatefulWidget {
 
 class _OrgProfileState extends State<OrgProfile> {
   final AuthService _authService = AuthService();
+  late Future<Map<String, dynamic>?> _orgDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _orgDataFuture = _fetchOrgData();
+  }
+
+  Future<Map<String, dynamic>?> _fetchOrgData() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return null;
+
+      final firestore = FirebaseFirestore.instance;
+
+      // Get user's organization data from Users collection
+      final userDoc =
+          await firestore.collection('Users').doc(currentUser.uid).get();
+
+      if (!userDoc.exists) return null;
+
+      final userData = userDoc.data() as Map<String, dynamic>;
+      final orgId = userData['orgId'] as String?;
+
+      if (orgId == null) return null;
+
+      // Get organization details from organizations collection
+      final orgDoc =
+          await firestore.collection('organizations').doc(orgId).get();
+
+      if (!orgDoc.exists) return null;
+
+      return orgDoc.data() as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Error fetching org data: $e');
+      return null;
+    }
+  }
 
   String _getInitials(String? name) {
     if (name == null || name.trim().isEmpty) return '';
@@ -33,7 +73,6 @@ class _OrgProfileState extends State<OrgProfile> {
         surfaceTintColor: Colors.transparent,
         toolbarHeight: 68,
         centerTitle: true,
-      
         title: Text(
           'Canopy',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -42,30 +81,36 @@ class _OrgProfileState extends State<OrgProfile> {
                 fontSize: 22,
               ),
         ),
-    ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            _buildHeader(context),
-            const SizedBox(height: 24),
-            _buildOrganizationInfo(context),
-            const SizedBox(height: 24),
-            _buildAccountSection(context),
-            const SizedBox(height: 16),
-            _buildNotificationsSection(context),
-            const SizedBox(height: 16),
-            _buildSupportSection(context),
-            const SizedBox(height: 24),
-            _buildSignOutButton(context),
-            const SizedBox(height: 100),
-          ],
-        ),
+      ),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: _orgDataFuture,
+        builder: (context, snapshot) {
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                const SizedBox(height: 20),
+                _buildHeader(context, snapshot.data),
+                const SizedBox(height: 24),
+                _buildOrganizationInfo(context),
+                const SizedBox(height: 24),
+                _buildAccountSection(context),
+                const SizedBox(height: 16),
+                _buildNotificationsSection(context),
+                const SizedBox(height: 16),
+                _buildSupportSection(context),
+                const SizedBox(height: 24),
+                _buildSignOutButton(context),
+                const SizedBox(height: 100),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, Map<String, dynamic>? orgData) {
+    final orgName = orgData?['org_name'] as String? ?? 'Organization';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -96,7 +141,7 @@ class _OrgProfileState extends State<OrgProfile> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Green Earth Initiative',
+            orgName,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: AppTheme.darkGreen,
                   fontWeight: FontWeight.w700,
@@ -531,13 +576,17 @@ class _SettingsCard extends StatelessWidget {
                             color: AppTheme.lightGreen.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(item.icon, color: AppTheme.primary, size: 20),
+                          child: Icon(item.icon,
+                              color: AppTheme.primary, size: 20),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
                           child: Text(
                             item.title,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
                                   fontWeight: FontWeight.w500,
                                   color: AppTheme.darkGreen,
                                 ),

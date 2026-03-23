@@ -4,7 +4,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
 
-import '../../Models/activity.dart';
 import '../../Models/user.dart';
 import '../../Services/Activities/activity_service.dart';
 import '../theme/app_theme.dart';
@@ -24,14 +23,12 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   late Animation<double> _fadeAnim;
 
   // ── Form fields ──────────────────────────────────────────────────────────
-  ActivityType _type = ActivityType.event;
   RegistrationState _registrationState = RegistrationState.open;
 
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _venueController = TextEditingController();
-  final _requiredParticipantsController =
-  TextEditingController(text: '10');
+  final _requiredParticipantsController = TextEditingController(text: '10');
 
   // Location
   String? _selectedCity;
@@ -51,11 +48,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   @override
   void initState() {
     super.initState();
-    _animController =
-    AnimationController(duration: const Duration(milliseconds: 400), vsync: this)
+    _animController = AnimationController(
+        duration: const Duration(milliseconds: 400), vsync: this)
       ..forward();
-    _fadeAnim =
-        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _loadCities();
   }
 
@@ -71,11 +67,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
 
   Future<void> _loadCities() async {
     try {
-      final json = await rootBundle
-          .loadString('assets/Cities/African/KenyaCities.json');
+      final json =
+          await rootBundle.loadString('assets/Cities/African/KenyaCities.json');
       final data = jsonDecode(json) as Map<String, dynamic>;
-      final map =
-      data['kenyaCitiesAndLocations'] as Map<String, dynamic>;
+      final map = data['kenyaCitiesAndLocations'] as Map<String, dynamic>;
       final parsed = <String, List<Map<String, dynamic>>>{};
       for (final e in map.entries) {
         parsed[e.key] = (e.value as List).cast<Map<String, dynamic>>();
@@ -100,17 +95,16 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   Map<String, dynamic>? get _selectedAreaData => _selectedArea == null
       ? null
       : _areas.firstWhere(
-        (a) => a['area'] == _selectedArea,
-    orElse: () => {},
-  );
+          (a) => a['area'] == _selectedArea,
+          orElse: () => {},
+        );
 
   void _onAreaSelected(String? area) {
     setState(() {
       _selectedArea = area;
       final areaData = _selectedAreaData;
       if (areaData != null) {
-        final coords =
-            areaData['coordinates'] as Map<String, dynamic>? ?? {};
+        final coords = areaData['coordinates'] as Map<String, dynamic>? ?? {};
         _lat = (coords['lat'] as num?)?.toDouble() ?? 0;
         _lng = (coords['lng'] as num?)?.toDouble() ?? 0;
       }
@@ -126,9 +120,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
       initialDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context)
-              .colorScheme
-              .copyWith(primary: AppTheme.primary),
+          colorScheme:
+              Theme.of(context).colorScheme.copyWith(primary: AppTheme.primary),
         ),
         child: child!,
       ),
@@ -142,9 +135,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
       initialTime: TimeOfDay.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context)
-              .colorScheme
-              .copyWith(primary: AppTheme.primary),
+          colorScheme:
+              Theme.of(context).colorScheme.copyWith(primary: AppTheme.primary),
         ),
         child: child!,
       ),
@@ -154,14 +146,13 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
 
   // ── Image picking ────────────────────────────────────────────────────────
   Future<void> _pickImage(int slot) async {
-    final file = await _picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 85);
+    final file =
+        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (!mounted) return;
     setState(() => _images[slot] = file);
   }
 
-  void _removeImage(int slot) =>
-      setState(() => _images[slot] = null);
+  void _removeImage(int slot) => setState(() => _images[slot] = null);
 
   // ── Submit ───────────────────────────────────────────────────────────────
   Future<void> _create() async {
@@ -176,8 +167,11 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
     }
 
     final dateTime = DateTime(
-      _date!.year, _date!.month, _date!.day,
-      _time!.hour, _time!.minute,
+      _date!.year,
+      _date!.month,
+      _date!.day,
+      _time!.hour,
+      _time!.minute,
     );
 
     setState(() => _saving = true);
@@ -193,16 +187,16 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
       );
 
       final id = await ActivityService().createActivity(
-        type: _type.label,
+        type: 'event',
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         location: location.toMap(),
         dateTime: dateTime,
         requiredParticipants:
-        int.tryParse(_requiredParticipantsController.text.trim()) ?? 10,
+            int.tryParse(_requiredParticipantsController.text.trim()) ?? 10,
         createdBy: user?.uid,
-        coverImage: _images.whereType<XFile>().isNotEmpty 
-            ? _images.whereType<XFile>().first 
+        coverImage: _images.whereType<XFile>().isNotEmpty
+            ? _images.whereType<XFile>().first
             : null,
       );
 
@@ -225,7 +219,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
     ));
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
   String _formatDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
@@ -249,22 +242,22 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
               color: AppTheme.lightGreen.withOpacity(0.18),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.close,
-                size: 18, color: AppTheme.darkGreen),
+            child: const Icon(Icons.close, size: 18, color: AppTheme.darkGreen),
           ),
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
-        title: const Text('Create Activity',
-            style: TextStyle(
-                color: AppTheme.darkGreen,
-                fontWeight: FontWeight.w800,
-                fontSize: 18)),
+        title: const Text(
+          'Create Activity',
+          style: TextStyle(
+              color: AppTheme.darkGreen,
+              fontWeight: FontWeight.w800,
+              fontSize: 18),
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(
-              height: 1,
-              color: AppTheme.lightGreen.withOpacity(0.18)),
+              height: 1, color: AppTheme.lightGreen.withOpacity(0.18)),
         ),
       ),
       body: FadeTransition(
@@ -278,64 +271,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // ── Activity Type selector ──────────────────────
-                      _SectionLabel(
-                          icon: Icons.category_outlined,
-                          label: 'Activity Type',
-                          color: AppTheme.primary),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: ActivityType.values.map((t) {
-                          final cfg = ActivityTypeConfig.forType(t);
-                          final selected = _type == t;
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _type = t),
-                              child: AnimatedContainer(
-                                duration:
-                                const Duration(milliseconds: 180),
-                                margin: EdgeInsets.only(
-                                    right: t != ActivityType.task
-                                        ? 8
-                                        : 0),
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? cfg.color
-                                      : cfg.color.withOpacity(0.07),
-                                  borderRadius:
-                                  BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: selected
-                                        ? cfg.color
-                                        : cfg.color.withOpacity(0.2),
-                                  ),
-                                ),
-                                child: Column(children: [
-                                  Icon(cfg.icon,
-                                      size: 20,
-                                      color: selected
-                                          ? Colors.white
-                                          : cfg.color),
-                                  const SizedBox(height: 4),
-                                  Text(t.label,
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: selected
-                                              ? Colors.white
-                                              : cfg.color)),
-                                ]),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                      const SizedBox(height: 22),
-
-                      // ── Basic info ──────────────────────────────────
+                      // ── Basic Info ──────────────────────────────────
                       _SectionLabel(
                           icon: Icons.edit_outlined,
                           label: 'Basic Info',
@@ -379,17 +315,14 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                           _lat = 0;
                           _lng = 0;
                         }),
-                        validator: (v) =>
-                        (v == null || v.isEmpty)
+                        validator: (v) => (v == null || v.isEmpty)
                             ? 'City is required'
                             : null,
                       ),
                       const SizedBox(height: 12),
                       _StyledDropdown(
                         value: _selectedArea,
-                        items: _areas
-                            .map((a) => a['area'] as String)
-                            .toList(),
+                        items: _areas.map((a) => a['area'] as String).toList(),
                         label: 'Area / Neighbourhood',
                         icon: Icons.pin_drop_outlined,
                         accentColor: AppTheme.lightGreen,
@@ -403,7 +336,6 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         accentColor: AppTheme.accent,
                       ),
 
-                      // Coords preview
                       if (_lat != 0 || _lng != 0) ...[
                         const SizedBox(height: 8),
                         Row(children: [
@@ -433,8 +365,9 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         Expanded(
                           child: _DateTimeButton(
                             icon: Icons.calendar_today_outlined,
-                            label:
-                            _date == null ? 'Pick Date' : _formatDate(_date!),
+                            label: _date == null
+                                ? 'Pick Date'
+                                : _formatDate(_date!),
                             color: AppTheme.secondary,
                             onTap: _pickDate,
                             filled: _date != null,
@@ -489,20 +422,16 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                               onTap: () =>
                                   setState(() => _registrationState = s),
                               child: AnimatedContainer(
-                                duration:
-                                const Duration(milliseconds: 180),
+                                duration: const Duration(milliseconds: 180),
                                 margin: EdgeInsets.only(
-                                    right: s == RegistrationState.open
-                                        ? 8
-                                        : 0),
+                                    right: s == RegistrationState.open ? 8 : 0),
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 12, horizontal: 14),
                                 decoration: BoxDecoration(
                                   color: isSelected
                                       ? color.withOpacity(0.08)
                                       : Colors.white,
-                                  borderRadius:
-                                  BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isSelected
                                         ? color
@@ -546,7 +475,8 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                       // ── Photos (4 slots) ──────────────────────────────
                       _SectionLabel(
                           icon: Icons.photo_library_outlined,
-                          label: 'Photos  (${_images.where((i) => i != null).length}/4)',
+                          label:
+                              'Photos  (${_images.where((i) => i != null).length}/4)',
                           color: AppTheme.darkGreen),
                       const SizedBox(height: 10),
 
@@ -554,28 +484,26 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                            const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
                           mainAxisSpacing: 10,
                           crossAxisSpacing: 10,
                           childAspectRatio: 1.5,
                         ),
                         itemCount: 4,
-                        itemBuilder: (context, i) =>
-                            _ImageSlot(
-                              index: i,
-                              file: _images[i],
-                              onPick: () => _pickImage(i),
-                              onRemove: () => _removeImage(i),
-                              isFirst: i == 0,
-                            ),
+                        itemBuilder: (context, i) => _ImageSlot(
+                          index: i,
+                          file: _images[i],
+                          onPick: () => _pickImage(i),
+                          onRemove: () => _removeImage(i),
+                          isFirst: i == 0,
+                        ),
                       ),
 
                       const SizedBox(height: 8),
-                      Text(
+                      const Text(
                         'First photo will be used as the cover image',
-                        style: TextStyle(
-                            fontSize: 11, color: Colors.black38),
+                        style: TextStyle(fontSize: 11, color: Colors.black38),
                       ),
 
                       const SizedBox(height: 24),
@@ -599,9 +527,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
               child: Row(children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _saving
-                        ? null
-                        : () => Navigator.pop(context),
+                    onPressed: _saving ? null : () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.darkGreen,
                       side: BorderSide(
@@ -624,7 +550,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         colors: [
                           AppTheme.darkGreen,
                           AppTheme.primary,
-                          AppTheme.secondary
+                          AppTheme.secondary,
                         ],
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
@@ -647,25 +573,23 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         child: Center(
                           child: _saving
                               ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white))
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
                               : const Row(
-                            mainAxisAlignment:
-                            MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_circle_outline,
-                                  color: Colors.white, size: 18),
-                              SizedBox(width: 8),
-                              Text('Create Activity',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700)),
-                            ],
-                          ),
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.add_circle_outline,
+                                        color: Colors.white, size: 18),
+                                    SizedBox(width: 8),
+                                    Text('Create Activity',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
                         ),
                       ),
                     ),
@@ -714,98 +638,92 @@ class _ImageSlot extends StatelessWidget {
                 ? AppTheme.primary.withOpacity(0.3)
                 : AppTheme.lightGreen.withOpacity(0.3),
             width: isFirst && file == null ? 2 : 1.2,
-            // Dashed look via style isn't native; using solid
           ),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(11),
           child: file == null
               ? Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                index == 0
-                    ? Icons.add_photo_alternate_outlined
-                    : Icons.add_photo_alternate_outlined,
-                size: 26,
-                color: isFirst
-                    ? AppTheme.primary.withOpacity(0.5)
-                    : AppTheme.lightGreen.withOpacity(0.6),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                index == 0 ? 'Cover Photo' : 'Photo ${index + 1}',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: isFirst
-                      ? AppTheme.primary.withOpacity(0.6)
-                      : Colors.black38,
-                ),
-              ),
-              if (isFirst) ...[
-                const SizedBox(height: 2),
-                Text('Required',
-                    style: TextStyle(
-                        fontSize: 9,
-                        color: AppTheme.primary.withOpacity(0.5))),
-              ]
-            ],
-          )
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.add_photo_alternate_outlined,
+                      size: 26,
+                      color: isFirst
+                          ? AppTheme.primary.withOpacity(0.5)
+                          : AppTheme.lightGreen.withOpacity(0.6),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      index == 0 ? 'Cover Photo' : 'Photo ${index + 1}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isFirst
+                            ? AppTheme.primary.withOpacity(0.6)
+                            : Colors.black38,
+                      ),
+                    ),
+                    if (isFirst) ...[
+                      const SizedBox(height: 2),
+                      Text('Required',
+                          style: TextStyle(
+                              fontSize: 9,
+                              color: AppTheme.primary.withOpacity(0.5))),
+                    ]
+                  ],
+                )
               : Stack(
-            fit: StackFit.expand,
-            children: [
-              // Preview — on real device use Image.file(File(file.path))
-              Container(
-                color: AppTheme.lightGreen.withOpacity(0.15),
-                child: const Center(
-                  child: Icon(Icons.image_outlined,
-                      size: 30, color: AppTheme.primary),
-                ),
-              ),
-              // Remove button
-              Positioned(
-                top: 4,
-                right: 4,
-                child: GestureDetector(
-                  onTap: onRemove,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.12),
-                            blurRadius: 4)
-                      ],
+                  fit: StackFit.expand,
+                  children: [
+                    Container(
+                      color: AppTheme.lightGreen.withOpacity(0.15),
+                      child: const Center(
+                        child: Icon(Icons.image_outlined,
+                            size: 30, color: AppTheme.primary),
+                      ),
                     ),
-                    child: const Icon(Icons.close,
-                        size: 12, color: Colors.red),
-                  ),
-                ),
-              ),
-              // Cover badge
-              if (isFirst)
-                Positioned(
-                  bottom: 4,
-                  left: 4,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.85),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text('Cover',
-                        style: TextStyle(
-                            fontSize: 9,
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: GestureDetector(
+                        onTap: onRemove,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
                             color: Colors.white,
-                            fontWeight: FontWeight.w700)),
-                  ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withOpacity(0.12),
+                                  blurRadius: 4)
+                            ],
+                          ),
+                          child: const Icon(Icons.close,
+                              size: 12, color: Colors.red),
+                        ),
+                      ),
+                    ),
+                    if (isFirst)
+                      Positioned(
+                        bottom: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Cover',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
         ),
       ),
     );
@@ -842,16 +760,14 @@ class _SectionLabel extends StatelessWidget {
               color: color,
               letterSpacing: 0.2)),
       const SizedBox(width: 10),
-      Expanded(
-          child: Container(height: 1, color: color.withOpacity(0.12))),
+      Expanded(child: Container(height: 1, color: color.withOpacity(0.12))),
     ]);
   }
 }
 
-OutlineInputBorder _border(Color c, {double width = 1.2}) =>
-    OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: c, width: width));
+OutlineInputBorder _border(Color c, {double width = 1.2}) => OutlineInputBorder(
+    borderRadius: BorderRadius.circular(14),
+    borderSide: BorderSide(color: c, width: width));
 
 class _StyledField extends StatelessWidget {
   final TextEditingController controller;
@@ -876,17 +792,15 @@ class _StyledField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       style: const TextStyle(
-          color: AppTheme.darkGreen,
-          fontSize: 14,
-          fontWeight: FontWeight.w500),
+          color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(
-            color: accentColor.withOpacity(0.75), fontSize: 13),
+        labelStyle:
+            TextStyle(color: accentColor.withOpacity(0.75), fontSize: 13),
         filled: true,
         fillColor: Colors.white,
         contentPadding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         prefixIcon: Padding(
           padding: const EdgeInsets.all(10),
           child: Container(
@@ -899,7 +813,7 @@ class _StyledField extends StatelessWidget {
           ),
         ),
         prefixIconConstraints:
-        const BoxConstraints(minWidth: 52, minHeight: 52),
+            const BoxConstraints(minWidth: 52, minHeight: 52),
         border: _border(accentColor.withOpacity(0.2)),
         enabledBorder: _border(accentColor.withOpacity(0.22)),
         focusedBorder: _border(accentColor, width: 2),
@@ -927,13 +841,12 @@ class _StyledTextArea extends StatelessWidget {
     return TextFormField(
       controller: controller,
       maxLines: 4,
-      style: const TextStyle(
-          color: AppTheme.darkGreen, fontSize: 14),
+      style: const TextStyle(color: AppTheme.darkGreen, fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         alignLabelWithHint: true,
-        labelStyle: TextStyle(
-            color: accentColor.withOpacity(0.75), fontSize: 13),
+        labelStyle:
+            TextStyle(color: accentColor.withOpacity(0.75), fontSize: 13),
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.all(14),
@@ -949,15 +862,14 @@ class _StyledTextArea extends StatelessWidget {
           ),
         ),
         prefixIconConstraints:
-        const BoxConstraints(minWidth: 52, minHeight: 52),
+            const BoxConstraints(minWidth: 52, minHeight: 52),
         border: _border(accentColor.withOpacity(0.2)),
         enabledBorder: _border(accentColor.withOpacity(0.22)),
         focusedBorder: _border(accentColor, width: 2),
         errorBorder: _border(Colors.red.shade300),
       ),
-      validator: (v) => (v == null || v.trim().isEmpty)
-          ? 'Description is required'
-          : null,
+      validator: (v) =>
+          (v == null || v.trim().isEmpty) ? 'Description is required' : null,
     );
   }
 }
@@ -988,19 +900,17 @@ class _StyledDropdown extends StatelessWidget {
       dropdownColor: Colors.white,
       menuMaxHeight: 280,
       style: const TextStyle(
-          color: AppTheme.darkGreen,
-          fontSize: 14,
-          fontWeight: FontWeight.w500),
+          color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
       icon: Icon(Icons.keyboard_arrow_down_rounded,
           color: accentColor.withOpacity(0.6), size: 20),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(
-            color: accentColor.withOpacity(0.75), fontSize: 13),
+        labelStyle:
+            TextStyle(color: accentColor.withOpacity(0.75), fontSize: 13),
         filled: true,
         fillColor: Colors.white,
         contentPadding:
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         prefixIcon: Padding(
           padding: const EdgeInsets.all(10),
           child: Container(
@@ -1013,7 +923,7 @@ class _StyledDropdown extends StatelessWidget {
           ),
         ),
         prefixIconConstraints:
-        const BoxConstraints(minWidth: 52, minHeight: 52),
+            const BoxConstraints(minWidth: 52, minHeight: 52),
         border: _border(accentColor.withOpacity(0.2)),
         enabledBorder: _border(accentColor.withOpacity(0.22)),
         focusedBorder: _border(accentColor, width: 2),
@@ -1083,7 +993,9 @@ class _DateTimeButton extends StatelessWidget {
   }
 }
 
-// Re-export ActivityTypeConfig so placeholders file can import from one place
+// ─────────────────────────────────────────────────────────────────────────────
+// ACTIVITY TYPE CONFIG  (kept for use by other files that import from here)
+// ─────────────────────────────────────────────────────────────────────────────
 class ActivityTypeConfig {
   final Color color;
   final Color lightColor;

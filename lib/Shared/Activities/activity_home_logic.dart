@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../Models/user.dart';
 import '../../Services/Community/community_service.dart';
@@ -19,11 +18,11 @@ class ActivityHomeLogic {
         final isOrganizer = role == 'Organizer';
         if (!isOrganizer) return const SizedBox.shrink();
 
-
         return FloatingActionButton(
           onPressed: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const CreateActivityScreen()),
+            MaterialPageRoute(
+                builder: (context) => const CreateActivityScreen()),
           ),
           backgroundColor: AppTheme.tertiary,
           foregroundColor: Colors.white,

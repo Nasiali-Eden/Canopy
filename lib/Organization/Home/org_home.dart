@@ -4,7 +4,7 @@ import 'Dashboard/org_dashboard.dart';
 import 'Profile/org_profile.dart';
 import 'OurTeam/org_team.dart';
 import 'Volunteers/org_volunteers.dart';
-import '../Map/org_map.dart';
+import 'Map/org_map.dart';
 
 class OrganizationHome extends StatefulWidget {
   const OrganizationHome({super.key});

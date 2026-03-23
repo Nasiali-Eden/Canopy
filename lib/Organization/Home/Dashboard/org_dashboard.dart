@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Shared/theme/app_theme.dart';
+import '../../../Shared/Activities/create_activity.dart';
+import '../../../Shared/Activities/create_article.dart';
 
 class OrgDashboard extends StatefulWidget {
   const OrgDashboard({super.key});
@@ -26,23 +29,18 @@ class OrgDashboardState extends State<OrgDashboard> {
         WidgetBuilder builder;
         switch (settings.name) {
           case '/':
-            builder = (BuildContext _) => _DashboardContent(firestore: _firestore);
+            builder =
+                (BuildContext _) => _DashboardContent(firestore: _firestore);
             break;
           case '/createActivity':
-            builder = (BuildContext _) => _CreateActivityScreen();
-            break;
-          case '/createEvent':
-            builder = (BuildContext _) => _CreateEventScreen();
+            builder = (BuildContext _) => const CreateActivityScreen();
             break;
           case '/createPost':
-            builder = (BuildContext _) => _CreatePostScreen();
-            break;
-          case '/activityDetails':
-            final args = settings.arguments as Map<String, dynamic>?;
-            builder = (BuildContext _) => _ActivityDetailsScreen(data: args ?? {});
+            builder = (BuildContext _) => const CreateArticleScreen();
             break;
           default:
-            builder = (BuildContext _) => _DashboardContent(firestore: _firestore);
+            builder =
+                (BuildContext _) => _DashboardContent(firestore: _firestore);
         }
         return MaterialPageRoute(builder: builder, settings: settings);
       },
@@ -50,9 +48,51 @@ class OrgDashboardState extends State<OrgDashboard> {
   }
 }
 
-class _DashboardContent extends StatelessWidget {
+class _DashboardContent extends StatefulWidget {
   final FirebaseFirestore firestore;
   const _DashboardContent({required this.firestore});
+
+  @override
+  State<_DashboardContent> createState() => _DashboardContentState();
+}
+
+class _DashboardContentState extends State<_DashboardContent> {
+  late Future<Map<String, dynamic>?> _orgDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _orgDataFuture = _fetchOrgData();
+  }
+
+  Future<Map<String, dynamic>?> _fetchOrgData() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return null;
+
+      // Get user's organization data from Users collection
+      final userDoc =
+          await widget.firestore.collection('Users').doc(currentUser.uid).get();
+
+      if (!userDoc.exists) return null;
+
+      final userData = userDoc.data() as Map<String, dynamic>;
+      final orgId = userData['orgId'] as String?;
+
+      if (orgId == null) return null;
+
+      // Get organization details from organizations collection
+      final orgDoc =
+          await widget.firestore.collection('organizations').doc(orgId).get();
+
+      if (!orgDoc.exists) return null;
+
+      return orgDoc.data() as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Error fetching org data: $e');
+      return null;
+    }
+  }
 
   String _getInitials(String? name) {
     if (name == null || name.trim().isEmpty) return '';
@@ -68,26 +108,31 @@ class _DashboardContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-   body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(context),
-            const SizedBox(height: 20),
-            _buildQuickActions(context),
-            const SizedBox(height: 24),
-            _buildActivitySection(context),
-            const SizedBox(height: 24),
-            _buildEventsSection(context),
-            const SizedBox(height: 24),
-            _buildPostsSection(context),
-            const SizedBox(height: 100),
-          ],
-        ),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: _orgDataFuture,
+        builder: (context, snapshot) {
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                _buildHeader(context, snapshot.data),
+                const SizedBox(height: 20),
+                _buildQuickActions(context),
+                const SizedBox(height: 24),
+                _buildActivitySection(context),
+                const SizedBox(height: 24),
+                _buildPostsSection(context),
+                const SizedBox(height: 100),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, Map<String, dynamic>? orgData) {
+    final orgName = orgData?['org_name'] as String? ?? 'Organization';
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -116,7 +161,8 @@ class _DashboardContent extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.25),
                     borderRadius: BorderRadius.circular(8),
@@ -140,7 +186,7 @@ class _DashboardContent extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Green Earth Initiative',
+              orgName,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -152,22 +198,24 @@ class _DashboardContent extends StatelessWidget {
                 Icon(Icons.location_on, color: Colors.white70, size: 16),
                 const SizedBox(width: 4),
                 Text(
-                  'Nairobi, Kenya',
+                  'Kenya',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 14,
                   ),
                 ),
                 const SizedBox(width: 16),
-                Icon(Icons.category, color: Colors.white70, size: 16),
-                const SizedBox(width: 4),
-                Text(
-                  'Environmental',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
+                if (orgData?['orgDesignation'] != null) ...[
+                  Icon(Icons.category, color: Colors.white70, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    orgData!['orgDesignation'] as String,
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
             const SizedBox(height: 20),
@@ -222,7 +270,7 @@ class _DashboardContent extends StatelessWidget {
             children: [
               Expanded(
                 child: _QuickActionCard(
-                  title: 'Create Activity',
+                  title: 'Create Event',
                   icon: Icons.event_available,
                   gradient: LinearGradient(
                     colors: [AppTheme.primary, AppTheme.secondary],
@@ -235,29 +283,17 @@ class _DashboardContent extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _QuickActionCard(
-                  title: 'Create Event',
-                  icon: Icons.campaign,
+                  title: 'Publish Update',
+                  icon: Icons.announcement,
                   gradient: LinearGradient(
-                    colors: [AppTheme.accent, AppTheme.secondary],
+                    colors: [AppTheme.tertiary, Color(0xFFE0B861)],
                   ),
                   onTap: () {
-                    Navigator.of(context).pushNamed('/createEvent');
+                    Navigator.of(context).pushNamed('/createPost');
                   },
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          _QuickActionCard(
-            title: 'Publish Update',
-            icon: Icons.announcement,
-            gradient: LinearGradient(
-              colors: [AppTheme.tertiary, Color(0xFFE0B861)],
-            ),
-            onTap: () {
-              Navigator.of(context).pushNamed('/createPost');
-            },
-            expanded: true,
           ),
         ],
       ),
@@ -294,7 +330,7 @@ class _DashboardContent extends StatelessWidget {
         SizedBox(
           height: 240,
           child: StreamBuilder<QuerySnapshot>(
-            stream: firestore
+            stream: widget.firestore
                 .collection('Activities')
                 .orderBy('date', descending: false)
                 .limit(5)
@@ -313,11 +349,13 @@ class _DashboardContent extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.event_busy, size: 48, color: AppTheme.lightGreen),
+                      Icon(Icons.event_busy,
+                          size: 48, color: AppTheme.lightGreen),
                       const SizedBox(height: 12),
                       Text(
                         'No activities yet',
-                        style: TextStyle(color: AppTheme.darkGreen.withOpacity(0.6)),
+                        style: TextStyle(
+                            color: AppTheme.darkGreen.withOpacity(0.6)),
                       ),
                     ],
                   ),
@@ -329,7 +367,8 @@ class _DashboardContent extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: activities.length,
                 itemBuilder: (context, index) {
-                  final activity = activities[index].data() as Map<String, dynamic>;
+                  final activity =
+                      activities[index].data() as Map<String, dynamic>;
                   return _ActivityCard(
                     activity: activity,
                     onTap: () {
@@ -343,89 +382,6 @@ class _DashboardContent extends StatelessWidget {
               );
             },
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEventsSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Events',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: AppTheme.darkGreen,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-              TextButton(
-                onPressed: () {},
-                child: Text(
-                  'View All',
-                  style: TextStyle(color: AppTheme.primary),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        StreamBuilder<QuerySnapshot>(
-          stream: firestore
-              .collection('Events')
-              .orderBy('date', descending: false)
-              .limit(3)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return Center(
-                child: CircularProgressIndicator(color: AppTheme.primary),
-              );
-            }
-
-            final events = snapshot.data!.docs;
-
-            if (events.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: AppTheme.lightGreen.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.event_busy, size: 48, color: AppTheme.lightGreen),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No events scheduled',
-                          style: TextStyle(color: AppTheme.darkGreen.withOpacity(0.6)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              itemCount: events.length,
-              itemBuilder: (context, index) {
-                final event = events[index].data() as Map<String, dynamic>;
-                return _EventCard(event: event);
-              },
-            );
-          },
         ),
       ],
     );
@@ -447,7 +403,7 @@ class _DashboardContent extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         StreamBuilder<QuerySnapshot>(
-          stream: firestore
+          stream: widget.firestore
               .collection('Posts')
               .orderBy('timestamp', descending: true)
               .limit(3)
@@ -473,11 +429,13 @@ class _DashboardContent extends StatelessWidget {
                   child: Center(
                     child: Column(
                       children: [
-                        Icon(Icons.post_add, size: 48, color: AppTheme.lightGreen),
+                        Icon(Icons.post_add,
+                            size: 48, color: AppTheme.lightGreen),
                         const SizedBox(height: 12),
                         Text(
                           'No posts yet',
-                          style: TextStyle(color: AppTheme.darkGreen.withOpacity(0.6)),
+                          style: TextStyle(
+                              color: AppTheme.darkGreen.withOpacity(0.6)),
                         ),
                       ],
                     ),
@@ -690,7 +648,8 @@ class _ActivityCard extends StatelessWidget {
           children: [
             if (activity['imageUrl'] != null)
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
                 child: Image.network(
                   activity['imageUrl'],
                   height: 120,
@@ -699,7 +658,8 @@ class _ActivityCard extends StatelessWidget {
                   errorBuilder: (_, __, ___) => Container(
                     height: 120,
                     color: AppTheme.lightGreen.withOpacity(0.2),
-                    child: Icon(Icons.image, size: 48, color: AppTheme.lightGreen),
+                    child:
+                        Icon(Icons.image, size: 48, color: AppTheme.lightGreen),
                   ),
                 ),
               )
@@ -723,8 +683,8 @@ class _ActivityCard extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: statusColor.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(6),
@@ -816,78 +776,6 @@ class _ActivityCard extends StatelessWidget {
   }
 }
 
-class _EventCard extends StatelessWidget {
-  final Map<String, dynamic> event;
-
-  const _EventCard({required this.event});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: AppTheme.accent.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.campaign, color: AppTheme.accent, size: 28),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  event['name'] ?? 'Event',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen,
-                      ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.calendar_today,
-                        size: 12, color: AppTheme.darkGreen.withOpacity(0.6)),
-                    const SizedBox(width: 4),
-                    Text(
-                      event['date'] ?? 'TBD',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.darkGreen.withOpacity(0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right, color: AppTheme.primary),
-        ],
-      ),
-    );
-  }
-}
-
 class _PostCard extends StatelessWidget {
   final Map<String, dynamic> post;
 
@@ -968,75 +856,6 @@ class _PostCard extends StatelessWidget {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-// Placeholder screens for navigation
-class _CreateActivityScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('Create Activity'),
-        backgroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Text('Activity creation form here'),
-      ),
-    );
-  }
-}
-
-class _CreateEventScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('Create Event'),
-        backgroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Text('Event creation form here'),
-      ),
-    );
-  }
-}
-
-class _CreatePostScreen extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('Create Post'),
-        backgroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Text('Post creation form here'),
-      ),
-    );
-  }
-}
-
-class _ActivityDetailsScreen extends StatelessWidget {
-  final Map<String, dynamic> data;
-
-  const _ActivityDetailsScreen({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text('Activity Details'),
-        backgroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Text('Activity details here'),
       ),
     );
   }
