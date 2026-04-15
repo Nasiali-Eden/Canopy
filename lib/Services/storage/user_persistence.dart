@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,6 +24,41 @@ class UserPersistence {
     if (_prefs != null) return _prefs!;
     _prefs = await SharedPreferences.getInstance();
     return _prefs!;
+  }
+
+  /// Convert Firestore Timestamp to ISO string for JSON serialization
+  static Map<String, dynamic> _sanitizeForJson(Map<String, dynamic> data) {
+    final sanitized = <String, dynamic>{};
+    
+    data.forEach((key, value) {
+      if (value is Timestamp) {
+        // Convert Timestamp to ISO string
+        sanitized[key] = value.toDate().toIso8601String();
+      } else if (value is DateTime) {
+        // Convert DateTime to ISO string
+        sanitized[key] = value.toIso8601String();
+      } else if (value is Map<String, dynamic>) {
+        // Recursively sanitize nested maps
+        sanitized[key] = _sanitizeForJson(value);
+      } else if (value is List) {
+        // Sanitize list items
+        sanitized[key] = value.map((item) {
+          if (item is Map<String, dynamic>) {
+            return _sanitizeForJson(item);
+          } else if (item is Timestamp) {
+            return item.toDate().toIso8601String();
+          } else if (item is DateTime) {
+            return item.toIso8601String();
+          }
+          return item;
+        }).toList();
+      } else {
+        // Keep other types as-is
+        sanitized[key] = value;
+      }
+    });
+    
+    return sanitized;
   }
 
   /// Check if user is logged in (persisted state)
@@ -54,11 +90,22 @@ class UserPersistence {
     return prefs.getString(_keyUserRole);
   }
 
-  /// Save user profile data
+  /// Save user profile data (sanitizes Firestore Timestamps)
   static Future<void> saveUserProfile(Map<String, dynamic> profileData) async {
-    final prefs = await _preferences;
-    final jsonString = jsonEncode(profileData);
-    await prefs.setString(_keyUserProfile, jsonString);
+    try {
+      final prefs = await _preferences;
+      
+      // Sanitize data to handle Firestore Timestamps
+      final sanitized = _sanitizeForJson(profileData);
+      
+      final jsonString = jsonEncode(sanitized);
+      await prefs.setString(_keyUserProfile, jsonString);
+      
+      debugPrint('[UserPersistence] ✅ User profile cached successfully');
+    } catch (e) {
+      debugPrint('[UserPersistence] ⚠️ Error caching user profile: $e');
+      // Don't rethrow - caching is not critical
+    }
   }
 
   /// Get cached user profile data
@@ -69,7 +116,7 @@ class UserPersistence {
       try {
         return jsonDecode(jsonString) as Map<String, dynamic>;
       } catch (e) {
-        // If decoding fails, return null
+        debugPrint('[UserPersistence] ⚠️ Error decoding cached profile: $e');
         return null;
       }
     }
@@ -105,6 +152,11 @@ class UserPersistence {
             .collection('org_rep')
             .doc(uid)
             .get();
+      } else if (role == 'Marketplace Seller') {
+        userDoc = await FirebaseFirestore.instance
+            .collection('marketplace_sellers')
+            .doc(uid)
+            .get();
       } else {
         userDoc = await FirebaseFirestore.instance
             .collection('members')
@@ -115,10 +167,11 @@ class UserPersistence {
       if (userDoc.exists) {
         final userData = userDoc.data() as Map<String, dynamic>;
         await saveUserProfile(userData);
+        debugPrint('[UserPersistence] ✅ User profile refreshed and cached');
         return userData;
       }
     } catch (e) {
-      print('Error refreshing user profile: $e');
+      debugPrint('[UserPersistence] ⚠️ Error refreshing user profile: $e');
     }
     return null;
   }
@@ -156,7 +209,7 @@ class UserPersistence {
       
       return false;
     } catch (e) {
-      print('Error validating auth: $e');
+      debugPrint('[UserPersistence] ⚠️ Error validating auth: $e');
       return false;
     }
   }
@@ -164,18 +217,18 @@ class UserPersistence {
   /// Fetch user data from Firestore
   static Future<Map<String, dynamic>?> _fetchUserData(String uid) async {
     try {
-      // Check members collection first
-      final memberDoc = await FirebaseFirestore.instance
-          .collection('members')
+      // Check marketplace_sellers first
+      final sellerDoc = await FirebaseFirestore.instance
+          .collection('marketplace_sellers')
           .doc(uid)
           .get();
       
-      if (memberDoc.exists) {
-        final data = memberDoc.data() as Map<String, dynamic>;
-        data['role'] = 'Member';
+      if (sellerDoc.exists) {
+        final data = sellerDoc.data() as Map<String, dynamic>;
+        data['role'] = 'Marketplace Seller';
         return data;
       }
-      
+
       // Check org_rep collection
       final orgDoc = await FirebaseFirestore.instance
           .collection('org_rep')
@@ -187,8 +240,20 @@ class UserPersistence {
         data['role'] = 'Org Rep';
         return data;
       }
+      
+      // Check members collection
+      final memberDoc = await FirebaseFirestore.instance
+          .collection('members')
+          .doc(uid)
+          .get();
+      
+      if (memberDoc.exists) {
+        final data = memberDoc.data() as Map<String, dynamic>;
+        data['role'] = 'Member';
+        return data;
+      }
     } catch (e) {
-      print('Error fetching user data: $e');
+      debugPrint('[UserPersistence] ⚠️ Error fetching user data: $e');
     }
     return null;
   }
@@ -204,6 +269,7 @@ class UserPersistence {
       prefs.remove(_keyLastLogin),
       prefs.remove(_keyUserProfile),
     ]);
+    debugPrint('[UserPersistence] ✅ User data cleared');
   }
 
   /// Update last login time (call this periodically when app is active)

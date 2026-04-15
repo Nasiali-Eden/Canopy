@@ -1,4 +1,7 @@
+// lib/Community/community_home.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -24,9 +27,10 @@ class CommunityHomeScreen extends StatefulWidget {
 class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
   int _index = 0;
 
+  bool get _isMapTab => _index == 3;
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final user = Provider.of<F_User?>(context);
 
     final pages = [
@@ -52,16 +56,19 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
       onWillPop: () async => false,
       child: Scaffold(
         backgroundColor: Colors.white,
-        appBar: AppBar(
+        // AppBar only on Home tab (index 0)
+        appBar: _index == 0
+            ? AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
-          toolbarHeight: 68,
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
+          toolbarHeight: 62,
           centerTitle: true,
           leading: Padding(
             padding: const EdgeInsets.only(left: 16),
             child: Container(
-              margin: const EdgeInsets.all(8),
+              margin: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 color: AppTheme.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
@@ -69,65 +76,50 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
               child: Icon(
                 Icons.eco_outlined,
                 color: AppTheme.primary,
-                size: 22,
+                size: 20,
               ),
             ),
           ),
           title: Text(
             'Canopy',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppTheme.darkGreen,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 22,
-                ),
+              color: AppTheme.darkGreen,
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+            ),
           ),
           actions: [
-            // Shop Icon with label
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const EcoShopScreen(),
-                      ),
-                    );
-                  },
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppTheme.lightGreen.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.shopping_bag_outlined,
-                      color: AppTheme.primary,
-                      size: 22,
-                    ),
-                  ),
-                ),
-                Transform.translate(
-                  offset: const Offset(0, -8),
-                  child: Text(
-                    'Shop',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.darkGreen.withOpacity(0.7),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 4),
+            // Shop
             IconButton(
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const NotificationCenterScreen()),
+                    builder: (context) => const EcoShopScreen(),
+                  ),
+                );
+              },
+              icon: Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppTheme.lightGreen.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.shopping_bag_outlined,
+                  color: AppTheme.primary,
+                  size: 20,
+                ),
+              ),
+            ),
+            // Notifications
+            IconButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                      const NotificationCenterScreen()),
                 );
               },
               icon: Stack(
@@ -147,23 +139,38 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
                       decoration: BoxDecoration(
                         color: AppTheme.tertiary,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
+                        border:
+                        Border.all(color: Colors.white, width: 1.5),
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
           ],
-        ),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(
+              height: 1,
+              color: AppTheme.lightGreen.withOpacity(0.18),
+            ),
+          ),
+        )
+            : null,
+        // Map extends to bottom edge; all other tabs sit above nav bar normally
+        extendBody: _isMapTab,
         body: pages[_index],
         floatingActionButton: _index == 1
             ? ActivityHomeLogic.buildFloatingActionButton(context, user)
             : null,
-        bottomNavigationBar: Container(
+        bottomNavigationBar: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
+            color: _isMapTab ? Colors.transparent : Colors.white,
+            boxShadow: _isMapTab
+                ? []
+                : [
               BoxShadow(
                 color: Colors.black.withOpacity(0.08),
                 blurRadius: 12,
@@ -173,42 +180,60 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
           ),
           child: SafeArea(
             child: NavigationBar(
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.transparent,
               surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
               selectedIndex: _index,
               onDestinationSelected: (i) => setState(() => _index = i),
-              indicatorColor: AppTheme.primary.withOpacity(0.15),
+              indicatorColor: _isMapTab
+                  ? Colors.white.withOpacity(0.20)
+                  : AppTheme.primary.withOpacity(0.15),
               height: 70,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               destinations: [
                 NavigationDestination(
                   icon: Icon(Icons.home_outlined,
-                      color: AppTheme.darkGreen.withOpacity(0.5)),
-                  selectedIcon: Icon(Icons.home, color: AppTheme.primary),
+                      color: _isMapTab
+                          ? Colors.white.withOpacity(0.70)
+                          : AppTheme.darkGreen.withOpacity(0.50)),
+                  selectedIcon: Icon(Icons.home,
+                      color: _isMapTab ? Colors.white : AppTheme.primary),
                   label: 'Home',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.event_note_outlined,
-                      color: AppTheme.darkGreen.withOpacity(0.5)),
-                  selectedIcon: Icon(Icons.event_note, color: AppTheme.primary),
+                      color: _isMapTab
+                          ? Colors.white.withOpacity(0.70)
+                          : AppTheme.darkGreen.withOpacity(0.50)),
+                  selectedIcon: Icon(Icons.event_note,
+                      color: _isMapTab ? Colors.white : AppTheme.primary),
                   label: 'Activities',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.analytics_outlined,
-                      color: AppTheme.darkGreen.withOpacity(0.5)),
-                  selectedIcon: Icon(Icons.analytics, color: AppTheme.primary),
+                      color: _isMapTab
+                          ? Colors.white.withOpacity(0.70)
+                          : AppTheme.darkGreen.withOpacity(0.50)),
+                  selectedIcon: Icon(Icons.analytics,
+                      color: _isMapTab ? Colors.white : AppTheme.primary),
                   label: 'Impact',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.map_outlined,
-                      color: AppTheme.darkGreen.withOpacity(0.5)),
-                  selectedIcon: Icon(Icons.map, color: AppTheme.primary),
+                      color: _isMapTab
+                          ? Colors.white.withOpacity(0.70)
+                          : AppTheme.darkGreen.withOpacity(0.50)),
+                  selectedIcon: Icon(Icons.map,
+                      color: _isMapTab ? Colors.white : AppTheme.primary),
                   label: 'Map',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_outline,
-                      color: AppTheme.darkGreen.withOpacity(0.5)),
-                  selectedIcon: Icon(Icons.person, color: AppTheme.primary),
+                      color: _isMapTab
+                          ? Colors.white.withOpacity(0.70)
+                          : AppTheme.darkGreen.withOpacity(0.50)),
+                  selectedIcon: Icon(Icons.person,
+                      color: _isMapTab ? Colors.white : AppTheme.primary),
                   label: 'Profile',
                 ),
               ],
@@ -219,6 +244,10 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HOME TAB
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _HomeTab extends StatelessWidget {
   final String? userId;
@@ -244,7 +273,7 @@ class _HomeTab extends StatelessWidget {
             margin: const EdgeInsets.all(20),
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
+              gradient: const LinearGradient(
                 colors: [AppTheme.primary, AppTheme.lightGreen],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -273,11 +302,11 @@ class _HomeTab extends StatelessWidget {
                                 .textTheme
                                 .titleLarge
                                 ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 26,
-                                  height: 1.2,
-                                ),
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 26,
+                              height: 1.2,
+                            ),
                           ),
                           Text(
                             'Community Together',
@@ -285,11 +314,11 @@ class _HomeTab extends StatelessWidget {
                                 .textTheme
                                 .titleLarge
                                 ?.copyWith(
-                                  color: Colors.white.withOpacity(0.9),
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 20,
-                                  height: 1.2,
-                                ),
+                              color: Colors.white.withOpacity(0.9),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 20,
+                              height: 1.2,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           Text(
@@ -298,9 +327,9 @@ class _HomeTab extends StatelessWidget {
                                 .textTheme
                                 .bodyMedium
                                 ?.copyWith(
-                                  color: Colors.white.withOpacity(0.85),
-                                  fontSize: 14,
-                                ),
+                              color: Colors.white.withOpacity(0.85),
+                              fontSize: 14,
+                            ),
                           ),
                         ],
                       ),
@@ -311,16 +340,11 @@ class _HomeTab extends StatelessWidget {
                         color: Colors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.eco,
-                        size: 40,
-                        color: Colors.white,
-                      ),
+                      child: const Icon(Icons.eco, size: 40, color: Colors.white),
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
-                // Stats Row
                 if (userId != null)
                   StreamBuilder<DocumentSnapshot>(
                     stream: FirebaseFirestore.instance
@@ -329,36 +353,17 @@ class _HomeTab extends StatelessWidget {
                         .snapshots(),
                     builder: (context, snapshot) {
                       final data =
-                          snapshot.data?.data() as Map<String, dynamic>?;
-                      final points = data?['totalPoints'] ?? 0;
-                      final contributions = data?['contributions'] ?? 0;
-                      final rank = data?['rank'] ?? '0';
-
+                      snapshot.data?.data() as Map<String, dynamic>?;
+                      final points       = data?['totalPoints']    ?? 0;
+                      final contributions= data?['contributions']  ?? 0;
+                      final rank         = data?['rank']           ?? '0';
                       return Row(
                         children: [
-                          Expanded(
-                            child: _StatCard(
-                              label: 'Points',
-                              value: points.toString(),
-                              icon: Icons.bolt,
-                            ),
-                          ),
+                          Expanded(child: _StatCard(label: 'Points',        value: points.toString(),        icon: Icons.bolt)),
                           const SizedBox(width: 12),
-                          Expanded(
-                            child: _StatCard(
-                              label: 'Contributions',
-                              value: contributions.toString(),
-                              icon: Icons.volunteer_activism,
-                            ),
-                          ),
+                          Expanded(child: _StatCard(label: 'Contributions', value: contributions.toString(), icon: Icons.volunteer_activism)),
                           const SizedBox(width: 12),
-                          Expanded(
-                            child: _StatCard(
-                              label: 'Rank',
-                              value: rank.toString(),
-                              icon: Icons.emoji_events,
-                            ),
-                          ),
+                          Expanded(child: _StatCard(label: 'Rank',          value: rank.toString(),          icon: Icons.emoji_events)),
                         ],
                       );
                     },
@@ -376,10 +381,10 @@ class _HomeTab extends StatelessWidget {
                 Text(
                   'Quick Actions',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen,
-                        fontSize: 18,
-                      ),
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.darkGreen,
+                    fontSize: 18,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -388,7 +393,7 @@ class _HomeTab extends StatelessWidget {
                       child: _QuickActionCard(
                         title: 'Log Work',
                         icon: Icons.add_circle_outline,
-                        gradient: LinearGradient(
+                        gradient: const LinearGradient(
                           colors: [AppTheme.primary, AppTheme.lightGreen],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -429,7 +434,7 @@ class _HomeTab extends StatelessWidget {
 
           const SizedBox(height: 32),
 
-          // Community Updates Section
+          // Community Updates
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
@@ -442,10 +447,10 @@ class _HomeTab extends StatelessWidget {
                     Text(
                       'Community Updates',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.darkGreen,
-                            fontSize: 18,
-                          ),
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.darkGreen,
+                        fontSize: 18,
+                      ),
                     ),
                   ],
                 ),
@@ -453,27 +458,27 @@ class _HomeTab extends StatelessWidget {
                 _CommunityNewsCard(
                   title: 'New Recycling Center Opens in Kibera',
                   description:
-                      'Community members can now drop off sorted materials at the new facility on Olympic Estate Road.',
+                  'Community members can now drop off sorted materials at the new facility on Olympic Estate Road.',
                   imageUrl:
-                      'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400',
+                  'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=400',
                   date: '2 days ago',
                 ),
                 const SizedBox(height: 12),
                 _CommunityNewsCard(
                   title: 'Beach Cleanup Collects 2 Tons of Waste',
                   description:
-                      'Volunteers gathered last weekend for the largest coastal cleanup event this year.',
+                  'Volunteers gathered last weekend for the largest coastal cleanup event this year.',
                   imageUrl:
-                      'https://images.unsplash.com/photo-1618477461853-cf6ed80faba5?w=400',
+                  'https://images.unsplash.com/photo-1618477461853-cf6ed80faba5?w=400',
                   date: '1 week ago',
                 ),
                 const SizedBox(height: 12),
                 _CommunityNewsCard(
                   title: 'Blockchain Rewards Program Launches',
                   description:
-                      'Earn ADA tokens for verified environmental contributions through our new platform.',
+                  'Earn ADA tokens for verified environmental contributions through our new platform.',
                   imageUrl:
-                      'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400',
+                  'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?w=400',
                   date: '2 weeks ago',
                 ),
               ],
@@ -482,7 +487,7 @@ class _HomeTab extends StatelessWidget {
 
           const SizedBox(height: 32),
 
-          // Recent Activity Section
+          // Recent Activity
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
@@ -493,18 +498,15 @@ class _HomeTab extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Recent Activity',
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.darkGreen,
-                                  fontSize: 18,
-                                ),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.darkGreen,
+                          fontSize: 18,
+                        ),
                       ),
                     ),
                     TextButton(
-                      onPressed: () {
-                        // TODO: Navigate to all contributions
-                      },
+                      onPressed: () {},
                       child: Text(
                         'View All',
                         style: TextStyle(
@@ -530,36 +532,22 @@ class _HomeTab extends StatelessWidget {
                         return Center(
                           child: Padding(
                             padding: const EdgeInsets.all(32.0),
-                            child: CircularProgressIndicator(
-                              color: AppTheme.primary,
-                            ),
+                            child: CircularProgressIndicator(color: AppTheme.primary),
                           ),
                         );
                       }
-
-                      // Always show placeholders (no empty state)
                       if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                         return Column(
                           children: List.generate(
                             3,
-                            (index) =>
-                                ContributionPlaceholders.buildPlaceholderCard(
-                                    context, index),
+                                (i) => ContributionPlaceholders.buildPlaceholderCard(context, i),
                           ),
                         );
                       }
-
-                      // Show actual contributions
-                      final contributions = snapshot.data!.docs;
                       return Column(
-                        children: contributions.map((doc) {
+                        children: snapshot.data!.docs.map((doc) {
                           final data = doc.data() as Map<String, dynamic>;
-                          return ContributionCard(
-                            contribution: {
-                              ...data,
-                              'id': doc.id,
-                            },
-                          );
+                          return ContributionCard(contribution: {...data, 'id': doc.id});
                         }).toList(),
                       );
                     },
@@ -568,8 +556,7 @@ class _HomeTab extends StatelessWidget {
                   Column(
                     children: List.generate(
                       3,
-                      (index) => ContributionPlaceholders.buildPlaceholderCard(
-                          context, index),
+                          (i) => ContributionPlaceholders.buildPlaceholderCard(context, i),
                     ),
                   ),
               ],
@@ -582,6 +569,10 @@ class _HomeTab extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REUSABLE HOME TAB WIDGETS (unchanged from original)
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _QuickActionCard extends StatelessWidget {
   final String title;
@@ -620,55 +611,52 @@ class _QuickActionCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: expanded
               ? Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(icon, size: 22, color: Colors.white),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              fontSize: 15,
-                            ),
-                      ),
-                    ),
-                    const Icon(Icons.arrow_forward,
-                        color: Colors.white, size: 18),
-                  ],
-                )
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(icon, size: 22, color: Colors.white),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            fontSize: 13,
-                          ),
-                    ),
-                  ],
+            children: [
+              Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(10),
                 ),
+                child: Icon(icon, size: 22, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              const Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+            ],
+          )
+              : Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 22, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -680,11 +668,7 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
 
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
+  const _StatCard({required this.label, required this.value, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -698,24 +682,20 @@ class _StatCard extends StatelessWidget {
         children: [
           Icon(icon, color: Colors.white.withOpacity(0.9), size: 20),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  fontSize: 19,
-                ),
-          ),
+          Text(value,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                fontSize: 19,
+              )),
           const SizedBox(height: 2),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withOpacity(0.85),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white.withOpacity(0.85),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              )),
         ],
       ),
     );
@@ -741,9 +721,7 @@ class _CommunityNewsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppTheme.lightGreen.withOpacity(0.3),
-        ),
+        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
         boxShadow: [
           BoxShadow(
             color: AppTheme.primary.withOpacity(0.05),
@@ -755,7 +733,6 @@ class _CommunityNewsCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image
           ClipRRect(
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(14),
@@ -763,34 +740,24 @@ class _CommunityNewsCard extends StatelessWidget {
             ),
             child: Image.network(
               imageUrl,
-              width: 90,
-              height: 90,
+              width: 90, height: 90,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
+              errorBuilder: (_, __, ___) => Container(
+                width: 90, height: 90,
+                color: AppTheme.lightGreen.withOpacity(0.2),
+                child: Icon(Icons.image_outlined, color: AppTheme.primary.withOpacity(0.5), size: 32),
+              ),
+              loadingBuilder: (_, child, progress) {
+                if (progress == null) return child;
                 return Container(
-                  width: 90,
-                  height: 90,
-                  color: AppTheme.lightGreen.withOpacity(0.2),
-                  child: Icon(
-                    Icons.image_outlined,
-                    color: AppTheme.primary.withOpacity(0.5),
-                    size: 32,
-                  ),
-                );
-              },
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  width: 90,
-                  height: 90,
+                  width: 90, height: 90,
                   color: AppTheme.lightGreen.withOpacity(0.2),
                   child: Center(
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       color: AppTheme.primary,
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
+                      value: progress.expectedTotalBytes != null
+                          ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
                           : null,
                     ),
                   ),
@@ -798,50 +765,39 @@ class _CommunityNewsCard extends StatelessWidget {
               },
             ),
           ),
-          // Content
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.darkGreen,
-                          fontSize: 14,
-                        ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.darkGreen,
+                        fontSize: 14,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.darkGreen.withOpacity(0.6),
-                          fontSize: 12,
-                        ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(description,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.darkGreen.withOpacity(0.6),
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Icon(
-                        Icons.access_time,
-                        size: 12,
-                        color: AppTheme.accent,
-                      ),
+                      Icon(Icons.access_time, size: 12, color: AppTheme.accent),
                       const SizedBox(width: 4),
-                      Text(
-                        date,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.accent,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      Text(date,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.accent,
+                            fontWeight: FontWeight.w500,
+                          )),
                     ],
                   ),
                 ],

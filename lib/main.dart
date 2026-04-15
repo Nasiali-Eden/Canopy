@@ -25,12 +25,12 @@ Future<void> initializeFirebase() async {
     try {
       // Check if Firebase is already initialized
       if (Firebase.apps.isNotEmpty) {
-        debugPrint('Firebase already initialized (${Firebase.apps.length} apps found)');
+        debugPrint('[Firebase] Already initialized (${Firebase.apps.length} apps found)');
         await _configureFirestoreSafely();
         return;
       }
 
-      debugPrint('Firebase initialization attempt $attempt/$maxRetries...');
+      debugPrint('[Firebase] Initialization attempt $attempt/$maxRetries...');
       
       // Initialize Firebase with timeout
       await Firebase.initializeApp(
@@ -42,52 +42,52 @@ Future<void> initializeFirebase() async {
         },
       );
       
-      debugPrint('✅ Firebase initialized successfully on attempt $attempt');
+      debugPrint('[Firebase] ✅ Initialized successfully on attempt $attempt');
       await _configureFirestoreSafely();
       return;
       
     } on FirebaseException catch (e) {
-      debugPrint('Firebase exception on attempt $attempt: ${e.code} - ${e.message}');
+      debugPrint('[Firebase] Exception on attempt $attempt: ${e.code} - ${e.message}');
       
       // If it's already initialized error, check for apps
       if (e.code == 'duplicate-app' || Firebase.apps.isNotEmpty) {
-        debugPrint('Firebase was already initialized, proceeding...');
+        debugPrint('[Firebase] Already initialized, proceeding...');
         await _configureFirestoreSafely();
         return;
       }
       
       // For other Firebase errors, retry unless it's the last attempt
       if (attempt == maxRetries) {
-        debugPrint('❌ Firebase initialization failed after $maxRetries attempts');
+        debugPrint('[Firebase] ❌ Failed after $maxRetries attempts');
         rethrow;
       }
       
     } on TimeoutException catch (e) {
-      debugPrint('Timeout on attempt $attempt: $e');
+      debugPrint('[Firebase] Timeout on attempt $attempt: $e');
       if (attempt == maxRetries) {
-        debugPrint('❌ Firebase initialization timed out after $maxRetries attempts');
+        debugPrint('[Firebase] ❌ Timed out after $maxRetries attempts');
         rethrow;
       }
       
     } catch (e) {
-      debugPrint('Unexpected error on attempt $attempt: $e');
+      debugPrint('[Firebase] Unexpected error on attempt $attempt: $e');
       
       // Check if Firebase became available despite the error
       if (Firebase.apps.isNotEmpty) {
-        debugPrint('Firebase is available despite error, proceeding...');
+        debugPrint('[Firebase] Available despite error, proceeding...');
         await _configureFirestoreSafely();
         return;
       }
       
       if (attempt == maxRetries) {
-        debugPrint('❌ Firebase initialization failed after $maxRetries attempts');
+        debugPrint('[Firebase] ❌ Failed after $maxRetries attempts');
         rethrow;
       }
     }
     
     // Wait before retry (except on last attempt)
     if (attempt < maxRetries) {
-      debugPrint('Waiting ${retryDelay.inSeconds}s before retry...');
+      debugPrint('[Firebase] Waiting ${retryDelay.inSeconds}s before retry...');
       await Future.delayed(retryDelay);
     }
   }
@@ -96,27 +96,25 @@ Future<void> initializeFirebase() async {
 /// Configure Firestore settings safely
 Future<void> _configureFirestoreSafely() async {
   try {
-    // Check if Firestore is available first
     final firestore = FirebaseFirestore.instance;
     
-    // Try to configure settings
-    await Future.delayed(const Duration(milliseconds: 100)); // Small delay for stability
+    // Small delay for stability
+    await Future.delayed(const Duration(milliseconds: 100));
     
     firestore.settings = const Settings(
       persistenceEnabled: true,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
     );
     
-    debugPrint('✅ Firestore settings configured successfully');
+    debugPrint('[Firestore] ✅ Settings configured (persistence enabled, unlimited cache)');
     
-    // Test basic connectivity
+    // Enable network
     await firestore.enableNetwork();
-    debugPrint('✅ Firestore network enabled');
+    debugPrint('[Firestore] ✅ Network enabled');
     
   } catch (e) {
-    debugPrint('⚠️ Error configuring Firestore settings: $e');
+    debugPrint('[Firestore] ⚠️ Configuration error: $e');
     // Continue anyway - Firestore might already be configured or will use defaults
-    // This is not critical for app functionality
   }
 }
 
@@ -173,17 +171,20 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    debugPrint('[App] Starting initialization...');
+    
     // Initialize user persistence first
     await UserPersistence.init();
-    debugPrint('✅ User persistence initialized');
+    debugPrint('[App] ✅ User persistence initialized');
     
     // Then initialize Firebase
     await initializeFirebase();
-    debugPrint('✅ App initialization completed successfully');
+    debugPrint('[App] ✅ Firebase initialized');
     
+    debugPrint('[App] ✅ App initialization completed successfully');
     runApp(const MyApp());
   } catch (e) {
-    debugPrint('❌ Failed to initialize app: $e');
+    debugPrint('[App] ❌ Initialization failed: $e');
     // Still run the app but show error
     runApp(const ErrorApp());
   }
@@ -196,14 +197,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // CRITICAL FIX: Use a custom stream that doesn't trigger rebuilds
-        // We provide the user stream but don't use it for automatic routing
         StreamProvider<F_User?>.value(
           value: AuthService().user,
           initialData: null,
-          // This prevents automatic navigation on auth state changes
           catchError: (context, error) {
-            debugPrint('Auth stream error: $error');
+            debugPrint('[App] Auth stream error: $error');
             return null;
           },
         ),
@@ -223,8 +221,6 @@ class MyApp extends StatelessWidget {
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: themeProvider.mode,
-            // CRITICAL: Start at splash and use direct navigation from there
-            // This prevents the app from auto-routing on auth changes
             home: const SplashScreen(),
           );
         },

@@ -1,41 +1,114 @@
+// lib/Community/Map/map.dart
+
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../Shared/theme/app_theme.dart';
+import 'map_style.dart' as map_style
+    hide kPlaceholderOrgs, kPlaceholderAmenities;
+import 'map_placeholders.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Filter model — mirrors organization_taxonomy.json structure
+// AMENITY TYPE ENUM
 // ─────────────────────────────────────────────────────────────────────────────
 
-class MapFilter {
+enum AmenityType {
+  waterPoint,
+  recyclingDropOff,
+  dumpsite,
+  canopyHub,
+  cleanupEvent,
+  treeSite,
+}
+
+extension AmenityTypeX on AmenityType {
+  String get label {
+    switch (this) {
+      case AmenityType.waterPoint:
+        return 'Water Point';
+      case AmenityType.recyclingDropOff:
+        return 'Recycling Drop-Off';
+      case AmenityType.dumpsite:
+        return 'Active Dumpsite';
+      case AmenityType.canopyHub:
+        return 'Canopy Hub';
+      case AmenityType.cleanupEvent:
+        return 'Cleanup Event';
+      case AmenityType.treeSite:
+        return 'Tree Planting Site';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case AmenityType.waterPoint:
+        return Icons.water_drop_outlined;
+      case AmenityType.recyclingDropOff:
+        return Icons.recycling;
+      case AmenityType.dumpsite:
+        return Icons.delete_outline;
+      case AmenityType.canopyHub:
+        return Icons.solar_power_outlined;
+      case AmenityType.cleanupEvent:
+        return Icons.cleaning_services_outlined;
+      case AmenityType.treeSite:
+        return Icons.park_outlined;
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case AmenityType.waterPoint:
+        return const Color(0xFF1E88E5);
+      case AmenityType.recyclingDropOff:
+        return const Color(0xFF43A047);
+      case AmenityType.dumpsite:
+        return const Color(0xFFE53935);
+      case AmenityType.canopyHub:
+        return AppTheme.tertiary;
+      case AmenityType.cleanupEvent:
+        return const Color(0xFF00897B);
+      case AmenityType.treeSite:
+        return const Color(0xFF2E7D32);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AMENITY MODEL
+// ─────────────────────────────────────────────────────────────────────────────
+
+class MapAmenity {
   final String id;
-  final String label;
-  final IconData icon;
-  final Color color;
-  bool selected;
+  final String name;
+  final AmenityType amenityType;
+  final LatLng location;
+  final String description;
+  final String? reportedBy;
+  final DateTime? verifiedAt;
+  final bool isActive;
+  final String? operatingHours;
+  final List<String> acceptedMaterials;
 
-  MapFilter({
+  const MapAmenity({
     required this.id,
-    required this.label,
-    required this.icon,
-    required this.color,
-    this.selected = false,
+    required this.name,
+    required this.amenityType,
+    required this.location,
+    required this.description,
+    this.reportedBy,
+    this.verifiedAt,
+    this.isActive = true,
+    this.operatingHours,
+    this.acceptedMaterials = const [],
   });
 }
 
-class MapFilterLevel {
-  final String id;
-  final String label;
-  final List<MapFilter> options;
-  MapFilterLevel({required this.id, required this.label, required this.options});
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Organization model
+// ORGANISATION MODEL
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MapOrganization {
@@ -49,7 +122,7 @@ class MapOrganization {
   final List<String> beneficiaryGroupIds;
   final List<String> facilityTypeIds;
   final List<String> subFacilityIds;
-  final String? logoUrl; // URL to org's transparent PNG from Firebase Storage
+  final String? logoUrl;
   final String legalDesignation;
   final String country;
   final String city;
@@ -81,7 +154,58 @@ class MapOrganization {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MapScreen
+// FILTER CHIP CATEGORIES
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ChipCategory {
+  final String id;
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  const _ChipCategory({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+}
+
+const List<_ChipCategory> _chipCategories = [
+  _ChipCategory(
+      id: 'all',
+      label: 'All',
+      icon: Icons.layers_outlined,
+      color: AppTheme.primary),
+  _ChipCategory(
+      id: 'organisations',
+      label: 'Organisations',
+      icon: Icons.business_outlined,
+      color: Color(0xFF2D7A4F)),
+  _ChipCategory(
+      id: 'who_they_serve',
+      label: 'Who They Serve',
+      icon: Icons.group_outlined,
+      color: Color(0xFF7E57C2)),
+  _ChipCategory(
+      id: 'amenities',
+      label: 'Amenities',
+      icon: Icons.place_outlined,
+      color: Color(0xFF1E88E5)),
+  _ChipCategory(
+      id: 'marketplace',
+      label: 'Marketplace',
+      icon: Icons.storefront_outlined,
+      color: Color(0xFFC4A961)),
+  _ChipCategory(
+      id: 'events',
+      label: 'Events',
+      icon: Icons.event_outlined,
+      color: Color(0xFF00897B)),
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAP SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MapScreen extends StatefulWidget {
@@ -95,356 +219,199 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   bool _iconsLoaded = false;
-  MapOrganization? _selectedOrg;
 
-  // ── Filter state: one active category at a time, subcategories within it ──
-  // activeCategory = sectorId of the selected category (null = show all)
-  String? _activeCategory;
-  // activeSubFilters = orgTypeIds chosen within the active category
+  // Active filter chip
+  String _activeChipId = 'all';
+  // Sub-filters selected inside the bottom sheet
   final Set<String> _activeSubFilters = {};
 
-  // Icon cache: normal (light, small) + hero (dark, big, glittery)
-  final Map<String, BitmapDescriptor> _typeIconsNormal = {};
-  final Map<String, BitmapDescriptor> _typeIconsHero = {};
+  MapOrganization? _selectedOrg;
+  MapAmenity? _selectedAmenity;
 
-  late AnimationController _bottomSheetController;
+  late AnimationController _sheetController;
+  late AnimationController _subSheetController;
+  bool _subSheetOpen = false;
 
-  // Sidebar: subcategory panel open?
-  bool _subPanelOpen = false;
+  // Icon caches
+  final Map<String, BitmapDescriptor> _orgIconsNormal = {};
+  final Map<String, BitmapDescriptor> _orgIconsHero = {};
+  final Map<AmenityType, BitmapDescriptor> _amenityIcons = {};
+
+  // Merged org list: Firestore (production) + placeholders
+  List<MapOrganization> get _allOrgs => kPlaceholderOrgs;
+  List<MapAmenity> get _allAmenities => kPlaceholderAmenities;
 
   final CameraPosition _initialPosition = const CameraPosition(
     target: LatLng(-1.2921, 36.8219),
     zoom: 13,
   );
 
-  // ── Sample data (replace with Firestore stream in production) ───────────────
-  final List<MapOrganization> _allOrgs = const [
-    MapOrganization(
-      id: 'org_001',
-      name: 'Kibera Plastics Collective',
-      description: 'Collecting and processing plastic waste from Kibera into pellets and recycled products for resale.',
-      location: LatLng(-1.3120, 36.7810),
-      sectorId: 'sector_env',
-      orgTypeId: 'ot_recycler',
-      subTypeIds: ['st_plastic_recycler', 'st_mixed_recycler'],
-      beneficiaryGroupIds: ['bg_youth', 'bg_women', 'bg_general'],
-      facilityTypeIds: ['facility_collection_point', 'facility_drop_off'],
-      subFacilityIds: ['sf_plastic_drop', 'sf_general_drop'],
-      legalDesignation: 'CBO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Kibera',
-      verified: true,
-    ),
-    MapOrganization(
-      id: 'org_002',
-      name: 'Sanaa ya Taka (Waste Art Co-op)',
-      description: 'Transforming plastic waste and scrap metal into sculptures, ornaments, and handmade jewellery sold globally.',
-      location: LatLng(-1.3000, 36.7670),
-      sectorId: 'sector_env',
-      orgTypeId: 'ot_waste_art',
-      subTypeIds: ['st_plastic_art', 'st_ornament_maker'],
-      beneficiaryGroupIds: ['bg_women', 'bg_youth'],
-      facilityTypeIds: ['facility_workshop', 'facility_gallery'],
-      subFacilityIds: ['sf_art_studio', 'sf_sewing_studio'],
-      legalDesignation: 'Social Enterprise',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Kawangware',
-      verified: true,
-    ),
-    MapOrganization(
-      id: 'org_003',
-      name: 'Amka Girls Initiative',
-      description: 'Empowering girls through mentorship, menstrual health education, and anti-FGM advocacy in Mathare.',
-      location: LatLng(-1.2597, 36.8581),
-      sectorId: 'sector_social',
-      orgTypeId: 'ot_girls_org',
-      subTypeIds: ['st_girl_mentorship', 'st_girl_menstrual_health', 'st_girl_safety'],
-      beneficiaryGroupIds: ['bg_girls', 'bg_teen_mothers'],
-      facilityTypeIds: ['facility_community_center', 'facility_drop_in_center'],
-      subFacilityIds: ['sf_counseling_room', 'sf_resource_center'],
-      legalDesignation: 'NGO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Mathare',
-      verified: true,
-    ),
-    MapOrganization(
-      id: 'org_004',
-      name: 'Tupendane PWD Center',
-      description: 'Rehabilitation, assistive devices, and vocational training for persons with physical and intellectual disabilities.',
-      location: LatLng(-1.3158, 36.8269),
-      sectorId: 'sector_social',
-      orgTypeId: 'ot_pwd_org',
-      subTypeIds: ['st_physical_disability', 'st_intellectual_disability', 'st_assistive_tech'],
-      beneficiaryGroupIds: ['bg_pwd', 'bg_children', 'bg_youth'],
-      facilityTypeIds: ['facility_rehabilitation_center', 'facility_training_center'],
-      subFacilityIds: ['sf_tailoring_unit', 'sf_ict_lab'],
-      legalDesignation: 'NPO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'South B',
-      verified: false,
-    ),
-    MapOrganization(
-      id: 'org_005',
-      name: 'Mama na Mtoto Health Clinic',
-      description: 'Maternal and child health clinic providing ANC, immunization, and HIV testing services to Kibera residents.',
-      location: LatLng(-1.3125, 36.7825),
-      sectorId: 'sector_health',
-      orgTypeId: 'ot_clinic',
-      subTypeIds: ['st_maternal_clinic', 'st_hiv_center'],
-      beneficiaryGroupIds: ['bg_women', 'bg_children', 'bg_girls'],
-      facilityTypeIds: ['facility_clinic'],
-      subFacilityIds: ['sf_antenatal', 'sf_hiv_testing', 'sf_pharmacy'],
-      legalDesignation: 'NGO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Olympic Estate, Kibera',
-      verified: true,
-      phone: '+254700000001',
-    ),
-    MapOrganization(
-      id: 'org_006',
-      name: 'Tabasamu Women Enterprise',
-      description: 'Women savings cooperative supporting 200+ members with microcredit, business training, and market linkages.',
-      location: LatLng(-1.2833, 36.8167),
-      sectorId: 'sector_social',
-      orgTypeId: 'ot_women_org',
-      subTypeIds: ['st_women_enterprise', 'st_women_empowerment'],
-      beneficiaryGroupIds: ['bg_women'],
-      facilityTypeIds: ['facility_office', 'facility_training_center'],
-      subFacilityIds: ['sf_arts_studio'],
-      legalDesignation: 'SACCO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Ngara',
-      verified: true,
-    ),
-    MapOrganization(
-      id: 'org_007',
-      name: 'Nairobi River Guardians',
-      description: 'Monthly cleanup drives along the Nairobi River, with waste quantification reports and school education programs.',
-      location: LatLng(-1.3175, 36.7875),
-      sectorId: 'sector_env',
-      orgTypeId: 'ot_cleanup_org',
-      subTypeIds: ['st_river_cleanup', 'st_community_cleanup'],
-      beneficiaryGroupIds: ['bg_youth', 'bg_general'],
-      facilityTypeIds: ['facility_collection_point'],
-      subFacilityIds: ['sf_general_drop'],
-      legalDesignation: 'CBO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Westlands — Nairobi River',
-      verified: true,
-    ),
-    MapOrganization(
-      id: 'org_008',
-      name: 'Upendo Children\'s Home',
-      description: 'Caring for 150 orphaned and abandoned children with housing, full-time schooling, and psychosocial support.',
-      location: LatLng(-1.2400, 36.8700),
-      sectorId: 'sector_social',
-      orgTypeId: 'ot_children_org',
-      subTypeIds: ['st_orphan_care', 'st_child_education'],
-      beneficiaryGroupIds: ['bg_children', 'bg_orphans'],
-      facilityTypeIds: ['facility_shelter', 'facility_school'],
-      subFacilityIds: ['sf_emergency_shelter', 'sf_primary', 'sf_library'],
-      legalDesignation: 'Trust',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Roysambu',
-      verified: true,
-    ),
-    MapOrganization(
-      id: 'org_009',
-      name: 'Kibera WASH Point',
-      description: 'Clean water access, communal latrines, and hygiene promotion across 5 villages in Kibera.',
-      location: LatLng(-1.3140, 36.7840),
-      sectorId: 'sector_health',
-      orgTypeId: 'ot_wash',
-      subTypeIds: ['st_water_access', 'st_sanitation'],
-      beneficiaryGroupIds: ['bg_general', 'bg_children'],
-      facilityTypeIds: ['facility_water_point'],
-      subFacilityIds: ['sf_public_tap', 'sf_latrine_block', 'sf_handwashing'],
-      legalDesignation: 'CBO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Kibera, Olympic Estate',
-      verified: true,
-    ),
-    MapOrganization(
-      id: 'org_010',
-      name: 'FutureMakers Youth Hub',
-      description: 'ICT training, graphic design, and entrepreneurship programs for youth aged 18–30 in Ngara.',
-      location: LatLng(-1.2667, 36.8333),
-      sectorId: 'sector_social',
-      orgTypeId: 'ot_youth_org',
-      subTypeIds: ['st_youth_skills', 'st_youth_enterprise', 'st_youth_arts'],
-      beneficiaryGroupIds: ['bg_youth', 'bg_boys', 'bg_girls'],
-      facilityTypeIds: ['facility_youth_center', 'facility_training_center'],
-      subFacilityIds: ['sf_ict_lab', 'sf_entrepreneurship_hub', 'sf_recording_studio'],
-      legalDesignation: 'NPO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Ngara',
-      verified: false,
-    ),
-    MapOrganization(
-      id: 'org_011',
-      name: 'Taka Treasure Upcyclers',
-      description: 'Handcrafted upcycled furniture and home goods from reclaimed wood, tyres, and metal scrap.',
-      location: LatLng(-1.2921, 36.7856),
-      sectorId: 'sector_env',
-      orgTypeId: 'ot_waste_art',
-      subTypeIds: ['st_furniture_maker', 'st_mixed_craft'],
-      beneficiaryGroupIds: ['bg_youth', 'bg_men'],
-      facilityTypeIds: ['facility_workshop'],
-      subFacilityIds: ['sf_fabrication_shop'],
-      legalDesignation: 'Social Enterprise',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'Kilimani',
-      verified: false,
-    ),
-    MapOrganization(
-      id: 'org_012',
-      name: 'Haki Legal Aid Centre',
-      description: 'Free legal aid for survivors of GBV, land disputes, and child rights violations across Nairobi.',
-      location: LatLng(-1.2864, 36.8172),
-      sectorId: 'sector_legal',
-      orgTypeId: 'ot_legal_aid',
-      subTypeIds: ['st_gbv_legal', 'st_land_rights', 'st_child_legal'],
-      beneficiaryGroupIds: ['bg_women', 'bg_children', 'bg_pwd'],
-      facilityTypeIds: ['facility_legal_aid_office'],
-      subFacilityIds: [],
-      legalDesignation: 'NGO',
-      country: 'Kenya',
-      city: 'Nairobi',
-      area: 'CBD',
-      verified: true,
-      phone: '+254722000002',
-      website: 'https://hakilegal.example.org',
-    ),
+  // ── Sector / sub-filter data ─────────────────────────────────────────────
+
+  static const _sectorSubFilters = <String, List<Map<String, dynamic>>>{
+    'sector_env': [
+      {'id': 'ot_recycler', 'label': 'Recycler', 'icon': Icons.recycling},
+      {'id': 'ot_waste_art', 'label': 'Waste-to-Art', 'icon': Icons.palette},
+      {
+        'id': 'ot_cleanup_org',
+        'label': 'Cleanup Org',
+        'icon': Icons.cleaning_services
+      },
+      {'id': 'ot_conservation', 'label': 'Conservation', 'icon': Icons.park},
+      {'id': 'ot_clean_energy', 'label': 'Clean Energy', 'icon': Icons.bolt},
+    ],
+    'sector_social': [
+      {'id': 'ot_women_org', 'label': "Women's Org", 'icon': Icons.woman},
+      {'id': 'ot_girls_org', 'label': "Girls' Org", 'icon': Icons.girl},
+      {
+        'id': 'ot_children_org',
+        'label': "Children's Org",
+        'icon': Icons.child_care
+      },
+      {'id': 'ot_youth_org', 'label': 'Youth Org', 'icon': Icons.group},
+      {'id': 'ot_pwd_org', 'label': 'PWD Org', 'icon': Icons.accessible},
+      {'id': 'ot_elderly_org', 'label': 'Elderly Care', 'icon': Icons.elderly},
+      {
+        'id': 'ot_refugee_org',
+        'label': 'Refugee Support',
+        'icon': Icons.transfer_within_a_station
+      },
+    ],
+    'sector_health': [
+      {'id': 'ot_clinic', 'label': 'Clinic', 'icon': Icons.local_hospital},
+      {'id': 'ot_wash', 'label': 'WASH Org', 'icon': Icons.water_drop},
+      {
+        'id': 'ot_nutrition_org',
+        'label': 'Nutrition',
+        'icon': Icons.restaurant
+      },
+    ],
+    'sector_education': [
+      {'id': 'ot_school', 'label': 'School', 'icon': Icons.school},
+      {'id': 'ot_vocational', 'label': 'Vocational', 'icon': Icons.build},
+    ],
+    'sector_economic': [
+      {
+        'id': 'ot_sacco',
+        'label': 'SACCO / Microfinance',
+        'icon': Icons.account_balance
+      },
+    ],
+    'sector_legal': [
+      {'id': 'ot_legal_aid', 'label': 'Legal Aid', 'icon': Icons.gavel},
+    ],
+    'sector_faith': [
+      {'id': 'ot_fbo', 'label': 'Faith-Based Org', 'icon': Icons.church},
+    ],
+    'sector_community': [
+      {
+        'id': 'ot_football_club',
+        'label': 'Football / Sports Club',
+        'icon': Icons.sports_soccer
+      },
+      {
+        'id': 'ot_drama_choir',
+        'label': 'Drama, Music & Choir',
+        'icon': Icons.theater_comedy
+      },
+      {
+        'id': 'ot_neighbourhood_assoc',
+        'label': 'Neighbourhood Association',
+        'icon': Icons.home
+      },
+      {
+        'id': 'ot_parent_group',
+        'label': 'Parent & Family Group',
+        'icon': Icons.family_restroom
+      },
+      {
+        'id': 'ot_youth_club',
+        'label': 'Youth Club (Informal)',
+        'icon': Icons.groups
+      },
+      {
+        'id': 'ot_cultural_group',
+        'label': 'Cultural & Heritage Group',
+        'icon': Icons.diversity_3
+      },
+    ],
+  };
+
+  static const _beneficiarySubFilters = <Map<String, dynamic>>[
+    {'id': 'bg_women', 'label': 'Women', 'icon': Icons.woman},
+    {'id': 'bg_girls', 'label': 'Girls (Under 18)', 'icon': Icons.girl},
+    {'id': 'bg_men', 'label': 'Men', 'icon': Icons.man},
+    {'id': 'bg_boys', 'label': 'Boys (Under 18)', 'icon': Icons.boy},
+    {'id': 'bg_children', 'label': 'Children (All)', 'icon': Icons.child_care},
+    {'id': 'bg_youth', 'label': 'Youth (15–35)', 'icon': Icons.group},
+    {'id': 'bg_elderly', 'label': 'Elderly (60+)', 'icon': Icons.elderly},
+    {
+      'id': 'bg_pwd',
+      'label': 'Persons with Disabilities',
+      'icon': Icons.accessible
+    },
+    {
+      'id': 'bg_refugees',
+      'label': 'Refugees & IDPs',
+      'icon': Icons.transfer_within_a_station
+    },
+    {
+      'id': 'bg_orphans',
+      'label': 'Orphans & OVCs',
+      'icon': Icons.family_restroom
+    },
+    {
+      'id': 'bg_teen_mothers',
+      'label': 'Teen Mothers',
+      'icon': Icons.pregnant_woman
+    },
+    {'id': 'bg_general', 'label': 'General Community', 'icon': Icons.people},
   ];
 
-  // ── Filter level definitions ─────────────────────────────────────────────────
-
-  late final List<MapFilterLevel> _filterLevels = [
-    MapFilterLevel(
-      id: 'sector',
-      label: 'Sector',
-      options: [
-        MapFilter(id: 'sector_env', label: 'Environmental & Waste', icon: Icons.eco, color: const Color(0xFF2E7D32)),
-        MapFilter(id: 'sector_social', label: 'Social Services', icon: Icons.volunteer_activism, color: const Color(0xFFC62828)),
-        MapFilter(id: 'sector_health', label: 'Health & Medical', icon: Icons.local_hospital, color: const Color(0xFF00695C)),
-        MapFilter(id: 'sector_education', label: 'Education & Skills', icon: Icons.school, color: const Color(0xFF1565C0)),
-        MapFilter(id: 'sector_economic', label: 'Economic Empowerment', icon: Icons.trending_up, color: const Color(0xFFE65100)),
-        MapFilter(id: 'sector_legal', label: 'Legal Aid & Advocacy', icon: Icons.gavel, color: const Color(0xFF4A148C)),
-        MapFilter(id: 'sector_faith', label: 'Faith-Based', icon: Icons.church, color: const Color(0xFF4E342E)),
-      ],
-    ),
-    MapFilterLevel(
-      id: 'orgType',
-      label: 'Org Type',
-      options: [
-        MapFilter(id: 'ot_recycler', label: 'Recycler', icon: Icons.recycling, color: const Color(0xFF388E3C)),
-        MapFilter(id: 'ot_waste_art', label: 'Waste-to-Art Creator', icon: Icons.palette, color: const Color(0xFF00897B)),
-        MapFilter(id: 'ot_cleanup_org', label: 'Cleanup Org', icon: Icons.cleaning_services, color: const Color(0xFF43A047)),
-        MapFilter(id: 'ot_conservation', label: 'Conservation', icon: Icons.park, color: const Color(0xFF2E7D32)),
-        MapFilter(id: 'ot_clean_energy', label: 'Clean Energy', icon: Icons.bolt, color: const Color(0xFFF9A825)),
-        MapFilter(id: 'ot_women_org', label: "Women's Org", icon: Icons.woman, color: const Color(0xFFE91E63)),
-        MapFilter(id: 'ot_girls_org', label: "Girls' Org", icon: Icons.girl, color: const Color(0xFFF06292)),
-        MapFilter(id: 'ot_children_org', label: "Children's Org", icon: Icons.child_care, color: const Color(0xFFFF7043)),
-        MapFilter(id: 'ot_youth_org', label: 'Youth Org', icon: Icons.group, color: const Color(0xFF7E57C2)),
-        MapFilter(id: 'ot_pwd_org', label: 'PWD Org', icon: Icons.accessible, color: const Color(0xFF0288D1)),
-        MapFilter(id: 'ot_elderly_org', label: 'Elderly Care', icon: Icons.elderly, color: const Color(0xFF5C6BC0)),
-        MapFilter(id: 'ot_refugee_org', label: 'Refugee Support', icon: Icons.transfer_within_a_station, color: const Color(0xFFFF8F00)),
-        MapFilter(id: 'ot_clinic', label: 'Clinic', icon: Icons.local_hospital, color: const Color(0xFFE53935)),
-        MapFilter(id: 'ot_wash', label: 'WASH Org', icon: Icons.water_drop, color: const Color(0xFF1E88E5)),
-        MapFilter(id: 'ot_nutrition_org', label: 'Nutrition & Food', icon: Icons.restaurant, color: const Color(0xFFEF6C00)),
-        MapFilter(id: 'ot_school', label: 'School', icon: Icons.school, color: const Color(0xFF1976D2)),
-        MapFilter(id: 'ot_vocational', label: 'Vocational Training', icon: Icons.build, color: const Color(0xFF0277BD)),
-        MapFilter(id: 'ot_sacco', label: 'SACCO / Microfinance', icon: Icons.account_balance, color: const Color(0xFFBF360C)),
-        MapFilter(id: 'ot_legal_aid', label: 'Legal Aid', icon: Icons.gavel, color: const Color(0xFF6A1B9A)),
-        MapFilter(id: 'ot_fbo', label: 'Faith-Based Org', icon: Icons.church, color: const Color(0xFF5D4037)),
-      ],
-    ),
-    MapFilterLevel(
-      id: 'beneficiary',
-      label: 'Who They Serve',
-      options: [
-        MapFilter(id: 'bg_women', label: 'Women', icon: Icons.woman, color: const Color(0xFFE91E63)),
-        MapFilter(id: 'bg_girls', label: 'Girls (Under 18)', icon: Icons.girl, color: const Color(0xFFF06292)),
-        MapFilter(id: 'bg_men', label: 'Men', icon: Icons.man, color: const Color(0xFF1E88E5)),
-        MapFilter(id: 'bg_boys', label: 'Boys (Under 18)', icon: Icons.boy, color: const Color(0xFF42A5F5)),
-        MapFilter(id: 'bg_children', label: 'Children (All)', icon: Icons.child_care, color: const Color(0xFFFF7043)),
-        MapFilter(id: 'bg_youth', label: 'Youth (15–35)', icon: Icons.group, color: const Color(0xFF7E57C2)),
-        MapFilter(id: 'bg_elderly', label: 'Elderly (60+)', icon: Icons.elderly, color: const Color(0xFF5C6BC0)),
-        MapFilter(id: 'bg_pwd', label: 'Persons with Disabilities', icon: Icons.accessible, color: const Color(0xFF0288D1)),
-        MapFilter(id: 'bg_refugees', label: 'Refugees & IDPs', icon: Icons.transfer_within_a_station, color: const Color(0xFFFF8F00)),
-        MapFilter(id: 'bg_orphans', label: 'Orphans & OVCs', icon: Icons.family_restroom, color: const Color(0xFFEF6C00)),
-        MapFilter(id: 'bg_teen_mothers', label: 'Teen Mothers', icon: Icons.pregnant_woman, color: const Color(0xFFAD1457)),
-        MapFilter(id: 'bg_hiv_positive', label: 'PLHIV (HIV+)', icon: Icons.healing, color: const Color(0xFF00897B)),
-        MapFilter(id: 'bg_general', label: 'General Community', icon: Icons.people, color: const Color(0xFF43A047)),
-      ],
-    ),
-    MapFilterLevel(
-      id: 'facility',
-      label: 'Facility Type',
-      options: [
-        MapFilter(id: 'facility_clinic', label: 'Clinic / Health Facility', icon: Icons.local_hospital, color: const Color(0xFFE53935)),
-        MapFilter(id: 'facility_school', label: 'School / Learning Center', icon: Icons.school, color: const Color(0xFF1976D2)),
-        MapFilter(id: 'facility_training_center', label: 'Training / Vocational Center', icon: Icons.build, color: const Color(0xFF0277BD)),
-        MapFilter(id: 'facility_collection_point', label: 'Waste Collection Point', icon: Icons.recycling, color: const Color(0xFF388E3C)),
-        MapFilter(id: 'facility_drop_off', label: 'Drop-Off Point', icon: Icons.archive, color: const Color(0xFF43A047)),
-        MapFilter(id: 'facility_workshop', label: 'Workshop / Studio', icon: Icons.palette, color: const Color(0xFF00897B)),
-        MapFilter(id: 'facility_shelter', label: 'Shelter / Safe House', icon: Icons.home, color: const Color(0xFFAD1457)),
-        MapFilter(id: 'facility_community_center', label: 'Community Center', icon: Icons.groups, color: const Color(0xFF00897B)),
-        MapFilter(id: 'facility_water_point', label: 'Water Point / WASH', icon: Icons.water_drop, color: const Color(0xFF1E88E5)),
-        MapFilter(id: 'facility_youth_center', label: 'Youth Center', icon: Icons.group, color: const Color(0xFF7E57C2)),
-        MapFilter(id: 'facility_food_bank', label: 'Food Bank / Feeding Program', icon: Icons.restaurant, color: const Color(0xFFEF6C00)),
-        MapFilter(id: 'facility_rehabilitation_center', label: 'Rehabilitation Center', icon: Icons.accessibility_new, color: const Color(0xFF0288D1)),
-        MapFilter(id: 'facility_legal_aid_office', label: 'Legal Aid Office', icon: Icons.gavel, color: const Color(0xFF6A1B9A)),
-        MapFilter(id: 'facility_gallery', label: 'Gallery / Exhibition Space', icon: Icons.photo_library, color: const Color(0xFFF57C00)),
-      ],
-    ),
-    MapFilterLevel(
-      id: 'subFacility',
-      label: 'Services',
-      options: [
-        MapFilter(id: 'sf_antenatal', label: 'Antenatal Care', icon: Icons.pregnant_woman, color: const Color(0xFFE53935)),
-        MapFilter(id: 'sf_hiv_testing', label: 'HIV Testing & Counseling', icon: Icons.healing, color: const Color(0xFF00897B)),
-        MapFilter(id: 'sf_pharmacy', label: 'Pharmacy', icon: Icons.medication, color: const Color(0xFFE53935)),
-        MapFilter(id: 'sf_mental_health_services', label: 'Mental Health Services', icon: Icons.psychology, color: const Color(0xFF7E57C2)),
-        MapFilter(id: 'sf_dental_unit', label: 'Dental Unit', icon: Icons.medical_services, color: const Color(0xFF1976D2)),
-        MapFilter(id: 'sf_eye_unit', label: 'Eye / Vision Unit', icon: Icons.remove_red_eye, color: const Color(0xFF0277BD)),
-        MapFilter(id: 'sf_plastic_drop', label: 'Plastic Drop-Off', icon: Icons.water_drop, color: const Color(0xFF388E3C)),
-        MapFilter(id: 'sf_ewaste_drop', label: 'E-Waste Drop-Off', icon: Icons.devices, color: const Color(0xFF43A047)),
-        MapFilter(id: 'sf_public_tap', label: 'Public Tap / Standpipe', icon: Icons.water_drop, color: const Color(0xFF1E88E5)),
-        MapFilter(id: 'sf_latrine_block', label: 'Latrine Block', icon: Icons.wc, color: const Color(0xFF546E7A)),
-        MapFilter(id: 'sf_handwashing', label: 'Handwashing Station', icon: Icons.soap, color: const Color(0xFF1E88E5)),
-        MapFilter(id: 'sf_ict_lab', label: 'ICT / Computer Lab', icon: Icons.laptop, color: const Color(0xFF0277BD)),
-        MapFilter(id: 'sf_tailoring_unit', label: 'Tailoring Unit', icon: Icons.checkroom, color: const Color(0xFF0277BD)),
-        MapFilter(id: 'sf_recording_studio', label: 'Recording Studio', icon: Icons.mic, color: const Color(0xFF7E57C2)),
-        MapFilter(id: 'sf_gbv_safe_house', label: 'GBV Safe House', icon: Icons.shield, color: const Color(0xFFAD1457)),
-        MapFilter(id: 'sf_counseling_room', label: 'Counseling Room', icon: Icons.psychology, color: const Color(0xFF7E57C2)),
-        MapFilter(id: 'sf_library', label: 'Library', icon: Icons.local_library, color: const Color(0xFF1976D2)),
-        MapFilter(id: 'sf_art_studio', label: 'Art Studio', icon: Icons.brush, color: const Color(0xFF00897B)),
-        MapFilter(id: 'sf_fabrication_shop', label: 'Fabrication / Metal Shop', icon: Icons.hardware, color: const Color(0xFF00897B)),
-        MapFilter(id: 'sf_entrepreneurship_hub', label: 'Entrepreneurship Hub', icon: Icons.business_center, color: const Color(0xFF7E57C2)),
-        MapFilter(id: 'sf_resource_center', label: 'Resource & Info Center', icon: Icons.info, color: const Color(0xFF00897B)),
-      ],
-    ),
+  static const _amenitySubFilters = <Map<String, dynamic>>[
+    {
+      'id': 'waterPoint',
+      'label': 'Water Points',
+      'icon': Icons.water_drop_outlined
+    },
+    {
+      'id': 'recyclingDropOff',
+      'label': 'Recycling Drop-Offs',
+      'icon': Icons.recycling
+    },
+    {
+      'id': 'dumpsite',
+      'label': 'Active Dumpsites',
+      'icon': Icons.delete_outline
+    },
+    {
+      'id': 'canopyHub',
+      'label': 'Canopy Hubs',
+      'icon': Icons.solar_power_outlined
+    },
+    {
+      'id': 'cleanupEvent',
+      'label': 'Cleanup Events',
+      'icon': Icons.cleaning_services_outlined
+    },
+    {
+      'id': 'treeSite',
+      'label': 'Tree Planting Sites',
+      'icon': Icons.park_outlined
+    },
   ];
 
-  // ── Lifecycle ───────────────────────────────────────────────────────────────
+  // ── Lifecycle ────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _bottomSheetController = AnimationController(
+    _sheetController = AnimationController(
       duration: const Duration(milliseconds: 350),
+      vsync: this,
+    );
+    _subSheetController = AnimationController(
+      duration: const Duration(milliseconds: 300),
       vsync: this,
     );
     _loadIconsAndBuildMarkers();
@@ -452,12 +419,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _bottomSheetController.dispose();
+    _sheetController.dispose();
+    _subSheetController.dispose();
     _mapController?.dispose();
     super.dispose();
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────
 
   Color _sectorColor(String sectorId) {
     const map = {
@@ -468,6 +436,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       'sector_economic': Color(0xFFE65100),
       'sector_legal': Color(0xFF4A148C),
       'sector_faith': Color(0xFF4E342E),
+      'sector_community': Color(0xFF5C6BC0),
     };
     return map[sectorId] ?? AppTheme.primary;
   }
@@ -494,6 +463,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       'ot_sacco': Icons.account_balance,
       'ot_legal_aid': Icons.gavel,
       'ot_fbo': Icons.church,
+      'ot_football_club': Icons.sports_soccer,
+      'ot_drama_choir': Icons.theater_comedy,
+      'ot_neighbourhood_assoc': Icons.home,
+      'ot_parent_group': Icons.family_restroom,
+      'ot_youth_club': Icons.groups,
+      'ot_cultural_group': Icons.diversity_3,
     };
     return map[orgTypeId] ?? Icons.business;
   }
@@ -515,22 +490,29 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       'facility_legal_aid_office': 'Legal Aid Office',
       'facility_gallery': 'Gallery',
       'facility_office': 'Office',
+      'facility_sports_ground': 'Sports Ground',
+      'facility_drop_in_center': 'Drop-In Center',
     };
     return map[id] ?? id;
   }
 
-  // ── Icon generation ─────────────────────────────────────────────────────────
+  // ── Icon generation ──────────────────────────────────────────────────────
 
   Future<void> _loadIconsAndBuildMarkers() async {
+    // Org icons
     final typeIds = _allOrgs.map((o) => o.orgTypeId).toSet();
     for (final typeId in typeIds) {
       final org = _allOrgs.firstWhere((o) => o.orgTypeId == typeId);
       final color = _sectorColor(org.sectorId);
       final icon = _orgTypeIcon(typeId);
-      // Normal: lighter, smaller — Google Maps style
-      _typeIconsNormal[typeId] = await _makeMarkerIcon(icon, color, 80.0, hero: false);
-      // Hero: dark, bigger, glittery — for active filtered orgs
-      _typeIconsHero[typeId] = await _makeMarkerIcon(icon, color, 140.0, hero: true);
+      _orgIconsNormal[typeId] =
+          await _makeOrgIcon(icon, color, 80.0, hero: false);
+      _orgIconsHero[typeId] =
+          await _makeOrgIcon(icon, color, 140.0, hero: true);
+    }
+    // Amenity icons
+    for (final type in AmenityType.values) {
+      _amenityIcons[type] = await _makeAmenityIcon(type);
     }
     if (mounted) {
       setState(() {
@@ -540,15 +522,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<BitmapDescriptor> _makeMarkerIcon(
-      IconData iconData, Color color, double size, {bool hero = false}) async {
+  Future<BitmapDescriptor> _makeOrgIcon(
+      IconData iconData, Color color, double size,
+      {required bool hero}) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final cx = size / 2;
-    final cy = size / 2;
-
-    // Normal markers: light pastel Google-Maps style (soft fill, subtle shadow)
-    // Hero markers: dark vivid, bigger, glittery sparkle ring
+    final cx = size / 2, cy = size / 2;
 
     if (hero) {
       // Outer bloom halo
@@ -559,16 +538,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           ..color = color.withOpacity(0.22)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
       );
-      // Sparkle dot ring — 8 dots orbiting
+      // Sparkle ring
       final dotR = size / 2 - 11;
       for (int d = 0; d < 8; d++) {
         final angle = (d * math.pi * 2) / 8 - math.pi / 8;
-        final dx = cx + dotR * math.cos(angle);
-        final dy = cy + dotR * math.sin(angle);
         canvas.drawCircle(
-          Offset(dx, dy),
+          Offset(cx + dotR * math.cos(angle), cy + dotR * math.sin(angle)),
           d % 2 == 0 ? 3.8 : 2.4,
-          Paint()..color = d % 2 == 0 ? Colors.white.withOpacity(0.95) : color.withOpacity(0.75),
+          Paint()
+            ..color = d % 2 == 0
+                ? Colors.white.withOpacity(0.95)
+                : color.withOpacity(0.75),
         );
       }
     }
@@ -582,19 +562,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, hero ? 10 : 5),
     );
 
-    // Circle fill — dark vivid for hero, pastel for normal
     final circleR = size / 2 - (hero ? 16 : 8);
     final fillColor = hero
-        ? Color.lerp(color, Colors.black, 0.15)!   // darken for hero
-        : Color.lerp(color, Colors.white, 0.62)!;   // lighten to pastel for normal
+        ? Color.lerp(color, Colors.black, 0.15)!
+        : Color.lerp(color, Colors.white, 0.62)!;
 
     canvas.drawCircle(Offset(cx, cy), circleR, Paint()..color = fillColor);
 
     if (hero) {
-      // Shimmer arc (glitter highlight)
       canvas.drawArc(
         Rect.fromCircle(center: Offset(cx, cy), radius: circleR - 3),
-        -2.5, 1.1, false,
+        -2.5,
+        1.1,
+        false,
         Paint()
           ..color = Colors.white.withOpacity(0.40)
           ..style = PaintingStyle.stroke
@@ -603,7 +583,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       );
     }
 
-    // White ring border
     canvas.drawCircle(
       Offset(cx, cy),
       circleR - 1,
@@ -613,159 +592,250 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ..strokeWidth = hero ? 3.0 : 1.8,
     );
 
-    // Icon — dark on pastel, white on hero
-    final iconColor = hero ? Colors.white : color.withOpacity(0.85);
     final tp = TextPainter(textDirection: TextDirection.ltr)
       ..text = TextSpan(
         text: String.fromCharCode(iconData.codePoint),
         style: TextStyle(
           fontSize: circleR * (hero ? 0.82 : 0.75),
           fontFamily: iconData.fontFamily,
-          color: iconColor,
+          color: hero ? Colors.white : color.withOpacity(0.85),
         ),
       )
       ..layout();
     tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
 
-    final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final img =
+        await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
-  // ── Filtering ────────────────────────────────────────────────────────────────
+  Future<BitmapDescriptor> _makeAmenityIcon(AmenityType type) async {
+    const size = 72.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final color = type.color;
+    final cx = size / 2, cy = size / 2;
 
-  // Orgs that match the current active category (and subcategory filters)
-  List<MapOrganization> get _heroOrgs {
-    if (_activeCategory == null) return _allOrgs; // all = hero when nothing selected
-    return _allOrgs.where((org) {
-      if (org.sectorId != _activeCategory) return false;
-      if (_activeSubFilters.isNotEmpty && !_activeSubFilters.contains(org.orgTypeId)) return false;
-      return true;
-    }).toList();
+    // Shadow
+    canvas.drawCircle(
+      Offset(cx, cy + 3),
+      size / 2 - 10,
+      Paint()
+        ..color = Colors.black.withOpacity(0.15)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    // Fill
+    canvas.drawCircle(
+      Offset(cx, cy),
+      size / 2 - 9,
+      Paint()..color = Color.lerp(color, Colors.white, 0.55)!,
+    );
+    // Border
+    canvas.drawCircle(
+      Offset(cx, cy),
+      size / 2 - 10,
+      Paint()
+        ..color = Colors.white.withOpacity(0.80)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8,
+    );
+    // Icon
+    final tp = TextPainter(textDirection: TextDirection.ltr)
+      ..text = TextSpan(
+        text: String.fromCharCode(type.icon.codePoint),
+        style: TextStyle(
+          fontSize: (size / 2 - 9) * 0.72,
+          fontFamily: type.icon.fontFamily,
+          color: color.withOpacity(0.90),
+        ),
+      )
+      ..layout();
+    tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
+
+    final img =
+        await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+  }
+
+  // ── Filtering ────────────────────────────────────────────────────────────
+
+  List<MapOrganization> get _visibleOrgs {
+    if (_activeChipId == 'all') return _allOrgs;
+    if (_activeChipId == 'organisations') {
+      if (_activeSubFilters.isEmpty) return _allOrgs;
+      // sub-filters are sectorIds when chip = organisations
+      return _allOrgs
+          .where((o) => _activeSubFilters.contains(o.sectorId))
+          .toList();
+    }
+    if (_activeChipId == 'who_they_serve') {
+      if (_activeSubFilters.isEmpty) return _allOrgs;
+      return _allOrgs
+          .where((o) =>
+              o.beneficiaryGroupIds.any((b) => _activeSubFilters.contains(b)))
+          .toList();
+    }
+    if (_activeChipId == 'marketplace') return _allOrgs; // stub
+    if (_activeChipId == 'events') return [];
+    return _allOrgs;
+  }
+
+  List<MapAmenity> get _visibleAmenities {
+    if (_activeChipId == 'all') return _allAmenities;
+    if (_activeChipId == 'amenities') {
+      if (_activeSubFilters.isEmpty) return _allAmenities;
+      return _allAmenities
+          .where((a) => _activeSubFilters.contains(a.amenityType.name))
+          .toList();
+    }
+    if (_activeChipId == 'events') {
+      return _allAmenities
+          .where((a) =>
+              a.amenityType == AmenityType.cleanupEvent ||
+              a.amenityType == AmenityType.treeSite)
+          .toList();
+    }
+    return [];
   }
 
   void _rebuildMarkers() {
     final markers = <Marker>{};
-    final heroIds = _heroOrgs.map((o) => o.id).toSet();
-    final hasCategory = _activeCategory != null;
+    final isFiltered = _activeChipId != 'all';
 
-    for (final org in _allOrgs) {
-      final isHero = heroIds.contains(org.id);
-
-      if (hasCategory && !isHero) continue; // hide non-matching when filtered
-
-      final icon = isHero && hasCategory
-          ? (_typeIconsHero[org.orgTypeId] ?? _typeIconsNormal[org.orgTypeId] ?? BitmapDescriptor.defaultMarker)
-          : (_typeIconsNormal[org.orgTypeId] ?? BitmapDescriptor.defaultMarker);
-
+    // Org markers
+    for (final org in _visibleOrgs) {
+      final icon = isFiltered
+          ? (_orgIconsHero[org.orgTypeId] ?? BitmapDescriptor.defaultMarker)
+          : (_orgIconsNormal[org.orgTypeId] ?? BitmapDescriptor.defaultMarker);
       markers.add(Marker(
         markerId: MarkerId(org.id),
         position: org.location,
         icon: icon,
+        zIndex: isFiltered ? 2.0 : 1.0,
         infoWindow: InfoWindow.noText,
-        zIndex: isHero && hasCategory ? 2.0 : 1.0,
         onTap: () => _selectOrg(org),
       ));
     }
+
+    // Amenity markers
+    for (final amenity in _visibleAmenities) {
+      if (!amenity.isActive) continue;
+      final icon =
+          _amenityIcons[amenity.amenityType] ?? BitmapDescriptor.defaultMarker;
+      markers.add(Marker(
+        markerId: MarkerId(amenity.id),
+        position: amenity.location,
+        icon: icon,
+        zIndex: 1.5,
+        infoWindow: InfoWindow.noText,
+        onTap: () => _selectAmenity(amenity),
+      ));
+    }
+
     setState(() => _markers = markers);
   }
 
-  // Tap a category icon
-  void _selectCategory(String sectorId) {
+  // ── Selection ────────────────────────────────────────────────────────────
+
+  void _selectOrg(MapOrganization org) {
     setState(() {
-      if (_activeCategory == sectorId) {
-        // Deselect — back to show all
-        _activeCategory = null;
-        _activeSubFilters.clear();
-        _subPanelOpen = false;
-      } else {
-        _activeCategory = sectorId;
-        _activeSubFilters.clear();
-        _subPanelOpen = true;
-      }
+      _selectedOrg = org;
+      _selectedAmenity = null;
+    });
+    _sheetController.forward(from: 0);
+    _mapController?.animateCamera(CameraUpdate.newLatLngZoom(org.location, 16));
+  }
+
+  void _selectAmenity(MapAmenity amenity) {
+    setState(() {
+      _selectedAmenity = amenity;
+      _selectedOrg = null;
+    });
+    _sheetController.forward(from: 0);
+    _mapController
+        ?.animateCamera(CameraUpdate.newLatLngZoom(amenity.location, 16));
+  }
+
+  void _clearSelection() {
+    _sheetController.reverse().then((_) {
+      if (mounted)
+        setState(() {
+          _selectedOrg = null;
+          _selectedAmenity = null;
+        });
+    });
+  }
+
+  // ── Chip / sub-sheet ─────────────────────────────────────────────────────
+
+  void _onChipTap(String chipId) {
+    if (_activeChipId == chipId && chipId != 'all') {
+      // Re-tapping opens sub-sheet
+      _openSubSheet(chipId);
+      return;
+    }
+    setState(() {
+      _activeChipId = chipId;
+      _activeSubFilters.clear();
+      _subSheetOpen = false;
+    });
+    _subSheetController.reverse();
+    _rebuildMarkers();
+  }
+
+  void _openSubSheet(String chipId) {
+    if (chipId == 'all') return;
+    setState(() => _subSheetOpen = true);
+    _subSheetController.forward(from: 0);
+  }
+
+  void _closeSubSheet() {
+    _subSheetController.reverse().then((_) {
+      if (mounted) setState(() => _subSheetOpen = false);
+    });
+  }
+
+  void _toggleSubFilter(String id) {
+    setState(() {
+      _activeSubFilters.contains(id)
+          ? _activeSubFilters.remove(id)
+          : _activeSubFilters.add(id);
     });
     _rebuildMarkers();
   }
 
-  // Toggle a subcategory (orgType) within active category
-  void _toggleSubFilter(String orgTypeId) {
-    setState(() {
-      _activeSubFilters.contains(orgTypeId)
-          ? _activeSubFilters.remove(orgTypeId)
-          : _activeSubFilters.add(orgTypeId);
-    });
-    _rebuildMarkers();
-  }
-
-  // "Show All" in subcategory panel — clear sub filters, keep category
   void _clearSubFilters() {
     setState(() => _activeSubFilters.clear());
     _rebuildMarkers();
   }
 
-  void _selectOrg(MapOrganization org) {
-    setState(() => _selectedOrg = org);
-    _bottomSheetController.forward(from: 0);
-    _mapController?.animateCamera(
-      CameraUpdate.newLatLngZoom(org.location, 16),
-    );
-  }
-
-  void _clearOrgSelection() {
-    _bottomSheetController.reverse().then((_) {
-      if (mounted) setState(() => _selectedOrg = null);
-    });
-  }
-
-  bool get _hasActiveFilters => _activeCategory != null;
-
-  int get _totalActiveCount => _activeSubFilters.length;
-
-  void _clearAllFilters() {
-    setState(() {
-      _activeCategory = null;
-      _activeSubFilters.clear();
-      _subPanelOpen = false;
-    });
-    _rebuildMarkers();
-  }
-
-  // ── Build ────────────────────────────────────────────────────────────────────
+  // ── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    // Nav bar height (transparent but still reserves space for items)
+    const navBarH = 70.0;
 
-    // Static mapping: which orgTypeIds belong to each sector
-    const sectorOrgTypes = {
-      'sector_env':       ['ot_recycler', 'ot_waste_art', 'ot_cleanup_org', 'ot_conservation', 'ot_clean_energy'],
-      'sector_social':    ['ot_women_org', 'ot_girls_org', 'ot_children_org', 'ot_youth_org', 'ot_pwd_org', 'ot_elderly_org', 'ot_refugee_org'],
-      'sector_health':    ['ot_clinic', 'ot_wash', 'ot_nutrition_org'],
-      'sector_education': ['ot_school', 'ot_vocational'],
-      'sector_economic':  ['ot_sacco'],
-      'sector_legal':     ['ot_legal_aid'],
-      'sector_faith':     ['ot_fbo'],
-    };
-
-    // OrgType filters for the active sector — always show all defined types
-    final orgTypesInSector = _activeCategory == null
-        ? <MapFilter>[]
-        : _filterLevels[1].options.where((f) {
-      final allowed = sectorOrgTypes[_activeCategory] ?? [];
-      return allowed.contains(f.id);
-    }).toList();
+    final activeChip = _chipCategories.firstWhere((c) => c.id == _activeChipId);
 
     return Scaffold(
       body: Stack(
         children: [
-          // ── Google Map ────────────────────────────────────────────────────
+          // ── Google Map ─────────────────────────────────────────────────
           GoogleMap(
             initialCameraPosition: _initialPosition,
             markers: _markers,
-            onMapCreated: (c) => _mapController = c,
+            onMapCreated: (c) {
+              _mapController = c;
+              c.setMapStyle(map_style.kCanopyMapStyle);
+            },
             onTap: (_) {
-              _clearOrgSelection();
-              if (_subPanelOpen) setState(() => _subPanelOpen = false);
+              _clearSelection();
+              _closeSubSheet();
             },
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
@@ -773,62 +843,88 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             mapToolbarEnabled: false,
           ),
 
-          // ── Vertical filter sidebar (left edge) ───────────────────────────
+          // ── Search bar ─────────────────────────────────────────────────
           Positioned(
             top: topPad + 12,
-            left: 10,
-            bottom: 120,
-            child: _VerticalFilterSidebar(
-              filterLevels: _filterLevels,
-              activeCategory: _activeCategory,
-              activeSubFilters: _activeSubFilters,
-              subPanelOpen: _subPanelOpen,
-              orgTypesInSector: orgTypesInSector,
-              heroCount: _heroOrgs.length,
-              onSelectCategory: _selectCategory,
-              onToggleSubFilter: _toggleSubFilter,
-              onClearSubFilters: _clearSubFilters,
-              onToggleSubPanel: () => setState(() => _subPanelOpen = !_subPanelOpen),
-              onClearAll: _clearAllFilters,
+            left: 16,
+            right: 16,
+            child: _SearchBar(
+              onTap: () {
+                // TODO: open MapSearchOverlay
+              },
             ),
           ),
 
-          // ── Top-right controls ────────────────────────────────────────────
+          // ── Filter chip row ────────────────────────────────────────────
           Positioned(
-            top: topPad + 12,
-            right: 12,
-            child: Column(
-              children: [
-                _MapIconButton(
-                  icon: Icons.my_location_outlined,
-                  onTap: () => _mapController?.animateCamera(
-                    CameraUpdate.newLatLngZoom(_initialPosition.target, 13),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10)
-                    ],
-                  ),
-                  child: Text(
-                    '${_heroOrgs.length} shown',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.darkGreen,
-                    ),
-                  ),
-                ),
-              ],
+            top: topPad + 12 + 50, // below search bar
+            left: 0,
+            right: 0,
+            child: _FilterChipRow(
+              categories: _chipCategories,
+              activeId: _activeChipId,
+              activeSubCount: _activeSubFilters.length,
+              onTap: _onChipTap,
             ),
           ),
 
-          // ── Org detail bottom sheet ────────────────────────────────────────
+          // ── Org count pill ─────────────────────────────────────────────
+          Positioned(
+            top: topPad + 12 + 50 + 48,
+            right: 16,
+            child: _CountPill(
+              orgCount: _visibleOrgs.length,
+              amenityCount: _visibleAmenities.length,
+            ),
+          ),
+
+          // ── My location button ─────────────────────────────────────────
+          Positioned(
+            bottom: bottomPad + navBarH + 16,
+            right: 16,
+            child: _MapIconButton(
+              icon: Icons.my_location_outlined,
+              onTap: () => _mapController?.animateCamera(
+                CameraUpdate.newLatLngZoom(_initialPosition.target, 13),
+              ),
+            ),
+          ),
+
+          // ── Sub-filter sheet ───────────────────────────────────────────
+          if (_subSheetOpen)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _closeSubSheet,
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+          if (_subSheetOpen)
+            Positioned(
+              bottom: bottomPad + navBarH,
+              left: 0,
+              right: 0,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: _subSheetController,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: _SubFilterSheet(
+                  chip: activeChip,
+                  activeSubFilters: _activeSubFilters,
+                  onToggle: _toggleSubFilter,
+                  onClear: _clearSubFilters,
+                  onClose: _closeSubSheet,
+                  sectorSubFilters: _sectorSubFilters,
+                  beneficiarySubFilters: _beneficiarySubFilters,
+                  amenitySubFilters: _amenitySubFilters,
+                ),
+              ),
+            ),
+
+          // ── Org detail bottom sheet ────────────────────────────────────
           if (_selectedOrg != null)
             Positioned(
               bottom: 0,
@@ -839,7 +935,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   begin: const Offset(0, 1),
                   end: Offset.zero,
                 ).animate(CurvedAnimation(
-                  parent: _bottomSheetController,
+                  parent: _sheetController,
                   curve: Curves.easeOutCubic,
                 )),
                 child: _OrgDetailSheet(
@@ -847,7 +943,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   sectorColor: _sectorColor(_selectedOrg!.sectorId),
                   orgTypeIcon: _orgTypeIcon(_selectedOrg!.orgTypeId),
                   facilityLabel: _facilityLabel,
-                  onClose: _clearOrgSelection,
+                  bottomPad: bottomPad + navBarH,
+                  onClose: _clearSelection,
+                ),
+              ),
+            ),
+
+          // ── Amenity card ───────────────────────────────────────────────
+          if (_selectedAmenity != null)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(CurvedAnimation(
+                  parent: _sheetController,
+                  curve: Curves.easeOutCubic,
+                )),
+                child: _AmenityCard(
+                  amenity: _selectedAmenity!,
+                  bottomPad: bottomPad + navBarH,
+                  onClose: _clearSelection,
                 ),
               ),
             ),
@@ -855,158 +974,202 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       ),
     );
   }
-
-  Set<String> _activeSetFor(int levelIndex) => {}; // legacy stub
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Vertical Filter Sidebar — category icons + subcategory popout
+// SEARCH BAR
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _VerticalFilterSidebar extends StatelessWidget {
-  final List<MapFilterLevel> filterLevels;
-  final String? activeCategory;
-  final Set<String> activeSubFilters;
-  final bool subPanelOpen;
-  final List<MapFilter> orgTypesInSector;
-  final int heroCount;
-  final void Function(String sectorId) onSelectCategory;
-  final void Function(String orgTypeId) onToggleSubFilter;
-  final VoidCallback onClearSubFilters;
-  final VoidCallback onToggleSubPanel;
-  final VoidCallback onClearAll;
-
-  const _VerticalFilterSidebar({
-    required this.filterLevels,
-    required this.activeCategory,
-    required this.activeSubFilters,
-    required this.subPanelOpen,
-    required this.orgTypesInSector,
-    required this.heroCount,
-    required this.onSelectCategory,
-    required this.onToggleSubFilter,
-    required this.onClearSubFilters,
-    required this.onToggleSubPanel,
-    required this.onClearAll,
-  });
-
-  // Category-level icons & colors (sectors)
-  static const _sectorColors = {
-    'sector_env':       Color(0xFF2E7D32),
-    'sector_social':    Color(0xFFC62828),
-    'sector_health':    Color(0xFF00695C),
-    'sector_education': Color(0xFF1565C0),
-    'sector_economic':  Color(0xFFE65100),
-    'sector_legal':     Color(0xFF4A148C),
-    'sector_faith':     Color(0xFF4E342E),
-  };
+class _SearchBar extends StatelessWidget {
+  final VoidCallback onTap;
+  const _SearchBar({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final sectors = filterLevels[0].options; // sector-level filters
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Category icon column ───────────────────────────────────────────
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ...sectors.map((sector) {
-              final isActive = activeCategory == sector.id;
-              final color = _sectorColors[sector.id] ?? sector.color;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: GestureDetector(
-                  onTap: () => onSelectCategory(sector.id),
-                  child: _SidebarIconButton(
-                    icon: sector.icon,
-                    color: color,
-                    isActive: isActive,
-                    isExpanded: isActive && subPanelOpen,
-                    label: sector.label,
-                  ),
-                ),
-              );
-            }),
-
-            // ── "Show All" — only when a category is selected ─────────────
-            if (activeCategory != null) ...[
-              Container(
-                margin: const EdgeInsets.only(top: 2, bottom: 6),
-                height: 1,
-                width: 34,
-                color: Colors.grey.shade300,
-              ),
-              GestureDetector(
-                onTap: onClearAll,
-                child: const _ShowAllButton(),
-              ),
-            ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 46,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(23),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
-
-        // ── Subcategory panel ──────────────────────────────────────────────
-        if (activeCategory != null && subPanelOpen) ...[
-          const SizedBox(width: 8),
-          _SubcategoryPanel(
-            categoryLabel: filterLevels[0].options
-                .firstWhere((f) => f.id == activeCategory,
-                orElse: () => MapFilter(
-                    id: '', label: 'Types', icon: Icons.category, color: Colors.grey))
-                .label,
-            color: _sectorColors[activeCategory!] ?? Colors.grey,
-            orgTypes: orgTypesInSector,
-            activeSubFilters: activeSubFilters,
-            onToggle: onToggleSubFilter,
-            onClear: onClearSubFilters,
-            onClose: onToggleSubPanel,
-          ),
-        ],
-      ],
+        child: Row(
+          children: [
+            const SizedBox(width: 14),
+            Icon(Icons.search, color: AppTheme.primary, size: 20),
+            const SizedBox(width: 10),
+            Text(
+              'Search organisations, places, or facilities...',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.darkGreen.withOpacity(0.50),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Show All button — clears all filters
+// FILTER CHIP ROW
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ShowAllButton extends StatelessWidget {
-  const _ShowAllButton();
+class _FilterChipRow extends StatelessWidget {
+  final List<_ChipCategory> categories;
+  final String activeId;
+  final int activeSubCount;
+  final void Function(String) onTap;
+
+  const _FilterChipRow({
+    required this.categories,
+    required this.activeId,
+    required this.activeSubCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: categories.length,
+        itemBuilder: (_, i) {
+          final cat = categories[i];
+          final isActive = cat.id == activeId;
+          final hasSubFilter = isActive && activeSubCount > 0;
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => onTap(cat.id),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                decoration: BoxDecoration(
+                  color: isActive ? cat.color : Colors.white.withOpacity(0.92),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isActive ? cat.color : Colors.white.withOpacity(0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isActive
+                          ? cat.color.withOpacity(0.30)
+                          : Colors.black.withOpacity(0.08),
+                      blurRadius: isActive ? 12 : 6,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      cat.icon,
+                      size: 14,
+                      color: isActive ? Colors.white : cat.color,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      cat.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: isActive
+                            ? Colors.white
+                            : AppTheme.darkGreen.withOpacity(0.75),
+                      ),
+                    ),
+                    if (hasSubFilter) ...[
+                      const SizedBox(width: 5),
+                      Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$activeSubCount',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: cat.color,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNT PILL
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountPill extends StatelessWidget {
+  final int orgCount;
+  final int amenityCount;
+  const _CountPill({required this.orgCount, required this.amenityCount});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 44,
-      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: Colors.grey.shade300, width: 1.5),
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10),
         ],
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.layers_clear_outlined, size: 16, color: Colors.grey.shade600),
-          const SizedBox(height: 1),
-          Text(
-            'All',
-            style: TextStyle(
-              fontSize: 8.5,
-              fontWeight: FontWeight.w800,
-              color: Colors.grey.shade600,
-              letterSpacing: 0.3,
-            ),
-          ),
+          Icon(Icons.business_outlined, size: 11, color: AppTheme.primary),
+          const SizedBox(width: 3),
+          Text('$orgCount',
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.darkGreen)),
+          const SizedBox(width: 6),
+          Container(
+              width: 1,
+              height: 10,
+              color: AppTheme.lightGreen.withOpacity(0.5)),
+          const SizedBox(width: 6),
+          Icon(Icons.place_outlined, size: 11, color: AppTheme.accent),
+          const SizedBox(width: 3),
+          Text('$amenityCount',
+              style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.darkGreen)),
         ],
       ),
     );
@@ -1014,225 +1177,265 @@ class _ShowAllButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sidebar icon button
+// SUB-FILTER SHEET
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _SidebarIconButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final bool isActive;
-  final bool isExpanded;
-  final String label;
-
-  const _SidebarIconButton({
-    required this.icon,
-    required this.color,
-    required this.isActive,
-    required this.isExpanded,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: isExpanded
-            ? color
-            : isActive
-            ? color.withOpacity(0.92)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: isExpanded || isActive ? color : Colors.grey.shade200,
-          width: isExpanded ? 2.5 : 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isActive || isExpanded
-                ? color.withOpacity(0.35)
-                : Colors.black.withOpacity(0.10),
-            blurRadius: isActive || isExpanded ? 14 : 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Icon(
-          icon,
-          size: 20,
-          color: isActive || isExpanded ? Colors.white : color,
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Subcategory panel — org types within selected sector, with checkboxes
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SubcategoryPanel extends StatelessWidget {
-  final String categoryLabel;
-  final Color color;
-  final List<MapFilter> orgTypes;
+class _SubFilterSheet extends StatelessWidget {
+  final _ChipCategory chip;
   final Set<String> activeSubFilters;
-  final void Function(String id) onToggle;
+  final void Function(String) onToggle;
   final VoidCallback onClear;
   final VoidCallback onClose;
+  final Map<String, List<Map<String, dynamic>>> sectorSubFilters;
+  final List<Map<String, dynamic>> beneficiarySubFilters;
+  final List<Map<String, dynamic>> amenitySubFilters;
 
-  const _SubcategoryPanel({
-    required this.categoryLabel,
-    required this.color,
-    required this.orgTypes,
+  const _SubFilterSheet({
+    required this.chip,
     required this.activeSubFilters,
     required this.onToggle,
     required this.onClear,
     required this.onClose,
+    required this.sectorSubFilters,
+    required this.beneficiarySubFilters,
+    required this.amenitySubFilters,
   });
+
+  List<Map<String, dynamic>> get _options {
+    switch (chip.id) {
+      case 'organisations':
+        // Show sectors as sub-filters
+        return [
+          {
+            'id': 'sector_env',
+            'label': 'Environmental & Waste',
+            'icon': Icons.eco
+          },
+          {
+            'id': 'sector_social',
+            'label': 'Social Services',
+            'icon': Icons.volunteer_activism
+          },
+          {
+            'id': 'sector_health',
+            'label': 'Health & Medical',
+            'icon': Icons.local_hospital
+          },
+          {
+            'id': 'sector_education',
+            'label': 'Education & Skills',
+            'icon': Icons.school
+          },
+          {
+            'id': 'sector_economic',
+            'label': 'Economic Empowerment',
+            'icon': Icons.trending_up
+          },
+          {
+            'id': 'sector_legal',
+            'label': 'Legal Aid & Advocacy',
+            'icon': Icons.gavel
+          },
+          {'id': 'sector_faith', 'label': 'Faith-Based', 'icon': Icons.church},
+          {
+            'id': 'sector_community',
+            'label': 'Community & Sports',
+            'icon': Icons.groups
+          },
+        ];
+      case 'who_they_serve':
+        return beneficiarySubFilters;
+      case 'amenities':
+        return amenitySubFilters;
+      case 'marketplace':
+        return [
+          {
+            'id': 'collector',
+            'label': 'Collector Listings',
+            'icon': Icons.recycling
+          },
+          {'id': 'processor', 'label': 'Processor Hubs', 'icon': Icons.factory},
+          {
+            'id': 'maker',
+            'label': 'Artisan / Maker Shops',
+            'icon': Icons.palette
+          },
+        ];
+      case 'events':
+        return [
+          {
+            'id': 'cleanupEvent',
+            'label': 'Cleanup Events',
+            'icon': Icons.cleaning_services_outlined
+          },
+          {
+            'id': 'treeSite',
+            'label': 'Tree Planting Sites',
+            'icon': Icons.park_outlined
+          },
+        ];
+      default:
+        return [];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final screenH = MediaQuery.of(context).size.height;
+    final options = _options;
 
     return Material(
       color: Colors.transparent,
       child: Container(
-        width: 220,
-        constraints: BoxConstraints(maxHeight: screenH * 0.58),
+        constraints: BoxConstraints(maxHeight: screenH * 0.45),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           boxShadow: [
-            BoxShadow(color: color.withOpacity(0.18), blurRadius: 24, offset: const Offset(4, 4)),
-            BoxShadow(color: Colors.black.withOpacity(0.09), blurRadius: 12, offset: const Offset(0, 2)),
+            BoxShadow(
+              color: chip.color.withOpacity(0.12),
+              blurRadius: 24,
+              offset: const Offset(0, -4),
+            ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Header ────────────────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
-                color: color,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            categoryLabel,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Text(
-                            activeSubFilters.isEmpty
-                                ? 'All types shown'
-                                : '${activeSubFilters.length} type${activeSubFilters.length > 1 ? 's' : ''} selected',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.80),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (activeSubFilters.isNotEmpty)
-                      GestureDetector(
-                        onTap: onClear,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.22),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text('All',
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.95),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800)),
-                        ),
-                      ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: onClose,
-                      child: Icon(Icons.close, color: Colors.white.withOpacity(0.80), size: 17),
-                    ),
-                  ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 10, bottom: 4),
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-
-              // ── Org type list ──────────────────────────────────────────────
-              Flexible(
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  itemCount: orgTypes.length,
-                  separatorBuilder: (_, __) =>
-                      Divider(height: 1, indent: 14, endIndent: 14, color: Colors.grey.shade100),
-                  itemBuilder: (_, i) {
-                    final opt = orgTypes[i];
-                    final selected = activeSubFilters.contains(opt.id);
-                    return InkWell(
-                      onTap: () => onToggle(opt.id),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 6, 14, 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: chip.color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(chip.icon, color: chip.color, size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          chip.label,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.darkGreen,
+                          ),
+                        ),
+                        Text(
+                          activeSubFilters.isEmpty
+                              ? 'Showing all'
+                              : '${activeSubFilters.length} selected',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: chip.color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (activeSubFilters.isNotEmpty)
+                    TextButton(
+                      onPressed: onClear,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        foregroundColor: chip.color,
+                        textStyle: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                      child: const Text('Clear'),
+                    ),
+                  IconButton(
+                    onPressed: onClose,
+                    icon: Icon(Icons.close,
+                        size: 18, color: Colors.grey.shade400),
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                ],
+              ),
+            ),
+            // Options wrap
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: options.map((opt) {
+                    final id = opt['id'] as String;
+                    final label = opt['label'] as String;
+                    final icon = opt['icon'] as IconData;
+                    final selected = activeSubFilters.contains(id);
+                    return GestureDetector(
+                      onTap: () => onToggle(id),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? chip.color
+                              : chip.color.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: selected
+                                ? chip.color
+                                : chip.color.withOpacity(0.25),
+                            width: selected ? 0 : 1.2,
+                          ),
+                        ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                color: selected ? color : color.withOpacity(0.09),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(opt.icon, size: 15,
-                                  color: selected ? Colors.white : color),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                opt.label,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-                                  color: selected ? color : Colors.black87,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                            Icon(icon,
+                                size: 13,
+                                color: selected ? Colors.white : chip.color),
+                            const SizedBox(width: 6),
+                            Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: selected
+                                    ? Colors.white
+                                    : AppTheme.darkGreen.withOpacity(0.75),
                               ),
                             ),
-                            SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: Checkbox(
-                                value: selected,
-                                activeColor: color,
-                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                                side: BorderSide(
-                                    color: selected ? color : Colors.grey.shade300, width: 1.5),
-                                onChanged: (_) => onToggle(opt.id),
-                              ),
-                            ),
+                            if (selected) ...[
+                              const SizedBox(width: 5),
+                              Icon(Icons.check, size: 12, color: Colors.white),
+                            ],
                           ],
                         ),
                       ),
                     );
-                  },
+                  }).toList(),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1240,7 +1443,7 @@ class _SubcategoryPanel extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Org Detail Bottom Sheet
+// ORG DETAIL BOTTOM SHEET — redesigned with full-width logo/gradient header
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _OrgDetailSheet extends StatelessWidget {
@@ -1248,6 +1451,7 @@ class _OrgDetailSheet extends StatelessWidget {
   final Color sectorColor;
   final IconData orgTypeIcon;
   final String Function(String) facilityLabel;
+  final double bottomPad;
   final VoidCallback onClose;
 
   const _OrgDetailSheet({
@@ -1255,6 +1459,7 @@ class _OrgDetailSheet extends StatelessWidget {
     required this.sectorColor,
     required this.orgTypeIcon,
     required this.facilityLabel,
+    required this.bottomPad,
     required this.onClose,
   });
 
@@ -1264,7 +1469,10 @@ class _OrgDetailSheet extends StatelessWidget {
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 30, offset: Offset(0, -4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black26, blurRadius: 30, offset: Offset(0, -4))
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1273,8 +1481,8 @@ class _OrgDetailSheet extends StatelessWidget {
           // Drag handle
           Center(
             child: Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 6),
-              width: 40,
+              margin: const EdgeInsets.only(top: 10, bottom: 0),
+              width: 36,
               height: 4,
               decoration: BoxDecoration(
                 color: Colors.grey.shade300,
@@ -1283,184 +1491,246 @@ class _OrgDetailSheet extends StatelessWidget {
             ),
           ),
 
-          // Header: logo + name + location + verified badge
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 6, 12, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Full-width header strip ──────────────────────────────────
+          SizedBox(
+            height: 140,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                // Logo or icon
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: sectorColor,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                // Background: logo image or gradient
+                ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(24)),
                   child: org.logoUrl != null
-                      ? ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: Image.network(
-                      org.logoUrl!,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) =>
-                          Icon(orgTypeIcon, color: Colors.white, size: 28),
-                    ),
-                  )
-                      : Icon(orgTypeIcon, color: Colors.white, size: 28),
+                      ? Image.network(
+                          org.logoUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _HeaderGradient(
+                              color: sectorColor, icon: orgTypeIcon),
+                        )
+                      : _HeaderGradient(color: sectorColor, icon: orgTypeIcon),
                 ),
-                const SizedBox(width: 13),
-                Expanded(
+                // Bottom gradient overlay for text
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 90,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.65),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Org name + badges bottom-left
+                Positioned(
+                  bottom: 12,
+                  left: 16,
+                  right: 50,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Expanded(
-                            child: Text(
-                              org.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                                height: 1.2,
-                              ),
-                            ),
-                          ),
                           if (org.verified)
                             Container(
-                              margin: const EdgeInsets.only(left: 6),
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.green.shade50,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.green.shade300),
+                                color: Colors.green.withOpacity(0.85),
+                                borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.verified, size: 11, color: Colors.green.shade700),
+                                  const Icon(Icons.verified,
+                                      size: 10, color: Colors.white),
                                   const SizedBox(width: 3),
-                                  Text(
-                                    'Verified',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.green.shade700,
-                                    ),
-                                  ),
+                                  const Text('Verified',
+                                      style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white)),
                                 ],
                               ),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.location_on_outlined, size: 12, color: Colors.grey.shade500),
-                          const SizedBox(width: 3),
-                          Expanded(
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.20),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.white.withOpacity(0.40)),
+                            ),
                             child: Text(
-                              '${org.area}, ${org.city}, ${org.country}',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                              overflow: TextOverflow.ellipsis,
+                              org.legalDesignation,
+                              style: const TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          _miniTag(org.legalDesignation, sectorColor),
-                          const SizedBox(width: 6),
-                          if (org.phone != null) _miniTag(org.phone!, Colors.teal),
-                        ],
+                      Text(
+                        org.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 17,
+                          height: 1.2,
+                          shadows: [
+                            Shadow(color: Colors.black45, blurRadius: 4)
+                          ],
+                        ),
+                        maxLines: 2,
                       ),
                     ],
                   ),
                 ),
-                IconButton(
-                  onPressed: onClose,
-                  icon: Icon(Icons.close, size: 20, color: Colors.grey.shade400),
-                  padding: EdgeInsets.zero,
+                // Close button top-right
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: GestureDetector(
+                    onTap: onClose,
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.35),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close,
+                          size: 16, color: Colors.white),
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
 
-          // Description
+          // ── Location line ────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                Icon(Icons.location_on_outlined, size: 13, color: sectorColor),
+                const SizedBox(width: 4),
+                Text(
+                  '${org.area}, ${org.city}',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500),
+                ),
+                if (org.phone != null) ...[
+                  const SizedBox(width: 10),
+                  Icon(Icons.phone_outlined,
+                      size: 12, color: Colors.grey.shade400),
+                  const SizedBox(width: 3),
+                  Text(org.phone!,
+                      style:
+                          TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                ],
+              ],
+            ),
+          ),
+
+          // ── Description ───────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Text(
               org.description,
-              style: const TextStyle(fontSize: 13, color: Colors.black54, height: 1.5),
+              style: TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.darkGreen.withOpacity(0.70),
+                  height: 1.5),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
           ),
 
-          // Facilities chips
+          // ── Facility chips ─────────────────────────────────────────────
           if (org.facilityTypeIds.isNotEmpty) ...[
             const SizedBox(height: 12),
             SizedBox(
               height: 30,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 18),
-                children: org.facilityTypeIds.map((id) {
-                  return Container(
-                    margin: const EdgeInsets.only(right: 7),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: sectorColor.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: sectorColor.withOpacity(0.25)),
-                    ),
-                    child: Text(
-                      facilityLabel(id),
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: sectorColor),
-                    ),
-                  );
-                }).toList(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: org.facilityTypeIds
+                    .map((id) => Container(
+                          margin: const EdgeInsets.only(right: 7),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: sectorColor.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: sectorColor.withOpacity(0.30)),
+                          ),
+                          child: Text(facilityLabel(id),
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: sectorColor)),
+                        ))
+                    .toList(),
               ),
             ),
           ],
 
           const SizedBox(height: 14),
 
-          // CTA buttons
+          // ── CTA buttons ────────────────────────────────────────────────
           Padding(
-            padding: EdgeInsets.fromLTRB(
-              16, 0, 16, MediaQuery.of(context).padding.bottom + 14,
-            ),
+            padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPad + 14),
             child: Row(
               children: [
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.info_outline, size: 17),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Organisation profiles coming soon')),
+                      );
+                    },
+                    icon: const Icon(Icons.info_outline, size: 16),
                     label: const Text('View Profile'),
                     style: FilledButton.styleFrom(
                       backgroundColor: sectorColor,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                       minimumSize: const Size(0, 46),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      textStyle: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 14),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 _SheetIconButton(
-                  icon: Icons.directions_outlined,
-                  color: sectorColor,
-                  onTap: () {},
-                ),
+                    icon: Icons.directions_outlined,
+                    color: sectorColor,
+                    onTap: () {}),
                 const SizedBox(width: 8),
                 _SheetIconButton(
-                  icon: Icons.share_outlined,
-                  color: sectorColor,
-                  onTap: () {},
-                ),
+                    icon: Icons.share_outlined,
+                    color: sectorColor,
+                    onTap: () {}),
               ],
             ),
           ),
@@ -1468,28 +1738,206 @@ class _OrgDetailSheet extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _miniTag(String label, Color color) {
+class _HeaderGradient extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+  const _HeaderGradient({required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        gradient: LinearGradient(
+          colors: [
+            Color.lerp(color, Colors.black, 0.25)!,
+            color,
+            Color.lerp(color, Colors.white, 0.15)!,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
-      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+      child: Center(
+        child: Icon(icon, size: 52, color: Colors.white.withOpacity(0.30)),
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Small reusable widgets
+// AMENITY CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AmenityCard extends StatelessWidget {
+  final MapAmenity amenity;
+  final double bottomPad;
+  final VoidCallback onClose;
+
+  const _AmenityCard({
+    required this.amenity,
+    required this.bottomPad,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = amenity.amenityType.color;
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black26, blurRadius: 24, offset: Offset(0, -3))
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 12, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(amenity.amenityType.icon, color: color, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(amenity.amenityType.label,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: color)),
+                      Text(amenity.name,
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.darkGreen,
+                              height: 1.2)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: onClose,
+                  icon:
+                      Icon(Icons.close, size: 18, color: Colors.grey.shade400),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Text(
+              amenity.description,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.darkGreen.withOpacity(0.65),
+                  height: 1.5),
+            ),
+          ),
+          if (amenity.operatingHours != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Row(
+                children: [
+                  Icon(Icons.access_time_outlined, size: 13, color: color),
+                  const SizedBox(width: 5),
+                  Text(amenity.operatingHours!,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: color,
+                          fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          if (amenity.acceptedMaterials.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 28,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: amenity.acceptedMaterials
+                    .map((m) => Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: color.withOpacity(0.25)),
+                          ),
+                          child: Text(m,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: color)),
+                        ))
+                    .toList(),
+              ),
+            ),
+          ],
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, 14, 16, bottomPad + 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.flag_outlined, size: 15),
+                    label: const Text('Report an Issue'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: color,
+                      side: BorderSide(color: color.withOpacity(0.5)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      minimumSize: const Size(0, 44),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _SheetIconButton(
+                    icon: Icons.share_outlined, color: color, onTap: () {}),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SMALL REUSABLES
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MapIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-
   const _MapIconButton({required this.icon, required this.onTap});
 
   @override
@@ -1497,16 +1945,19 @@ class _MapIconButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 50,
-        height: 50,
+        width: 46,
+        height: 46,
         decoration: BoxDecoration(
           color: Colors.white,
           shape: BoxShape.circle,
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 18, offset: const Offset(0, 4))
+            BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 16,
+                offset: const Offset(0, 4))
           ],
         ),
-        child: Icon(icon, color: AppTheme.darkGreen, size: 22),
+        child: Icon(icon, color: AppTheme.darkGreen, size: 20),
       ),
     );
   }
@@ -1516,8 +1967,8 @@ class _SheetIconButton extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-
-  const _SheetIconButton({required this.icon, required this.color, required this.onTap});
+  const _SheetIconButton(
+      {required this.icon, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
