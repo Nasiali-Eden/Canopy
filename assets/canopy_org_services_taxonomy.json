@@ -1,0 +1,683 @@
+{
+  "_meta": {
+    "document": "Canopy Organisation Services Taxonomy",
+    "version": "1.0",
+    "project": "Canopy Community Platform — SHIELD International",
+    "date": "2026",
+    "note": "Services are defined globally and referenced by org types. Any org can offer any service — the suggestedFor array signals defaults in the registration wizard but does not restrict. An org's active services are stored as a List<String> of serviceIds on their Firestore document."
+  },
+
+  "sectors": [
+    {
+      "sectorId": "sector_environment",
+      "label": "Environment & Conservation",
+      "icon": "eco",
+      "color": "#2D7A4F",
+      "orgTypes": [
+        {
+          "orgTypeId": "ot_ngo_environment",
+          "label": "Environmental NGO",
+          "icon": "nature_people",
+          "notes": "Registered NGOs with environmental mandate"
+        },
+        {
+          "orgTypeId": "ot_cbo_environment",
+          "label": "Environmental CBO",
+          "icon": "groups",
+          "notes": "Community-based orgs focused on local environmental action"
+        },
+        {
+          "orgTypeId": "ot_recycling_org",
+          "label": "Recycling & Waste Organisation",
+          "icon": "recycling",
+          "notes": "Orgs running collection programmes, processing hubs, or waste campaigns"
+        },
+        {
+          "orgTypeId": "ot_conservation",
+          "label": "Conservation Body",
+          "icon": "forest",
+          "notes": "Tree planting, biodiversity, water conservation organisations"
+        }
+      ]
+    },
+    {
+      "sectorId": "sector_education",
+      "label": "Education & Skills",
+      "icon": "school",
+      "color": "#1E88E5",
+      "orgTypes": [
+        {
+          "orgTypeId": "ot_school",
+          "label": "School / Learning Centre",
+          "icon": "school",
+          "notes": "Formal and informal schools, adult literacy centres"
+        },
+        {
+          "orgTypeId": "ot_vocational",
+          "label": "Vocational Training Centre",
+          "icon": "construction",
+          "notes": "Skills training, trade certification, apprenticeship programmes"
+        },
+        {
+          "orgTypeId": "ot_tutoring_centre",
+          "label": "Tutoring & Coaching Centre",
+          "icon": "menu_book",
+          "notes": "After-school, exam prep, subject tutoring"
+        },
+        {
+          "orgTypeId": "ot_digital_hub",
+          "label": "Digital / Tech Hub",
+          "icon": "computer",
+          "notes": "Coding bootcamps, digital literacy, computer access centres"
+        },
+        {
+          "orgTypeId": "ot_library",
+          "label": "Library & Resource Centre",
+          "icon": "local_library",
+          "notes": "Community libraries, reading programmes, information access"
+        }
+      ]
+    },
+    {
+      "sectorId": "sector_health",
+      "label": "Health & Wellbeing",
+      "icon": "favorite",
+      "color": "#E53935",
+      "orgTypes": [
+        {
+          "orgTypeId": "ot_clinic",
+          "label": "Clinic / Health Centre",
+          "icon": "local_hospital",
+          "notes": "Community clinics, mobile health units, dispensaries"
+        },
+        {
+          "orgTypeId": "ot_mental_health",
+          "label": "Mental Health Organisation",
+          "icon": "psychology",
+          "notes": "Counselling, psychosocial support, trauma recovery"
+        },
+        {
+          "orgTypeId": "ot_nutrition",
+          "label": "Nutrition & Food Security",
+          "icon": "restaurant",
+          "notes": "Food banks, nutrition programmes, community kitchens"
+        },
+        {
+          "orgTypeId": "ot_reproductive_health",
+          "label": "Reproductive & Maternal Health",
+          "icon": "pregnant_woman",
+          "notes": "Maternal health, family planning, SRHR organisations"
+        }
+      ]
+    },
+    {
+      "sectorId": "sector_livelihoods",
+      "label": "Livelihoods & Economic Empowerment",
+      "icon": "attach_money",
+      "color": "#C4A961",
+      "orgTypes": [
+        {
+          "orgTypeId": "ot_microfinance",
+          "label": "Microfinance / SACCO",
+          "icon": "account_balance",
+          "notes": "Savings groups, credit unions, impact lending"
+        },
+        {
+          "orgTypeId": "ot_enterprise_support",
+          "label": "Enterprise & Business Support",
+          "icon": "storefront",
+          "notes": "Incubators, accelerators, small business advisory"
+        },
+        {
+          "orgTypeId": "ot_cooperative",
+          "label": "Cooperative",
+          "icon": "handshake",
+          "notes": "Producer cooperatives, buying groups, shared economy orgs"
+        },
+        {
+          "orgTypeId": "ot_artisan_collective",
+          "label": "Artisan & Maker Collective",
+          "icon": "palette",
+          "notes": "Craft cooperatives, maker spaces, artisan networks"
+        }
+      ]
+    },
+    {
+      "sectorId": "sector_community",
+      "label": "Community & Sports",
+      "icon": "groups",
+      "color": "#5C6BC0",
+      "orgTypes": [
+        {
+          "orgTypeId": "ot_football_club",
+          "label": "Football / Sports Club",
+          "icon": "sports_soccer",
+          "notes": "Kibera Super League teams, basketball clubs, athletics groups"
+        },
+        {
+          "orgTypeId": "ot_drama_choir",
+          "label": "Drama, Music & Choir",
+          "icon": "theater_comedy",
+          "notes": "Community drama groups, gospel choirs, traditional dance"
+        },
+        {
+          "orgTypeId": "ot_neighbourhood_assoc",
+          "label": "Neighbourhood Association",
+          "icon": "home",
+          "notes": "Village elders councils, estate resident associations, nyumba kumi groups"
+        },
+        {
+          "orgTypeId": "ot_parent_group",
+          "label": "Parent & Family Group",
+          "icon": "family_restroom",
+          "notes": "School parent groups, family welfare associations"
+        },
+        {
+          "orgTypeId": "ot_youth_club",
+          "label": "Youth Club (Informal)",
+          "icon": "groups",
+          "notes": "Unregistered youth peer groups, mentorship circles"
+        },
+        {
+          "orgTypeId": "ot_cultural_group",
+          "label": "Cultural & Heritage Group",
+          "icon": "diversity_3",
+          "notes": "Traditional culture groups, language preservation, oral history collectives"
+        }
+      ]
+    },
+    {
+      "sectorId": "sector_rights_advocacy",
+      "label": "Rights & Advocacy",
+      "icon": "gavel",
+      "color": "#FF7043",
+      "orgTypes": [
+        {
+          "orgTypeId": "ot_human_rights",
+          "label": "Human Rights Organisation",
+          "icon": "balance",
+          "notes": "Legal aid, rights documentation, advocacy bodies"
+        },
+        {
+          "orgTypeId": "ot_gender_org",
+          "label": "Gender & Women's Rights",
+          "icon": "woman",
+          "notes": "GBV response, women's empowerment, gender equity advocacy"
+        },
+        {
+          "orgTypeId": "ot_youth_advocacy",
+          "label": "Youth Advocacy Body",
+          "icon": "campaign",
+          "notes": "Youth civic engagement, policy advocacy, youth governance"
+        },
+        {
+          "orgTypeId": "ot_disability_org",
+          "label": "Disability & Inclusion",
+          "icon": "accessible",
+          "notes": "Disability rights, assistive services, inclusion advocacy"
+        }
+      ]
+    },
+    {
+      "sectorId": "sector_faith",
+      "label": "Faith & Social Services",
+      "icon": "volunteer_activism",
+      "color": "#8D6E63",
+      "orgTypes": [
+        {
+          "orgTypeId": "ot_faith_org",
+          "label": "Faith-Based Organisation",
+          "icon": "church",
+          "notes": "Churches, mosques, temples with active community programmes"
+        },
+        {
+          "orgTypeId": "ot_social_welfare",
+          "label": "Social Welfare Organisation",
+          "icon": "favorite_border",
+          "notes": "Care for vulnerable groups, orphans, elderly, street populations"
+        }
+      ]
+    }
+  ],
+
+  "services": [
+    {
+      "serviceId": "svc_training_workshop",
+      "label": "Training & Workshops",
+      "icon": "co_present",
+      "description": "Structured learning sessions on a specific skill or topic, open to community members",
+      "deliveryModes": ["in_person", "online", "hybrid"],
+      "suggestedFor": [
+        "ot_ngo_environment", "ot_cbo_environment", "ot_recycling_org",
+        "ot_vocational", "ot_digital_hub", "ot_enterprise_support",
+        "ot_artisan_collective", "ot_football_club"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "sessionDurationMinutes": "number",
+        "maxParticipants": "number",
+        "recurrence": "enum:once|weekly|monthly|custom",
+        "targetAudience": "string",
+        "prerequisites": "string?"
+      }
+    },
+    {
+      "serviceId": "svc_mentorship",
+      "label": "Mentorship Programme",
+      "icon": "record_voice_over",
+      "description": "One-on-one or small group sustained guidance relationships between mentors and mentees",
+      "deliveryModes": ["in_person", "online"],
+      "suggestedFor": [
+        "ot_youth_club", "ot_enterprise_support", "ot_digital_hub",
+        "ot_football_club", "ot_vocational", "ot_gender_org",
+        "ot_youth_advocacy", "ot_faith_org"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "mentorshipDurationWeeks": "number",
+        "sessionFrequency": "enum:weekly|biweekly|monthly",
+        "openSpots": "number",
+        "focusArea": "string",
+        "mentorProfilesRequired": "boolean"
+      }
+    },
+    {
+      "serviceId": "svc_course",
+      "label": "Course / Curriculum",
+      "icon": "menu_book",
+      "description": "Multi-session structured learning programme with defined outcomes and progression",
+      "deliveryModes": ["in_person", "online", "hybrid"],
+      "suggestedFor": [
+        "ot_school", "ot_vocational", "ot_tutoring_centre",
+        "ot_digital_hub", "ot_library", "ot_artisan_collective"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "totalSessions": "number",
+        "sessionDurationMinutes": "number",
+        "certificationOffered": "boolean",
+        "certificationBody": "string?",
+        "courseMaterials": "string?",
+        "cohortBased": "boolean"
+      }
+    },
+    {
+      "serviceId": "svc_cleanup_drive",
+      "label": "Cleanup Drive",
+      "icon": "cleaning_services",
+      "description": "Organised community environmental cleanup event",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_ngo_environment", "ot_cbo_environment", "ot_recycling_org",
+        "ot_conservation", "ot_neighbourhood_assoc", "ot_youth_club",
+        "ot_football_club", "ot_faith_org"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "targetSite": "string",
+        "estimatedDurationHours": "number",
+        "equipmentProvided": "boolean",
+        "minParticipants": "number",
+        "maxParticipants": "number?"
+      }
+    },
+    {
+      "serviceId": "svc_tree_planting",
+      "label": "Tree Planting Programme",
+      "icon": "park",
+      "description": "Organised planting and long-term stewardship of trees in community spaces",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_ngo_environment", "ot_cbo_environment", "ot_conservation",
+        "ot_school", "ot_faith_org", "ot_neighbourhood_assoc"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "targetTreeCount": "number",
+        "species": "string?",
+        "plantingSite": "string",
+        "stewardshipPeriodDays": "number"
+      }
+    },
+    {
+      "serviceId": "svc_counselling",
+      "label": "Counselling & Psychosocial Support",
+      "icon": "psychology",
+      "description": "Individual or group emotional and psychological support sessions",
+      "deliveryModes": ["in_person", "online"],
+      "suggestedFor": [
+        "ot_mental_health", "ot_gender_org", "ot_clinic",
+        "ot_reproductive_health", "ot_faith_org", "ot_social_welfare",
+        "ot_disability_org"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": false,
+      "fields": {
+        "sessionType": "enum:individual|group|family",
+        "sessionDurationMinutes": "number",
+        "isConfidential": "boolean",
+        "qualifiedPractitioners": "boolean",
+        "referralRequired": "boolean"
+      }
+    },
+    {
+      "serviceId": "svc_legal_aid",
+      "label": "Legal Aid & Advice",
+      "icon": "gavel",
+      "description": "Free or subsidised legal guidance, document support, and representation",
+      "deliveryModes": ["in_person", "online"],
+      "suggestedFor": [
+        "ot_human_rights", "ot_gender_org", "ot_disability_org",
+        "ot_neighbourhood_assoc", "ot_youth_advocacy"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": false,
+      "fields": {
+        "caseTypesHandled": "string",
+        "isProBono": "boolean",
+        "referralPathway": "string?"
+      }
+    },
+    {
+      "serviceId": "svc_health_screening",
+      "label": "Health Screening & Outreach",
+      "icon": "health_and_safety",
+      "description": "Community health checks, screenings, and mobile medical outreach",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_clinic", "ot_nutrition", "ot_reproductive_health",
+        "ot_faith_org", "ot_social_welfare"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "screeningTypes": "string",
+        "mobileUnit": "boolean",
+        "referralAvailable": "boolean",
+        "targetPopulation": "string?"
+      }
+    },
+    {
+      "serviceId": "svc_food_distribution",
+      "label": "Food Distribution & Nutrition Support",
+      "icon": "restaurant",
+      "description": "Regular or emergency food provision, community kitchens, nutrition supplements",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_nutrition", "ot_faith_org", "ot_social_welfare",
+        "ot_neighbourhood_assoc"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "frequency": "enum:daily|weekly|monthly|emergency",
+        "mealsOrPackages": "enum:meals|packages|both",
+        "beneficiaryCount": "number?",
+        "eligibilityCriteria": "string?"
+      }
+    },
+    {
+      "serviceId": "svc_microfinance",
+      "label": "Savings, Credit & Microfinance",
+      "icon": "account_balance",
+      "description": "Savings groups, table banking, credit access, and financial literacy programmes",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_microfinance", "ot_cooperative", "ot_enterprise_support",
+        "ot_gender_org", "ot_faith_org", "ot_neighbourhood_assoc"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": false,
+      "fields": {
+        "productType": "enum:savings|credit|both",
+        "groupBased": "boolean",
+        "minGroupSize": "number?",
+        "interestRate": "string?",
+        "eligibilityCriteria": "string?"
+      }
+    },
+    {
+      "serviceId": "svc_job_placement",
+      "label": "Job Placement & Employment Support",
+      "icon": "work",
+      "description": "CV support, job matching, employer connections, and work readiness programmes",
+      "deliveryModes": ["in_person", "online"],
+      "suggestedFor": [
+        "ot_vocational", "ot_enterprise_support", "ot_digital_hub",
+        "ot_youth_advocacy", "ot_gender_org"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "sectorsServed": "string",
+        "placementTracked": "boolean",
+        "cvSupportIncluded": "boolean",
+        "interviewCoachingIncluded": "boolean"
+      }
+    },
+    {
+      "serviceId": "svc_sports_training",
+      "label": "Sports Training & Coaching",
+      "icon": "sports",
+      "description": "Regular coaching sessions, skills development, and team practice",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_football_club", "ot_youth_club", "ot_school",
+        "ot_neighbourhood_assoc"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "sport": "string",
+        "ageGroups": "string",
+        "sessionFrequency": "enum:daily|weekly|biweekly",
+        "equipmentProvided": "boolean",
+        "levelOffered": "enum:beginner|intermediate|competitive|all"
+      }
+    },
+    {
+      "serviceId": "svc_cultural_programme",
+      "label": "Cultural Programme & Performance",
+      "icon": "theater_comedy",
+      "description": "Traditional dance, music, drama, oral history, and heritage events",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_drama_choir", "ot_cultural_group", "ot_youth_club",
+        "ot_school", "ot_faith_org", "ot_neighbourhood_assoc"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "programmeType": "enum:performance|workshop|preservation|all",
+        "language": "string?",
+        "openToPublic": "boolean",
+        "layer4Linked": "boolean",
+        "layer4EntryId": "string?"
+      }
+    },
+    {
+      "serviceId": "svc_marketplace_listing",
+      "label": "Marketplace Presence",
+      "icon": "storefront",
+      "description": "Active listings on the Canopy recycling or artisan marketplace",
+      "deliveryModes": ["platform"],
+      "suggestedFor": [
+        "ot_recycling_org", "ot_artisan_collective", "ot_cooperative",
+        "ot_vocational", "ot_conservation"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "sellerRole": "enum:collector|processor|maker|hybrid",
+        "materialsHandled": "string?",
+        "activeListingCount": "number",
+        "circularCraftBadge": "boolean"
+      }
+    },
+    {
+      "serviceId": "svc_volunteer_programme",
+      "label": "Volunteer Programme",
+      "icon": "volunteer_activism",
+      "description": "Structured opportunities for community members to volunteer with this organisation",
+      "deliveryModes": ["in_person", "online", "hybrid"],
+      "suggestedFor": [
+        "ot_ngo_environment", "ot_cbo_environment", "ot_conservation",
+        "ot_social_welfare", "ot_faith_org", "ot_neighbourhood_assoc",
+        "ot_school", "ot_clinic"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "rolesAvailable": "string",
+        "minHoursPerWeek": "number?",
+        "trainingProvided": "boolean",
+        "verifiedHoursLogged": "boolean"
+      }
+    },
+    {
+      "serviceId": "svc_emergency_response",
+      "label": "Emergency & Crisis Response",
+      "icon": "emergency",
+      "description": "Rapid response services for floods, fires, displacement, or acute community crises",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_ngo_environment", "ot_clinic", "ot_social_welfare",
+        "ot_neighbourhood_assoc", "ot_faith_org", "ot_human_rights"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "responseTypes": "string",
+        "coverage24h": "boolean",
+        "partnerAgencies": "string?"
+      }
+    },
+    {
+      "serviceId": "svc_advocacy_campaign",
+      "label": "Advocacy & Awareness Campaign",
+      "icon": "campaign",
+      "description": "Public campaigns, petitions, community awareness drives on rights or environmental issues",
+      "deliveryModes": ["in_person", "online", "hybrid"],
+      "suggestedFor": [
+        "ot_human_rights", "ot_gender_org", "ot_youth_advocacy",
+        "ot_ngo_environment", "ot_disability_org", "ot_neighbourhood_assoc"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "campaignFocus": "string",
+        "onlinePresence": "boolean",
+        "communityFeedPost": "boolean"
+      }
+    },
+    {
+      "serviceId": "svc_safe_space",
+      "label": "Safe Space & Drop-In Centre",
+      "icon": "house",
+      "description": "A physical safe space where community members can access support, rest, or referral",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_gender_org", "ot_social_welfare", "ot_mental_health",
+        "ot_youth_club", "ot_faith_org", "ot_disability_org"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": false,
+      "fields": {
+        "openingHours": "string",
+        "targetGroups": "string",
+        "referralServicesAvailable": "boolean",
+        "genderSpecific": "boolean"
+      }
+    },
+    {
+      "serviceId": "svc_waste_collection",
+      "label": "Waste Collection Service",
+      "icon": "delete_outline",
+      "description": "Scheduled or on-demand waste collection from households or businesses",
+      "deliveryModes": ["in_person"],
+      "suggestedFor": [
+        "ot_recycling_org", "ot_cbo_environment", "ot_cooperative",
+        "ot_neighbourhood_assoc"
+      ],
+      "requiresBooking": true,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "collectionFrequency": "enum:daily|weekly|biweekly|on_demand",
+        "materialsAccepted": "string",
+        "serviceArea": "string",
+        "feeStructure": "enum:free|subsidised|paid"
+      }
+    },
+    {
+      "serviceId": "svc_layer4_contribution",
+      "label": "Cultural Knowledge Documentation",
+      "icon": "auto_stories",
+      "description": "Contribution of oral histories, traditions, and cultural knowledge to the Canopy Layer 4 archive",
+      "deliveryModes": ["in_person", "platform"],
+      "suggestedFor": [
+        "ot_cultural_group", "ot_drama_choir", "ot_neighbourhood_assoc",
+        "ot_faith_org", "ot_school", "ot_library"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": true,
+      "fields": {
+        "contentCategories": "string",
+        "primaryLanguages": "string",
+        "communityCouncilLinked": "boolean",
+        "visibilityDefault": "enum:public|community_only|restricted"
+      }
+    },
+    {
+      "serviceId": "svc_referral",
+      "label": "Referral & Navigation Services",
+      "icon": "alt_route",
+      "description": "Connecting community members to the right services, organisations, or resources",
+      "deliveryModes": ["in_person", "online"],
+      "suggestedFor": [
+        "ot_social_welfare", "ot_clinic", "ot_mental_health",
+        "ot_human_rights", "ot_gender_org", "ot_disability_org",
+        "ot_neighbourhood_assoc"
+      ],
+      "requiresBooking": false,
+      "canEarnImpactPoints": false,
+      "fields": {
+        "referralNetwork": "string",
+        "canopyOrgLinked": "boolean",
+        "responseTimeHours": "number?"
+      }
+    }
+  ],
+
+  "legalDesignations": [
+    { "id": "ld_ngo", "label": "NGO (Non-Governmental Organisation)" },
+    { "id": "ld_cbo", "label": "CBO (Community-Based Organisation)" },
+    { "id": "ld_npo", "label": "NPO (Non-Profit Organisation)" },
+    { "id": "ld_sacco", "label": "SACCO (Savings & Credit Cooperative)" },
+    { "id": "ld_trust", "label": "Charitable Trust" },
+    { "id": "ld_social_enterprise", "label": "Social Enterprise" },
+    { "id": "ld_cooperative", "label": "Cooperative Society" },
+    { "id": "ld_community_group", "label": "Community Group (Informal / Unregistered)" },
+    { "id": "ld_sports_club", "label": "Sports Club (Sports Kenya Registered)" },
+    { "id": "ld_village_council", "label": "Village Council / Nyumba Kumi" },
+    { "id": "ld_faith_org", "label": "Faith-Based Organisation" },
+    { "id": "ld_school", "label": "Registered Learning Institution" }
+  ],
+
+  "deliveryModes": {
+    "in_person": { "label": "In Person", "icon": "place" },
+    "online": { "label": "Online", "icon": "laptop" },
+    "hybrid": { "label": "Hybrid", "icon": "devices" },
+    "platform": { "label": "On Canopy Platform", "icon": "apps" }
+  },
+
+  "firestoreNotes": {
+    "orgDocument": "Each org in /organisations/{orgId} stores: activeServices: List<String> (serviceIds). Service-specific field values stored in /organisations/{orgId}/services/{serviceId} as a subcollection document.",
+    "serviceInstance": "A service instance document holds: serviceId, isActive, fields (Map<String,dynamic> matching the service fields schema), scheduleInfo (optional recurring schedule), contactForBooking (string?), lastUpdated.",
+    "discovery": "Platform service discovery queries activeServices array on org documents. Filter by serviceId to find all orgs offering a given service in a zone."
+  }
+}

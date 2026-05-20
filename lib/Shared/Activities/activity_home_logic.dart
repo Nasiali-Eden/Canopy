@@ -19,6 +19,7 @@ class ActivityHomeLogic {
         if (!isOrganizer) return const SizedBox.shrink();
 
         return FloatingActionButton(
+          heroTag: 'create_activity_fab',
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(

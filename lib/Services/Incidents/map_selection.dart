@@ -34,6 +34,7 @@ class _MapSelectionScreenState extends State<MapSelectionScreen> {
             : {},
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'map_selection_confirm_fab',
         child: Icon(Icons.check),
         onPressed: () {
           if (_selectedLocation != null) {

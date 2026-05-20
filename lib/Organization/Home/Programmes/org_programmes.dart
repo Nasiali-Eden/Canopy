@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-class OrgOperations extends StatelessWidget {
-  const OrgOperations({Key? key}) : super(key: key);
+class OrgProgrammes extends StatelessWidget {
+  const OrgProgrammes({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Operations'),
+        title: const Text('Programmes'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.white,
@@ -18,13 +18,13 @@ class OrgOperations extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.bolt_outlined,
+              Icons.grid_view_outlined,
               size: 64,
               color: Colors.grey.shade300,
             ),
             const SizedBox(height: 16),
             Text(
-              'Operations',
+              'Programmes',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),

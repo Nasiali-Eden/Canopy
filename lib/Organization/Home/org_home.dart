@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../Shared/theme/app_theme.dart';
 import 'Dashboard/org_dashboard.dart';
+import 'People/org_people.dart';
+import 'Operations/org_operations.dart';
+import 'Programmes/org_programmes.dart';
 import 'Profile/org_profile.dart';
-import 'OurTeam/org_team.dart';
-import 'Volunteers/org_volunteers.dart';
-import 'Map/org_map.dart';
 
 class OrganizationHome extends StatefulWidget {
   const OrganizationHome({super.key});
@@ -16,38 +16,41 @@ class OrganizationHome extends StatefulWidget {
 class _OrganizationHomeState extends State<OrganizationHome> {
   int _index = 0;
 
-  void _showCreateTeamDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Create New Team'),
-          content: const Text('Team creation functionality will be implemented here.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                // TODO: Implement team creation logic
-                Navigator.of(context).pop();
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  static const _destinations = [
+    _NavDestination(
+      icon: Icons.dashboard_outlined,
+      activeIcon: Icons.dashboard_rounded,
+      label: 'Dashboard',
+    ),
+    _NavDestination(
+      icon: Icons.people_outline,
+      activeIcon: Icons.people_rounded,
+      label: 'People',
+    ),
+    _NavDestination(
+      icon: Icons.bolt_outlined,
+      activeIcon: Icons.bolt_rounded,
+      label: 'Operations',
+    ),
+    _NavDestination(
+      icon: Icons.grid_view_outlined,
+      activeIcon: Icons.grid_view_rounded,
+      label: 'Programmes',
+    ),
+    _NavDestination(
+      icon: Icons.business_outlined,
+      activeIcon: Icons.business_rounded,
+      label: 'Profile',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final pages = [
       const OrgDashboard(),
-      const OrgTeam(),
-      const OrgVolunteers(),
-      const OrgMap(),
+      const OrgPeopleScreen(),
+      const OrgOperations(),
+      const OrgProgrammes(),
       const OrgProfile(),
     ];
 
@@ -55,95 +58,153 @@ class _OrganizationHomeState extends State<OrganizationHome> {
       onWillPop: () async => false,
       child: Scaffold(
         backgroundColor: Colors.white,
-      body: IndexedStack(
+        extendBody: true,
+        body: IndexedStack(
           index: _index,
           children: pages,
         ),
-        floatingActionButton: _index == 1
-            ? FloatingActionButton.extended(
-                onPressed: () => _showCreateTeamDialog(context),
-                backgroundColor: AppTheme.primary,
-                icon: const Icon(Icons.add, color: Colors.white),
-                label: const Text(
-                  'Add Team',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                ),
-              )
-            : null,
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 12,
-                offset: const Offset(0, -2),
+        bottomNavigationBar: _FloatingNavBar(
+          currentIndex: _index,
+          destinations: _destinations,
+          onTap: (i) => setState(() => _index = i),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FLOATING NAV BAR
+// ─────────────────────────────────────────────────────────────────────────────
+
+@immutable
+class _NavDestination {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+
+  const _NavDestination({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
+}
+
+class _FloatingNavBar extends StatelessWidget {
+  final int currentIndex;
+  final List<_NavDestination> destinations;
+  final ValueChanged<int> onTap;
+
+  const _FloatingNavBar({
+    required this.currentIndex,
+    required this.destinations,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: bottomPadding + 16,
+      ),
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          color: AppTheme.darkGreen,
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.darkGreen.withOpacity(0.35),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: List.generate(destinations.length, (i) {
+            final dest = destinations[i];
+            final isSelected = i == currentIndex;
+            return Expanded(
+              child: _NavItem(
+                icon: dest.icon,
+                activeIcon: dest.activeIcon,
+                label: dest.label,
+                isSelected: isSelected,
+                onTap: () => onTap(i),
               ),
-            ],
-          ),
-          child: SafeArea(
-            child: NavigationBarTheme(
-              data: NavigationBarThemeData(
-                labelTextStyle: MaterialStateProperty.resolveWith((states) {
-                  if (states.contains(MaterialState.selected)) {
-                    return TextStyle(
-                      color: AppTheme.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    );
-                  }
-                  return TextStyle(
-                    color: AppTheme.darkGreen.withOpacity(0.7),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  );
-                }),
-              ),
-              child: NavigationBar(
-                backgroundColor: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                selectedIndex: _index,
-                onDestinationSelected: (i) {
-                  setState(() => _index = i);
-                },
-                indicatorColor: AppTheme.primary.withOpacity(0.15),
-                height: 70,
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                destinations: [
-                  NavigationDestination(
-                    icon: Icon(Icons.dashboard_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon: Icon(Icons.dashboard, color: AppTheme.primary),
-                    label: 'Dashboard',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.groups_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon: Icon(Icons.groups, color: AppTheme.primary),
-                    label: 'Team',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.volunteer_activism_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon:
-                        Icon(Icons.volunteer_activism, color: AppTheme.primary),
-                    label: 'Volunteers',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.map_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon: Icon(Icons.map, color: AppTheme.primary),
-                    label: 'Map',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.business_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon: Icon(Icons.business, color: AppTheme.primary),
-                    label: 'Profile',
-                  ),
-                ],
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeInOut,
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? 14 : 0,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primary.withOpacity(0.28)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: isSelected
+            ? Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(activeIcon, color: Colors.white, size: 20),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
             ),
+          ],
+        )
+            : Center(
+          child: Icon(
+            icon,
+            color: Colors.white.withOpacity(0.55),
+            size: 22,
           ),
         ),
       ),

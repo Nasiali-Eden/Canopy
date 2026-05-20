@@ -1,0 +1,500 @@
+{
+  "_meta": {
+    "document": "Canopy Organisation Profile — Component-Based Content Model",
+    "version": "1.0",
+    "project": "Canopy Community Platform — SHIELD International",
+    "date": "2026",
+    "principle": "Content on an org profile is assembled from components. A post, a recap, a guide — all are containers. What goes inside them is always a component. Components are reusable, linkable, and typed. A photo component in an event recap is the same schema as a photo component in an article. A service tag component always references a serviceId from the org services taxonomy.",
+    "linkedTaxonomy": "canopy_org_services_taxonomy.json",
+    "firestoreRoot": "/organisations/{orgId}/profile_content/{contentId}"
+  },
+
+  "components": {
+
+    "_comment": "Components are the atomic units. Every content type is a container that holds an ordered list of components. The 'type' field on each component instance determines how it renders.",
+
+    "text": {
+      "componentType": "text",
+      "description": "A block of written content. Supports plain paragraphs, headings, and inline emphasis. Not a full rich-text editor — deliberately constrained to keep content readable on mobile.",
+      "fields": {
+        "body": "string — the text content",
+        "variant": "enum: paragraph | heading | caption | quote | callout",
+        "language": "string — BCP-47 code. Defaults to org primary language.",
+        "translationAvailable": "boolean — true if an AI translation exists in /translations subcollection"
+      },
+      "renderNotes": "Heading renders larger and bolder. Quote renders with left border accent in AppTheme.tertiary gold. Callout renders as a tinted card. Caption renders small and muted, typically below a media component."
+    },
+
+    "image": {
+      "componentType": "image",
+      "description": "A single photo. Can appear as full-width, grid item, or thumbnail depending on container layout.",
+      "fields": {
+        "storageUrl": "string — Firebase Storage URL",
+        "thumbnailUrl": "string — compressed version for feed rendering",
+        "altText": "string — required for accessibility",
+        "caption": "string? — optional caption, renders as text/caption component below",
+        "takenAt": "timestamp? — when the photo was taken, distinct from when it was posted",
+        "geoTagged": "boolean",
+        "location": {
+          "area": "string?",
+          "city": "string?",
+          "lat": "number?",
+          "lng": "number?"
+        },
+        "creditedTo": "string? — photographer name or user ID if a community member took it"
+      }
+    },
+
+    "imageGallery": {
+      "componentType": "imageGallery",
+      "description": "An ordered collection of image components displayed as a swipeable carousel or grid. The first image is the cover.",
+      "fields": {
+        "images": "List<image component> — ordered, minimum 2",
+        "layoutHint": "enum: carousel | grid_2 | grid_3 — hint to renderer, not enforced",
+        "coverIndex": "number — index of the cover image, default 0"
+      },
+      "renderNotes": "Carousel on mobile, grid on larger screens. Dot indicators shown for carousel. Tap opens full-screen viewer."
+    },
+
+    "video": {
+      "componentType": "video",
+      "description": "A video clip. Can be field footage, a short documentary, a training demonstration, or a testimonial. Audio-first option for voice notes.",
+      "fields": {
+        "storageUrl": "string — Firebase Storage URL or external URL (YouTube, Vimeo)",
+        "isExternal": "boolean",
+        "thumbnailUrl": "string — cover frame shown before play",
+        "durationSeconds": "number",
+        "caption": "string?",
+        "transcriptAvailable": "boolean — true if AI transcript exists in /transcripts subcollection",
+        "language": "string — spoken language BCP-47",
+        "subtitlesAvailable": "boolean",
+        "audioOnly": "boolean — renders as audio player with waveform if true"
+      }
+    },
+
+    "stat": {
+      "componentType": "stat",
+      "description": "A single verified metric. Used to represent impact numbers, participation counts, or transformation outcomes. Stats sourced from Canopy platform data are marked verified — those entered manually by the org are marked declared.",
+      "fields": {
+        "label": "string — e.g. 'Trees Planted', 'Volunteers Mobilised', 'KG Plastic Collected'",
+        "value": "string — displayed value, e.g. '340', '2.4 tonnes', '18 months'",
+        "icon": "string — Material icon name",
+        "sourceType": "enum: verified | declared",
+        "sourceRef": "string? — Firestore path to the verified record if sourceType is verified",
+        "period": "string? — e.g. 'Since January 2025', 'Last 90 days'"
+      },
+      "renderNotes": "Verified stats render with a gold checkmark badge. Declared stats render without badge but with a small 'self-reported' label. Stats are never shown without their sourceType — transparency is non-negotiable."
+    },
+
+    "statRow": {
+      "componentType": "statRow",
+      "description": "A horizontal row of 2–4 stat components. The standard impact summary display on org profiles.",
+      "fields": {
+        "stats": "List<stat component> — 2 to 4 items",
+        "backgroundVariant": "enum: plain | tinted | dark"
+      }
+    },
+
+    "serviceTag": {
+      "componentType": "serviceTag",
+      "description": "A reference to a service from the org services taxonomy. Used inline in content to signal what service a piece of content relates to. Always links to the service on the org profile.",
+      "fields": {
+        "serviceId": "string — must match a serviceId in canopy_org_services_taxonomy.json",
+        "serviceLabel": "string — denormalised label for display without taxonomy lookup",
+        "serviceIcon": "string — denormalised icon name",
+        "sectorColor": "string — denormalised hex color from parent sector"
+      },
+      "renderNotes": "Renders as a pill chip in sector color. Tapping navigates to that service's section on the org profile. Never renders as plain text — always styled as a chip."
+    },
+
+    "serviceTags": {
+      "componentType": "serviceTags",
+      "description": "A horizontal scrollable row of serviceTag components. Used at the top or bottom of content to tag which services it relates to.",
+      "fields": {
+        "tags": "List<serviceTag component> — 1 to 6"
+      }
+    },
+
+    "personCard": {
+      "componentType": "personCard",
+      "description": "A profile card for a team member, mentor, facilitator, or community figure. Used in meet-the-team content, mentor directories, and facilitator bios.",
+      "fields": {
+        "name": "string",
+        "role": "string — their role within the org",
+        "avatarUrl": "string?",
+        "bio": "string? — short, 2–3 sentences",
+        "canopyUserId": "string? — if this person has a Canopy account, links to their profile",
+        "serviceIds": "List<string>? — services this person delivers, references taxonomy"
+      }
+    },
+
+    "personCardRow": {
+      "componentType": "personCardRow",
+      "description": "A horizontally scrollable row of personCard components. Standard format for team and facilitator listings.",
+      "fields": {
+        "people": "List<personCard component>",
+        "label": "string? — section label above the row, e.g. 'Our Mentors', 'Meet the Team'"
+      }
+    },
+
+    "testimonial": {
+      "componentType": "testimonial",
+      "description": "A first-person account from a community member, beneficiary, volunteer, or partner about their experience with this org. Audio testimonials are supported alongside text.",
+      "fields": {
+        "quote": "string — the testimonial text",
+        "authorName": "string",
+        "authorRole": "string? — e.g. 'Volunteer since 2024', 'Programme participant'",
+        "authorAvatarUrl": "string?",
+        "canopyUserId": "string? — links to their Canopy profile if they consent",
+        "audioUrl": "string? — voice testimonial in original language",
+        "language": "string — BCP-47",
+        "translationAvailable": "boolean",
+        "consentVerified": "boolean — must be true before publishing"
+      },
+      "renderNotes": "Renders as a card with left quote mark in AppTheme.tertiary gold. Audio button appears if audioUrl is present. Author info below quote. consentVerified = false blocks publish."
+    },
+
+    "testimonialRow": {
+      "componentType": "testimonialRow",
+      "description": "A horizontally scrollable row of testimonial components.",
+      "fields": {
+        "testimonials": "List<testimonial component> — 1 to 6",
+        "label": "string? — e.g. 'What our community says'"
+      }
+    },
+
+    "mapEmbed": {
+      "componentType": "mapEmbed",
+      "description": "A static read-only map showing a location relevant to this content — an event site, service delivery area, or transformation zone. Not interactive beyond tap-to-expand.",
+      "fields": {
+        "lat": "number",
+        "lng": "number",
+        "area": "string",
+        "city": "string",
+        "label": "string — what this location is, e.g. 'Cleanup site — Laini Saba'",
+        "zoomLevel": "number — default 15",
+        "showCanopyStyle": "boolean — true renders Canopy warm desaturated map style"
+      }
+    },
+
+    "impactRecord": {
+      "componentType": "impactRecord",
+      "description": "A verified platform-generated impact event — a completed bounty, a transformation confirmation, a milestone. Content is sourced from Firestore verification records, not entered manually. The org cannot edit this component — they can only choose to include or exclude it.",
+      "fields": {
+        "recordType": "enum: transformation | bounty_completed | milestone | verification_consensus",
+        "recordRef": "string — Firestore path to the source verification or bounty document",
+        "title": "string — auto-generated from record data",
+        "summary": "string — auto-generated summary of what was verified",
+        "verifiedAt": "timestamp",
+        "onChainRef": "string? — Cardano transaction hash",
+        "evidenceImageUrls": "List<string> — photos from the verification record",
+        "verifierCount": "number — how many verifiers reached consensus",
+        "sponsorId": "string? — if bounty-funded, references the sponsor"
+      },
+      "renderNotes": "Always renders with a gold verified badge and blockchain anchor icon if onChainRef is present. Cannot be edited. Tapping expands to full verification detail view. This is the content type that separates Canopy from every other org profile platform — it cannot be faked."
+    },
+
+    "callToAction": {
+      "componentType": "callToAction",
+      "description": "A single clear action for the reader to take. Linked to a service, an event, a volunteer opportunity, or an external resource.",
+      "fields": {
+        "label": "string — button text, e.g. 'Join this programme', 'Register as a volunteer'",
+        "actionType": "enum: join_service | rsvp_event | follow_org | contact | external_link | marketplace_listing",
+        "targetRef": "string — serviceId, eventId, listingId, or URL depending on actionType",
+        "serviceId": "string? — if actionType is join_service, must match taxonomy serviceId",
+        "style": "enum: primary | secondary | outline"
+      }
+    },
+
+    "divider": {
+      "componentType": "divider",
+      "description": "A visual separator between content sections. Keeps long-form content scannable.",
+      "fields": {
+        "variant": "enum: line | space | labeled",
+        "label": "string? — only used when variant is labeled, e.g. 'Impact', 'Our Work'"
+      }
+    },
+
+    "externalLink": {
+      "componentType": "externalLink",
+      "description": "A card linking to an external resource — a report, a partner site, a news article, a government document. Not a raw URL — always has a title and description.",
+      "fields": {
+        "url": "string",
+        "title": "string",
+        "description": "string?",
+        "thumbnailUrl": "string?",
+        "domain": "string — auto-extracted from URL for display"
+      }
+    },
+
+    "layer4Reference": {
+      "componentType": "layer4Reference",
+      "description": "A reference to a cultural knowledge entry in the Canopy Layer 4 archive. Used by cultural orgs, drama groups, and heritage organisations to surface their archive contributions directly on their profile.",
+      "fields": {
+        "entryId": "string — references /cultural_entries/{entryId}",
+        "title": "string — denormalised entry title",
+        "category": "string — denormalised category label",
+        "language": "string — primary language of the entry",
+        "visibility": "string — denormalised visibility state",
+        "previewText": "string? — short excerpt shown on profile card",
+        "coverImageUrl": "string?"
+      },
+      "renderNotes": "Only renders if visibility is public or community_only and the viewing user has access. Sealed and restricted entries never surface on the org profile wall."
+    }
+  },
+
+  "contentTypes": {
+
+    "_comment": "Content types are containers. Each defines which components are allowed inside it, a required component set, and how the profile wall renders it. Components array is always ordered — render order is preserved.",
+
+    "post": {
+      "contentTypeId": "post",
+      "label": "Post",
+      "description": "A short, feed-native update. The lightest content format — quick to create, quick to read. Photo or video optional but encouraged.",
+      "icon": "edit_note",
+      "maxComponents": 6,
+      "requiredComponents": ["text:paragraph"],
+      "allowedComponents": [
+        "text", "image", "imageGallery", "video", "serviceTags", "callToAction"
+      ],
+      "profileWallDisplay": {
+        "cardHeight": "compact",
+        "coverComponent": "first image or video if present, else text-only card",
+        "previewLines": 3
+      }
+    },
+
+    "eventRecap": {
+      "contentTypeId": "eventRecap",
+      "label": "Event Recap",
+      "description": "A record of something that happened. A cleanup, a training session, a match, a ceremony. Built to outlast the moment — photo-forward, stat-verified where possible.",
+      "icon": "event_available",
+      "maxComponents": 20,
+      "requiredComponents": ["text:heading", "imageGallery"],
+      "allowedComponents": [
+        "text", "image", "imageGallery", "video", "stat", "statRow",
+        "serviceTags", "personCardRow", "mapEmbed", "impactRecord",
+        "testimonial", "callToAction", "divider"
+      ],
+      "linkedEventId": "string? — references /events/{eventId} if this recap is tied to a Canopy event",
+      "profileWallDisplay": {
+        "cardHeight": "tall",
+        "coverComponent": "first image in imageGallery",
+        "previewLines": 2,
+        "showStatRow": true
+      }
+    },
+
+    "article": {
+      "contentTypeId": "article",
+      "label": "Article",
+      "description": "A longer-form written piece. A guide, an explainer, an opinion, a how-to. Text is the primary medium — images and stats support the argument.",
+      "icon": "article",
+      "maxComponents": 30,
+      "requiredComponents": ["text:heading", "text:paragraph"],
+      "allowedComponents": [
+        "text", "image", "imageGallery", "video", "stat", "statRow",
+        "serviceTags", "callToAction", "externalLink", "divider",
+        "layer4Reference", "mapEmbed"
+      ],
+      "profileWallDisplay": {
+        "cardHeight": "standard",
+        "coverComponent": "first image if present, else heading card",
+        "previewLines": 3
+      }
+    },
+
+    "impactStory": {
+      "contentTypeId": "impactStory",
+      "label": "Impact Story",
+      "description": "A narrative built around a verified transformation. The story of a specific site, a specific person, or a specific outcome — anchored by a platform-verified impactRecord component. Cannot be published without at least one impactRecord component.",
+      "icon": "verified",
+      "maxComponents": 25,
+      "requiredComponents": ["text:heading", "impactRecord"],
+      "allowedComponents": [
+        "text", "image", "imageGallery", "video", "stat", "statRow",
+        "serviceTags", "testimonial", "testimonialRow", "personCard",
+        "mapEmbed", "impactRecord", "callToAction", "divider", "externalLink"
+      ],
+      "profileWallDisplay": {
+        "cardHeight": "tall",
+        "coverComponent": "first image or impactRecord visual",
+        "previewLines": 2,
+        "showVerifiedBadge": true
+      },
+      "renderNotes": "Impact stories are always visually distinguished on the profile wall — gold border, verified badge, slightly elevated card. They are the content type that proves Canopy is not Instagram."
+    },
+
+    "serviceShowcase": {
+      "contentTypeId": "serviceShowcase",
+      "label": "Service Showcase",
+      "description": "A dedicated profile page for one of the org's active services. Linked directly from the services section of the org profile. Shows what the service is, who delivers it, what it looks like in practice, and how to access it.",
+      "icon": "layers",
+      "maxComponents": 20,
+      "requiredComponents": ["serviceTags", "text:paragraph"],
+      "allowedComponents": [
+        "text", "image", "imageGallery", "video", "stat", "statRow",
+        "serviceTags", "personCardRow", "testimonialRow", "callToAction",
+        "mapEmbed", "divider", "layer4Reference", "externalLink"
+      ],
+      "linkedServiceId": "string — must match a serviceId in canopy_org_services_taxonomy.json. Required.",
+      "profileWallDisplay": {
+        "cardHeight": "standard",
+        "coverComponent": "first image or video",
+        "previewLines": 2,
+        "showServiceChip": true
+      }
+    },
+
+    "teamProfile": {
+      "contentTypeId": "teamProfile",
+      "label": "Meet the Team",
+      "description": "The people behind the org. Mentors, facilitators, staff, community leaders. Person-forward format — faces first, bios second.",
+      "icon": "people",
+      "maxComponents": 15,
+      "requiredComponents": ["personCardRow"],
+      "allowedComponents": [
+        "text", "personCard", "personCardRow", "image", "video",
+        "serviceTags", "callToAction", "divider"
+      ],
+      "profileWallDisplay": {
+        "cardHeight": "standard",
+        "coverComponent": "personCardRow face strip",
+        "previewLines": 1
+      }
+    },
+
+    "videoStory": {
+      "contentTypeId": "videoStory",
+      "label": "Video Story",
+      "description": "A video-first content piece. Field footage, a documentary short, a training demonstration, a before-and-after walkthrough. Video is the primary component — text provides context.",
+      "icon": "play_circle",
+      "maxComponents": 8,
+      "requiredComponents": ["video"],
+      "allowedComponents": [
+        "video", "text", "stat", "serviceTags", "mapEmbed",
+        "callToAction", "impactRecord"
+      ],
+      "profileWallDisplay": {
+        "cardHeight": "tall",
+        "coverComponent": "video thumbnail",
+        "showPlayIcon": true,
+        "previewLines": 1
+      }
+    },
+
+    "communityVoice": {
+      "contentTypeId": "communityVoice",
+      "label": "Community Voice",
+      "description": "Testimonials, voice notes, and written accounts from the people this org serves or works alongside. Audio-native — built for communities where spoken word carries more truth than written text.",
+      "icon": "record_voice_over",
+      "maxComponents": 10,
+      "requiredComponents": ["testimonial"],
+      "allowedComponents": [
+        "testimonial", "testimonialRow", "text", "image",
+        "serviceTags", "callToAction"
+      ],
+      "profileWallDisplay": {
+        "cardHeight": "standard",
+        "coverComponent": "first testimonial card",
+        "previewLines": 3,
+        "showQuoteIcon": true
+      }
+    },
+
+    "knowledgeResource": {
+      "contentTypeId": "knowledgeResource",
+      "label": "Knowledge Resource",
+      "description": "A structured piece of knowledge tied to a service — a course outline, a how-to guide, a workshop summary, a reading list. Designed to be saved and returned to, not just scrolled past.",
+      "icon": "menu_book",
+      "maxComponents": 25,
+      "requiredComponents": ["text:heading", "serviceTags"],
+      "allowedComponents": [
+        "text", "image", "imageGallery", "video", "stat",
+        "serviceTags", "externalLink", "callToAction", "divider",
+        "layer4Reference"
+      ],
+      "linkedServiceId": "string? — optional, references taxonomy serviceId if resource is service-specific",
+      "profileWallDisplay": {
+        "cardHeight": "standard",
+        "coverComponent": "first image or heading card",
+        "previewLines": 2,
+        "showBookmarkOption": true
+      }
+    },
+
+    "orgStory": {
+      "contentTypeId": "orgStory",
+      "label": "Our Story",
+      "description": "The founding narrative and identity of the organisation. Who started it, why, what they set out to change, and where things stand now. One per org — pinned permanently to the top of the profile.",
+      "icon": "auto_stories",
+      "maxComponents": 20,
+      "requiredComponents": ["text:heading", "text:paragraph"],
+      "allowedComponents": [
+        "text", "image", "imageGallery", "video", "stat", "statRow",
+        "personCardRow", "serviceTags", "testimonial", "mapEmbed",
+        "callToAction", "divider", "externalLink", "layer4Reference"
+      ],
+      "singleton": true,
+      "profileWallDisplay": {
+        "cardHeight": "hero",
+        "coverComponent": "first image or video",
+        "pinnedPosition": "top",
+        "previewLines": 3
+      }
+    }
+  },
+
+  "profileWall": {
+    "_comment": "How the org profile wall assembles and orders content for a visiting user.",
+    "assemblyOrder": [
+      "orgStory — always first if published",
+      "pinnedToProfile items — in pinOrder sequence",
+      "impactStory — highest priority in unpinned feed",
+      "eventRecap — second priority",
+      "serviceShowcase — surfaced when user views services tab",
+      "videoStory — third priority in feed",
+      "communityVoice — fourth priority",
+      "article — fifth priority",
+      "knowledgeResource — surfaces in learn tab",
+      "teamProfile — surfaces in about tab",
+      "post — most recent first in feed tab"
+    ],
+    "tabs": {
+      "feed": {
+        "label": "Feed",
+        "includes": ["post", "eventRecap", "impactStory", "videoStory", "communityVoice", "article", "orgStory"]
+      },
+      "impact": {
+        "label": "Impact",
+        "includes": ["impactStory", "eventRecap"],
+        "filterToVerified": true
+      },
+      "services": {
+        "label": "Services",
+        "includes": ["serviceShowcase", "knowledgeResource"],
+        "groupByServiceId": true
+      },
+      "learn": {
+        "label": "Learn",
+        "includes": ["knowledgeResource", "article"],
+        "showBookmarks": true
+      },
+      "about": {
+        "label": "About",
+        "includes": ["orgStory", "teamProfile"]
+      }
+    },
+    "serviceTagFilter": "Any content with a serviceTags component surfaces in the services tab filtered view for that service. A user browsing mentorship services sees all content tagged svc_mentorship across all orgs they follow.",
+    "crossOrgDiscovery": "serviceTag components enable cross-org content discovery. Users can tap a service chip on any content piece to find all Canopy orgs offering that service in their area."
+  },
+
+  "taxonomyLink": {
+    "_comment": "How this model connects to canopy_org_services_taxonomy.json",
+    "serviceTag_component": "Every serviceTag component stores a serviceId that must exist in the taxonomy services array. The serviceLabel and serviceIcon are denormalised at write time for read performance.",
+    "serviceShowcase_contentType": "Every serviceShowcase content piece has a linkedServiceId. The org profile services section is built from the union of activeServices on the org document and published serviceShowcase content.",
+    "knowledgeResource_contentType": "linkedServiceId is optional but strongly recommended. Resources without a service link are shown in the learn tab only. Resources with a service link appear in both learn and services tabs.",
+    "callToAction_component": "When actionType is join_service, targetRef must be a valid serviceId. The platform validates this at publish time.",
+    "personCard_component": "serviceIds on a personCard links that person to specific services in the taxonomy. On the services tab, facilitators surface under the services they deliver."
+  }
+}
