@@ -33,8 +33,8 @@ class _OrganizationHomeState extends State<OrganizationHome> {
       label: 'Operations',
     ),
     _NavDestination(
-      icon: Icons.grid_view_outlined,
-      activeIcon: Icons.grid_view_rounded,
+      icon: Icons.pending_actions,
+      activeIcon: Icons.pending_actions_rounded,
       label: 'Programmes',
     ),
     _NavDestination(
@@ -73,10 +73,7 @@ class _OrganizationHomeState extends State<OrganizationHome> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FLOATING NAV BAR
-// ─────────────────────────────────────────────────────────────────────────────
-
+// NAV DESTINATION MODEL
 @immutable
 class _NavDestination {
   final IconData icon;
@@ -90,6 +87,8 @@ class _NavDestination {
   });
 }
 
+// FLOATING NAV BAR - Elegant & Minimal
+// FLOATING NAV BAR - Clean White / Glass Style
 class _FloatingNavBar extends StatelessWidget {
   final int currentIndex;
   final List<_NavDestination> destinations;
@@ -103,52 +102,55 @@ class _FloatingNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        bottom: bottomPadding + 16,
-      ),
-      child: Container(
-        height: 64,
-        decoration: BoxDecoration(
-          color: AppTheme.darkGreen,
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.darkGreen.withOpacity(0.35),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
+    return SafeArea(
+      minimum: const EdgeInsets.only(bottom: 16),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(999), // Fully pill shape
+            border: Border.all(
+              color: Colors.white.withOpacity(0.6),
+              width: 0.5,
             ),
-            BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: List.generate(destinations.length, (i) {
-            final dest = destinations[i];
-            final isSelected = i == currentIndex;
-            return Expanded(
-              child: _NavItem(
-                icon: dest.icon,
-                activeIcon: dest.activeIcon,
-                label: dest.label,
-                isSelected: isSelected,
-                onTap: () => onTap(i),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: 30,
+                offset: const Offset(0, 12),
               ),
-            );
-          }),
+              BoxShadow(
+                color: AppTheme.darkGreen.withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(destinations.length, (i) {
+              final dest = destinations[i];
+              return Expanded(
+                child: _NavItem(
+                  icon: dest.icon,
+                  activeIcon: dest.activeIcon,
+                  label: dest.label,
+                  isSelected: i == currentIndex,
+                  onTap: () => onTap(i),
+                ),
+              );
+            }),
+          ),
         ),
       ),
     );
   }
 }
 
+// NAV ITEM - Elegant & Sharp
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
@@ -170,42 +172,40 @@ class _NavItem extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeInOut,
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 14 : 0,
-          vertical: 6,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppTheme.primary.withOpacity(0.28)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: isSelected
-            ? Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(activeIcon, color: Colors.white, size: 20),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+            // Icon
+            Icon(
+              isSelected ? activeIcon : icon,
+              size: 26,
+              color: isSelected
+                  ? AppTheme.tertiary
+                  : AppTheme.darkGreen.withOpacity(0.65),
+            ),
+
+            const SizedBox(height: 3),
+
+            // Label
+            AnimatedOpacity(
+              opacity: isSelected ? 1.0 : 0.65,
+              duration: const Duration(milliseconds: 200),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? AppTheme.darkGreen
+                      : AppTheme.darkGreen.withOpacity(0.7),
+                  letterSpacing: -0.1,
+                ),
               ),
             ),
           ],
-        )
-            : Center(
-          child: Icon(
-            icon,
-            color: Colors.white.withOpacity(0.55),
-            size: 22,
-          ),
         ),
       ),
     );

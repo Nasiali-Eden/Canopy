@@ -10,7 +10,8 @@ class _MapSelectionScreenState extends State<MapSelectionScreen> {
   LatLng? _selectedLocation;
   GoogleMapController? _mapController;
 
-  static const LatLng defaultCenter = LatLng(-1.286389, 36.817223); // Example bounds
+  static const LatLng defaultCenter =
+      LatLng(-1.286389, 36.817223); // Example bounds
 
   @override
   Widget build(BuildContext context) {
@@ -26,11 +27,11 @@ class _MapSelectionScreenState extends State<MapSelectionScreen> {
         },
         markers: _selectedLocation != null
             ? {
-          Marker(
-            markerId: MarkerId("selected"),
-            position: _selectedLocation!,
-          ),
-        }
+                Marker(
+                  markerId: MarkerId("selected"),
+                  position: _selectedLocation!,
+                ),
+              }
             : {},
       ),
       floatingActionButton: FloatingActionButton(
