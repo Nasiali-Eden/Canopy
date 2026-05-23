@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../MarketPlace/market_home.dart';
+import '../../../Community/Home/community_home.dart';
 import '../../../Services/Authentication/auth.dart';
+import '../../../Services/Authentication/community_auth.dart';
 import '../../../Shared/Pages/login.dart';
 import '../../../Shared/theme/app_theme.dart';
+import '../../../Shared/widgets/role_context_switcher.dart';
 
 class OrgProfile extends StatefulWidget {
   const OrgProfile({super.key});
@@ -14,7 +18,10 @@ class OrgProfile extends StatefulWidget {
 
 class _OrgProfileState extends State<OrgProfile> {
   final AuthService _authService = AuthService();
+  final CommunityAuthService _communityAuthService = CommunityAuthService();
   late Future<Map<String, dynamic>?> _orgDataFuture;
+  String? _selectedSellerRole;
+  bool _isApplying = false;
 
   @override
   void initState() {
@@ -85,11 +92,41 @@ class _OrgProfileState extends State<OrgProfile> {
       body: FutureBuilder<Map<String, dynamic>?>(
         future: _orgDataFuture,
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                'Error loading organization data',
+                style: TextStyle(color: AppTheme.darkGreen),
+              ),
+            );
+          }
+
+          final orgData = snapshot.data;
+          final currentUser = FirebaseAuth.instance.currentUser;
+          final isOrgRep = currentUser != null &&
+              orgData != null &&
+              orgData['org_rep_uid'] == currentUser.uid;
+
           return SingleChildScrollView(
             child: Column(
               children: [
                 const SizedBox(height: 20),
-                _buildHeader(context, snapshot.data),
+                _buildHeader(context, orgData),
+                const SizedBox(height: 24),
+                // ── Role Context Switcher (only for org rep) ────
+                if (isOrgRep) ...[
+                  _buildRoleContextSwitcher(context, orgData),
+                  const SizedBox(height: 24),
+                ],
+                // ── Marketplace Application Section ────────────
+                if (isOrgRep)
+                  _buildMarketplaceApplicationSection(context, orgData),
                 const SizedBox(height: 24),
                 _buildOrganizationInfo(context),
                 const SizedBox(height: 24),
@@ -174,6 +211,283 @@ class _OrgProfileState extends State<OrgProfile> {
         ],
       ),
     );
+  }
+
+  Widget _buildRoleContextSwitcher(
+      BuildContext context, Map<String, dynamic>? orgData) {
+    final hasMarketplace = orgData?['marketplaceStatus'] == 'approved';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: RoleContextSwitcher(
+        activeContext: 'org',
+        hasMarketplace: hasMarketplace,
+        onOrgTap: () {
+          // Already on org context, no-op
+        },
+        onMemberTap: () {
+          // Switch to Community context (full shell)
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CommunityHomeScreen(),
+            ),
+            (route) => false,
+          );
+        },
+        onMarketplaceTap: () {
+          // Switch to Marketplace context (full shell)
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const SellerHomeScreen(),
+            ),
+            (route) => false,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMarketplaceApplicationSection(
+      BuildContext context, Map<String, dynamic>? orgData) {
+    final marketplaceStatus =
+        orgData?['marketplaceStatus'] as String? ?? 'none';
+    final sellerRole = orgData?['sellerRole'] as String?;
+
+    if (marketplaceStatus == 'approved') {
+      // Don't show anything for approved
+      return const SizedBox.shrink();
+    }
+
+    if (marketplaceStatus == 'pending') {
+      // Show "under review" status
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.amber.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.amber.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Colors.amber,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Marketplace application under review',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.darkGreen.withOpacity(0.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show application card for 'none' or 'rejected'
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.tertiary.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.tertiary.withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Join the Marketplace',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.darkGreen,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Show rejection banner if needed
+            if (marketplaceStatus == 'rejected') ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline,
+                        size: 16, color: Colors.amber.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Previous application was not approved. You may reapply.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.amber.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Text(
+              'Organisations can apply to list materials, processed goods, or artisan products on the Canopy Marketplace. Your verified org identity backs every listing.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.darkGreen.withOpacity(0.65),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Role selection chips
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildRoleChip(
+                  label: 'Collector',
+                  isSelected: _selectedSellerRole == 'collector',
+                  color: AppTheme.primary,
+                  onTap: () =>
+                      setState(() => _selectedSellerRole = 'collector'),
+                ),
+                _buildRoleChip(
+                  label: 'Processor',
+                  isSelected: _selectedSellerRole == 'processor',
+                  color: AppTheme.accent,
+                  onTap: () =>
+                      setState(() => _selectedSellerRole = 'processor'),
+                ),
+                _buildRoleChip(
+                  label: 'Maker / Artisan',
+                  isSelected: _selectedSellerRole == 'maker',
+                  color: AppTheme.tertiary,
+                  onTap: () => setState(() => _selectedSellerRole = 'maker'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Apply button
+            FilledButton(
+              onPressed: _selectedSellerRole != null && !_isApplying
+                  ? () => _applyForMarketplace(orgData)
+                  : null,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.tertiary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(48),
+                disabledBackgroundColor: AppTheme.tertiary.withOpacity(0.5),
+              ),
+              child: _isApplying
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text('Apply to Sell'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoleChip({
+    required String label,
+    required bool isSelected,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? color : color.withOpacity(0.3),
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyForMarketplace(Map<String, dynamic>? orgData) async {
+    if (_selectedSellerRole == null || orgData == null) return;
+
+    final orgId = orgData['orgId'] as String?;
+    if (orgId == null) return;
+
+    setState(() => _isApplying = true);
+
+    try {
+      await _communityAuthService.applyForMarketplaceSeller(
+        orgId: orgId,
+        sellerRole: _selectedSellerRole!,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Application submitted. You\'ll be notified when approved.'),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+        // Reset the selection
+        setState(() => _selectedSellerRole = null);
+      }
+    } catch (e) {
+      debugPrint('Error applying for marketplace: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                const Text('Error submitting application. Please try again.'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isApplying = false);
+      }
+    }
   }
 
   Widget _buildOrganizationInfo(BuildContext context) {

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../Shared/theme/app_theme.dart';
 import '../Pages/login.dart';
-import 'Artists/m_registration.dart';
 import 'components/role_card.dart';
 import 'member/member_register_screen.dart';
 import 'organization/org_register_wizard.dart';
@@ -24,9 +23,6 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
     } else if (_role == 'Org Rep') {
       Navigator.push(context,
           MaterialPageRoute(builder: (_) => const OrgRegisterWizard()));
-    } else {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const MarketplaceRegisterScreen()));
     }
   }
 
@@ -40,10 +36,8 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
         surfaceTintColor: Colors.transparent,
         title: Text(
           'Create Account',
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(color: AppTheme.darkGreen, fontWeight: FontWeight.w700),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: AppTheme.darkGreen, fontWeight: FontWeight.w700),
         ),
       ),
       body: SafeArea(child: _buildRoleSelection()),
@@ -57,10 +51,8 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
         const SizedBox(height: 8),
         Text(
           'How will you join?',
-          style: Theme.of(context)
-              .textTheme
-              .headlineSmall
-              ?.copyWith(color: AppTheme.darkGreen, fontWeight: FontWeight.w800),
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: AppTheme.darkGreen, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 6),
         Text(
@@ -76,7 +68,7 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
         RoleCard(
           title: 'Community Member',
           subtitle:
-          'Report issues, attend cleanups, follow organisations, and engage with your community.',
+              'Report issues, attend cleanups, follow organisations, and engage with your community.',
           icon: Icons.people_outline,
           accent: AppTheme.primary,
           selected: _role == 'Member',
@@ -88,56 +80,11 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
         RoleCard(
           title: 'Organisation Representative',
           subtitle:
-          'Register an NGO, recycler, waste-art collective, clinic, school, or any community org.',
+              'Register an NGO, recycler, waste-art collective, clinic, school, or any community org.',
           icon: Icons.business_outlined,
           accent: const Color(0xFF0097A7),
           selected: _role == 'Org Rep',
           onTap: () => setState(() => _role = 'Org Rep'),
-        ),
-        const SizedBox(height: 14),
-
-        // ── Marketplace ────────────────────────────────────────────────────
-        RoleCard(
-          title: 'Marketplace Member',
-          subtitle:
-          'Collect & sell materials, process recyclables, or create and sell artisan goods made from recovered materials.',
-          icon: Icons.storefront_outlined,
-          accent: AppTheme.tertiary,
-          selected: _role == 'Marketplace',
-          onTap: () => setState(() => _role = 'Marketplace'),
-        ),
-
-        // ── Marketplace role pills (shown only when selected) ──────────────
-        AnimatedSize(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-          child: _role == 'Marketplace'
-              ? Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppTheme.tertiary.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: AppTheme.tertiary.withOpacity(0.25)),
-              ),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _rolePill(Icons.recycling_outlined, 'Collector',
-                      const Color(0xFF2D7A4F)),
-                  _rolePill(Icons.factory_outlined, 'Processor',
-                      const Color(0xFF0097A7)),
-                  _rolePill(Icons.palette_outlined, 'Maker / Artisan',
-                      AppTheme.tertiary),
-                ],
-              ),
-            ),
-          )
-              : const SizedBox.shrink(),
         ),
 
         const SizedBox(height: 10),
@@ -170,20 +117,17 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
         FilledButton(
           onPressed: _continue,
           style: FilledButton.styleFrom(
-            backgroundColor: _role == 'Marketplace'
-                ? AppTheme.tertiary
-                : AppTheme.primary,
+            backgroundColor: AppTheme.primary,
             foregroundColor: Colors.white,
             minimumSize: const Size.fromHeight(56),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: const [
               Text('Continue',
-                  style:
-                  TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               SizedBox(width: 8),
               Icon(Icons.arrow_forward, size: 20),
             ],
@@ -193,37 +137,15 @@ class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
         const SizedBox(height: 24),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Text('Already have an account? ',
-              style:
-              TextStyle(color: AppTheme.darkGreen.withOpacity(0.6))),
+              style: TextStyle(color: AppTheme.darkGreen.withOpacity(0.6))),
           GestureDetector(
-            onTap: () => Navigator.pushReplacement(context,
-                MaterialPageRoute(builder: (_) => const LoginPage())),
+            onTap: () => Navigator.pushReplacement(
+                context, MaterialPageRoute(builder: (_) => const LoginPage())),
             child: Text('Sign In',
                 style: TextStyle(
-                    color: AppTheme.primary,
-                    fontWeight: FontWeight.w700)),
+                    color: AppTheme.primary, fontWeight: FontWeight.w700)),
           ),
         ]),
-      ]),
-    );
-  }
-
-  Widget _rolePill(IconData icon, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 13, color: color),
-        const SizedBox(width: 5),
-        Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: color)),
       ]),
     );
   }

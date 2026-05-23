@@ -369,6 +369,37 @@ class CommunityAuthService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  //  Marketplace Seller Application
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> applyForMarketplaceSeller({
+    required String orgId,
+    required String sellerRole, // 'collector' | 'processor' | 'maker'
+  }) async {
+    try {
+      debugPrint(
+          '[CommunityAuth] applyForMarketplaceSeller orgId=$orgId, role=$sellerRole');
+
+      await _db.collection('organizations').doc(orgId).set({
+        'marketplaceStatus': 'pending',
+        'sellerRole': sellerRole,
+        'marketplaceAppliedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      debugPrint(
+          '[CommunityAuth] marketplace seller application submitted for orgId=$orgId');
+    } on FirebaseException catch (e, st) {
+      debugPrint('[CommunityAuth] FirebaseException: ${e.code} ${e.message}');
+      debugPrint('$st');
+      rethrow;
+    } catch (e, st) {
+      debugPrint('[CommunityAuth] error: $e');
+      debugPrint('$st');
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   //  Guidelines
   // ─────────────────────────────────────────────────────────────────────────
 

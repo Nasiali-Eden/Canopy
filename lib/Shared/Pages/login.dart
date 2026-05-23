@@ -55,9 +55,9 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       debugPrint('[Login] Starting sign in for ${_emailCtrl.text.trim()}');
-      
-      final user = await _authService.signIn(
-          _emailCtrl.text.trim(), _passwordCtrl.text);
+
+      final user =
+          await _authService.signIn(_emailCtrl.text.trim(), _passwordCtrl.text);
 
       if (!mounted) return;
 
@@ -73,7 +73,7 @@ class _LoginPageState extends State<LoginPage> {
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       debugPrint('[Login] FirebaseAuthException: ${e.code} - ${e.message}');
-      
+
       switch (e.code) {
         case 'user-not-found':
         case 'wrong-password':
@@ -88,7 +88,8 @@ class _LoginPageState extends State<LoginPage> {
           break;
         case 'network-timeout':
         case 'network-request-failed':
-          _showError('Network error. Please check your connection and try again.');
+          _showError(
+              'Network error. Please check your connection and try again.');
           break;
         default:
           _showError('Sign-in failed: ${e.message}');
@@ -109,18 +110,20 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       debugPrint('[Login] Routing user ${user.uid}...');
-      
+
       // Try to route using Firestore with retry logic
       final routed = await _routeWithFirestore(db, user.uid);
       if (routed) return;
 
       // If Firestore fails, try offline-first routing using cached profile
-      debugPrint('[Login] Firestore routing failed, trying offline-first routing...');
+      debugPrint(
+          '[Login] Firestore routing failed, trying offline-first routing...');
       final offlineRouted = await _routeOfflineFirst(user.uid);
       if (offlineRouted) return;
 
       // If all else fails, go to join community
-      debugPrint('[Login] No user profile found, routing to JoinCommunityScreen');
+      debugPrint(
+          '[Login] No user profile found, routing to JoinCommunityScreen');
       _navigateTo(const JoinCommunityScreen());
     } catch (e) {
       debugPrint('[Login] Routing error: $e');
@@ -146,7 +149,8 @@ class _LoginPageState extends State<LoginPage> {
               .get(const GetOptions(source: Source.serverAndCache))
               .timeout(timeout);
           if (sellerDoc.exists) {
-            debugPrint('[Login] ✅ Found marketplace seller, routing to SellerHomeScreen');
+            debugPrint(
+                '[Login] ✅ Found marketplace seller, routing to SellerHomeScreen');
             // Cache the profile
             await UserPersistence.saveUserProfile(sellerDoc.data() ?? {});
             _navigateTo(const SellerHomeScreen());
@@ -164,11 +168,45 @@ class _LoginPageState extends State<LoginPage> {
               .get(const GetOptions(source: Source.serverAndCache))
               .timeout(timeout);
           if (orgDoc.exists) {
-            debugPrint('[Login] ��� Found org rep, routing to OrganizationHome');
+            debugPrint(
+                '[Login] ✅ Found org rep, fetching orgId from Users collection');
             // Cache the profile
             await UserPersistence.saveUserProfile(orgDoc.data() ?? {});
-            _navigateTo(const OrganizationHome());
-            return true;
+
+            // Get orgId from Users collection
+            try {
+              final userDoc = await db
+                  .collection('Users')
+                  .doc(uid)
+                  .get(const GetOptions(source: Source.serverAndCache))
+                  .timeout(timeout);
+
+              if (userDoc.exists) {
+                final userData = userDoc.data() as Map<String, dynamic>?;
+                final orgId = userData?['orgId'] as String?;
+
+                if (orgId != null && orgId.isNotEmpty) {
+                  debugPrint(
+                      '[Login] ✅ Found orgId, routing to OrganizationHome');
+                  _navigateTo(const OrganizationHome());
+                  return true;
+                } else {
+                  debugPrint(
+                      '[Login] ⚠️ orgId is missing for Org Rep, falling back to CommunityHome');
+                  _navigateTo(const CommunityHomeScreen());
+                  return true;
+                }
+              } else {
+                debugPrint(
+                    '[Login] ⚠️ Users doc not found for Org Rep, falling back to CommunityHome');
+                _navigateTo(const CommunityHomeScreen());
+                return true;
+              }
+            } catch (e) {
+              debugPrint('[Login] Error fetching orgId: $e');
+              _navigateTo(const CommunityHomeScreen());
+              return true;
+            }
           }
         } catch (e) {
           debugPrint('[Login] Org rep check error: $e');
@@ -182,7 +220,8 @@ class _LoginPageState extends State<LoginPage> {
               .get(const GetOptions(source: Source.serverAndCache))
               .timeout(timeout);
           if (memberDoc.exists) {
-            debugPrint('[Login] ✅ Found community member, routing to CommunityHomeScreen');
+            debugPrint(
+                '[Login] ✅ Found community member, routing to CommunityHomeScreen');
             // Cache the profile
             await UserPersistence.saveUserProfile(memberDoc.data() ?? {});
             _navigateTo(const CommunityHomeScreen());
@@ -215,20 +254,23 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       debugPrint('[Login] Using cached profile for routing');
-      
+
       // Determine role from cached profile
       final role = cachedProfile['role'] as String?;
-      
+
       if (role == 'Org Rep') {
-        debugPrint('[Login] ✅ Cached profile is Org Rep, routing to OrganizationHome');
+        debugPrint(
+            '[Login] ✅ Cached profile is Org Rep, routing to OrganizationHome');
         _navigateTo(const OrganizationHome());
         return true;
       } else if (role == 'Marketplace Seller') {
-        debugPrint('[Login] ✅ Cached profile is Marketplace Seller, routing to SellerHomeScreen');
+        debugPrint(
+            '[Login] ✅ Cached profile is Marketplace Seller, routing to SellerHomeScreen');
         _navigateTo(const SellerHomeScreen());
         return true;
       } else {
-        debugPrint('[Login] ✅ Cached profile is Community Member, routing to CommunityHomeScreen');
+        debugPrint(
+            '[Login] ✅ Cached profile is Community Member, routing to CommunityHomeScreen');
         _navigateTo(const CommunityHomeScreen());
         return true;
       }
@@ -302,7 +344,8 @@ class _LoginPageState extends State<LoginPage> {
                     icon: Icons.email_outlined,
                     keyboardType: TextInputType.emailAddress,
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'Email cannot be empty';
+                      if (v == null || v.isEmpty)
+                        return 'Email cannot be empty';
                       if (!RegExp(r'^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+\.[a-z]+$')
                           .hasMatch(v)) return 'Please enter a valid email';
                       return null;
@@ -321,11 +364,11 @@ class _LoginPageState extends State<LoginPage> {
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
                           color: const Color(0xFF1a1a1a)),
-                      onPressed: () =>
-                          setState(() => _isObscure = !_isObscure),
+                      onPressed: () => setState(() => _isObscure = !_isObscure),
                     ),
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'Password cannot be empty';
+                      if (v == null || v.isEmpty)
+                        return 'Password cannot be empty';
                       if (v.length < 6)
                         return 'Password must be at least 6 characters';
                       return null;
@@ -362,16 +405,14 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 24),
               // Divider
               Row(children: [
-                Expanded(
-                    child: Divider(color: Colors.grey.withOpacity(0.3))),
+                Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text('or',
                       style: TextStyle(
                           color: Colors.grey.withOpacity(0.6), fontSize: 13)),
                 ),
-                Expanded(
-                    child: Divider(color: Colors.grey.withOpacity(0.3))),
+                Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
               ]),
               const SizedBox(height: 24),
               // Social sign-in buttons (placeholder)

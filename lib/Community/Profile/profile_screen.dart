@@ -1,13 +1,21 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../Features/marketplace/marketplace_seller_stub.dart';
+import '../../MarketPlace/market_home.dart';
+import '../../Organization/Home/org_home.dart';
 import '../../Models/user.dart';
+import '../../Organization/Home/Profile/org_profile.dart';
 import '../../Services/Authentication/auth.dart';
+import '../../Services/Authentication/community_auth.dart';
 import '../../Services/Impact/impact_service.dart';
 import '../../Services/Profile/profile_service.dart';
 import '../../Shared/Pages/login.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/widgets/role_context_switcher.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,6 +26,45 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
+  late Future<Map<String, dynamic>?> _userDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      _userDataFuture = _fetchUserData(currentUser.uid);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchUserData(String uid) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final userDoc = await firestore.collection('Users').doc(uid).get();
+      if (userDoc.exists) {
+        return userDoc.data() as Map<String, dynamic>?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error fetching user data: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchOrgData(String orgId) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final orgDoc =
+          await firestore.collection('organizations').doc(orgId).get();
+      if (orgDoc.exists) {
+        return orgDoc.data() as Map<String, dynamic>?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error fetching org data: $e');
+      return null;
+    }
+  }
 
   String _getInitials(String? name) {
     if (name == null || name.trim().isEmpty) return '';
@@ -33,39 +80,109 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = Provider.of<F_User?>(context);
 
-    return StreamBuilder<ProfileData>(
-      stream: ProfileService().watchProfile(userId: user!.uid),
-      builder: (context, snapshot) {
-        final profile = snapshot.data;
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _userDataFuture,
+      builder: (context, userSnapshot) {
+        final userData = userSnapshot.data;
+        final userRole = userData?['role'] as String?;
+        final isOrgRep = userRole == 'Org Rep';
+        final orgId = userData?['orgId'] as String?;
 
-        return Scaffold(
-          backgroundColor: Colors.white,
-        
-          body: SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                _buildHeader(context, profile),
-                const SizedBox(height: 24),
-                _buildPersonalInfo(context, profile),
-                const SizedBox(height: 24),
-                _buildAccountSection(context),
-                const SizedBox(height: 16),
-                _buildNotificationsSection(context),
-                const SizedBox(height: 16),
-                _buildImpactSection(context, user!.uid),
-                const SizedBox(height: 16),
-                _buildRecognitionSection(context),
-                const SizedBox(height: 16),
-                _buildSupportSection(context),
-                const SizedBox(height: 24),
-                _buildSignOutButton(context),
-                const SizedBox(height: 100),
-              ],
-            ),
-          ),
+        return StreamBuilder<ProfileData>(
+          stream: ProfileService().watchProfile(userId: user!.uid),
+          builder: (context, snapshot) {
+            final profile = snapshot.data;
+
+            return Scaffold(
+              backgroundColor: Colors.white,
+              body: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    _buildHeader(context, profile),
+                    const SizedBox(height: 24),
+                    // ── Role Context Switcher (only for org rep) ────
+                    if (isOrgRep && orgId != null)
+                      FutureBuilder<Map<String, dynamic>?>(
+                        future: _fetchOrgData(orgId),
+                        builder: (context, orgSnapshot) {
+                          final orgData = orgSnapshot.data;
+                          final hasMarketplace =
+                              orgData?['marketplaceStatus'] == 'approved';
+                          final sellerRole = orgData?['sellerRole'] as String?;
+
+                          return Column(
+                            children: [
+                              _buildMemberRoleContextSwitcher(
+                                context,
+                                hasMarketplace,
+                                sellerRole,
+                                orgId,
+                              ),
+                              const SizedBox(height: 24),
+                            ],
+                          );
+                        },
+                      ),
+                    _buildPersonalInfo(context, profile),
+                    const SizedBox(height: 24),
+                    _buildAccountSection(context),
+                    const SizedBox(height: 16),
+                    _buildNotificationsSection(context),
+                    const SizedBox(height: 16),
+                    _buildImpactSection(context, user!.uid),
+                    const SizedBox(height: 16),
+                    _buildRecognitionSection(context),
+                    const SizedBox(height: 16),
+                    _buildSupportSection(context),
+                    const SizedBox(height: 24),
+                    _buildSignOutButton(context),
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildMemberRoleContextSwitcher(
+    BuildContext context,
+    bool hasMarketplace,
+    String? sellerRole,
+    String orgId,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: RoleContextSwitcher(
+        activeContext: 'member',
+        hasMarketplace: hasMarketplace,
+        onOrgTap: () {
+          // Switch to Org context (full shell)
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const OrganizationHome(),
+            ),
+            (route) => false,
+          );
+        },
+        onMemberTap: () {
+          // Already on member context, no-op
+        },
+        onMarketplaceTap: () {
+          // Switch to Marketplace context (full shell)
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const SellerHomeScreen(),
+            ),
+            (route) => false,
+          );
+        },
+      ),
     );
   }
 
@@ -92,35 +209,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
-            child: (profile?.photoUrl == null || (profile?.photoUrl ?? '').isEmpty)
-                ? Center(
-                    child: Text(
-                      _getInitials(profile?.name),
-                      style: const TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+            child:
+                (profile?.photoUrl == null || (profile?.photoUrl ?? '').isEmpty)
+                    ? Center(
+                        child: Text(
+                          _getInitials(profile?.name),
+                          style: const TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    : ClipRRect(
+                        borderRadius: BorderRadius.circular(50),
+                        child: CachedNetworkImage(
+                          imageUrl: profile!.photoUrl!,
+                          fit: BoxFit.cover,
+                          errorWidget: (context, url, error) => const Icon(
+                            Icons.person,
+                            size: 50,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                    ),
-                  )
-                : ClipRRect(
-                    borderRadius: BorderRadius.circular(50),
-                    child: CachedNetworkImage(
-                      imageUrl: profile!.photoUrl!,
-                      fit: BoxFit.cover,
-                      errorWidget: (context, url, error) => const Icon(
-                        Icons.person,
-                        size: 50,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
           ),
           const SizedBox(height: 16),
           Text(
-            (profile?.name ?? '').isEmpty
-                ? 'Community Member'
-                : profile!.name,
+            (profile?.name ?? '').isEmpty ? 'Community Member' : profile!.name,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: AppTheme.darkGreen,
                   fontWeight: FontWeight.w700,
@@ -197,9 +313,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _InfoRow(
               icon: Icons.person,
               label: 'Name',
-              value: (profile?.name ?? '').isEmpty
-                  ? 'Not set'
-                  : profile!.name,
+              value: (profile?.name ?? '').isEmpty ? 'Not set' : profile!.name,
             ),
             const SizedBox(height: 12),
             _InfoRow(
