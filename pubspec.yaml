@@ -44,6 +44,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   intl: ^0.20.1  # Internationalization
   provider: ^6.1.2
+  flutter_riverpod: ^2.6.1
   shared_preferences: ^2.3.5  # Local storage
   fl_chart: ^0.66.2
   cached_network_image: ^3.3.1

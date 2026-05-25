@@ -10,6 +10,7 @@ import 'Services/storage/user_persistence.dart';
 import 'Models/user.dart';
 import 'Providers/theme_provider.dart';
 import 'Services/Authentication/auth.dart';
+import 'Culture/culture_home.dart';
 
 import 'Shared/Pages/splash_screen.dart';
 
@@ -221,7 +222,7 @@ class MyApp extends StatelessWidget {
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: themeProvider.mode,
-            home: const SplashScreen(),
+            home: const CultureHomeScreen(orgId: "demo_org_id"),
           );
         },
       ),
