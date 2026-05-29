@@ -1,0 +1,784 @@
+{
+  "_file": "layer4_content_entries.json",
+  "_description": "All cultural content entry types. Every type lives in the same 'cultural_entries' collection, distinguished by 'content_type'. Shared base fields appear on every document; type-specific fields are nested under 'type_data'. This keeps queries simple — filter the whole archive by content_type — while keeping type-specific schemas clean.",
+  "_collection": "cultural_entries",
+
+  "base_fields": {
+    "_note": "Every cultural entry document, regardless of type, carries all of these fields.",
+
+    "id":                       { "type": "string",         "required": true,  "note": "Auto-generated Firestore ID" },
+    "content_type":             { "type": "string",         "required": true,  "enum": ["oral_tradition","food_tradition","ingredient","music_tradition","instrument","ceremony","craft_technique","clothing_tradition","language_entry","place_knowledge","medicine_knowledge","person"] },
+
+    "org_id":                   { "type": "string",         "required": true,  "ref": "contributing_orgs/{id}" },
+    "created_by_uid":           { "type": "string",         "required": true },
+
+    "title":                    { "type": "string",         "required": true,  "note": "Title in the original language" },
+    "title_swahili":            { "type": "string",         "required": false },
+    "title_english":            { "type": "string",         "required": false },
+
+    "locality": {
+      "_note": "How the entry is placed in the hierarchy. country_id always required. Everything else as specific as the contributor can be. Use 'unknown' strings where unspecified.",
+      "country_id":             { "type": "string",         "required": true,  "ref": "heritage_hierarchy/{country_id}" },
+      "region_id":              { "type": "string",         "required": false, "ref": "heritage_hierarchy/{region_id}" },
+      "county_id":              { "type": "string",         "required": false },
+      "community_id":           { "type": "string",         "required": false, "note": "null if community is unknown — valid" },
+      "community_unknown":      { "type": "boolean",        "required": true,  "default": false, "note": "True when contributor cannot identify the community. Distinct from null community_id — this is an explicit 'I don't know'." },
+      "sub_group_id":           { "type": "string",         "required": false },
+      "locality_notes":         { "type": "string",         "required": false, "note": "Free text to clarify locality when the hierarchy doesn't capture it. e.g. 'Practiced in the Kibera Luo diaspora, not the Nyanza homeland'" }
+    },
+
+    "primary_language":         { "type": "string",         "required": false, "note": "ISO 639-3 or language name" },
+    "languages_present":        { "type": "array<string>",  "required": false },
+
+    "description":              { "type": "string",         "required": true,  "note": "The primary text body in the original language. Minimum 50 characters." },
+    "description_swahili":      { "type": "string",         "required": false },
+    "description_english":      { "type": "string",         "required": false },
+
+    "visibility":               { "type": "string",         "required": true,  "default": "public", "enum": ["public","community_only","restricted","sealed"] },
+    "visibility_reason":        { "type": "string",         "required": false, "note": "Required if visibility is restricted or sealed" },
+
+    "tags":                     { "type": "array<string>",  "required": false },
+    "is_seeking_contributors":  { "type": "boolean",        "required": true,  "default": false },
+    "is_endangered":            { "type": "boolean",        "required": true,  "default": false },
+    "is_contested":             { "type": "boolean",        "required": true,  "default": false },
+    "has_active_dispute":       { "type": "boolean",        "required": true,  "default": false },
+
+    "version_count":            { "type": "integer",        "required": true,  "default": 1 },
+    "on_chain_ref":             { "type": "string",         "required": false, "note": "Cardano transaction hash — null until anchored" },
+
+    "cover_image_url":          { "type": "string",         "required": false },
+    "cover_image_media_id":     { "type": "string",         "required": false, "ref": "cultural_media/{id}" },
+
+    "media_count":              { "type": "integer",        "required": true,  "default": 0 },
+    "relation_count":           { "type": "integer",        "required": true,  "default": 0 },
+    "comment_count":            { "type": "integer",        "required": true,  "default": 0 },
+    "view_count":               { "type": "integer",        "required": true,  "default": 0 },
+
+    "created_at":               { "type": "timestamp",      "required": true },
+    "updated_at":               { "type": "timestamp",      "required": true },
+    "last_activity_at":         { "type": "timestamp",      "required": true,  "note": "Updated on new comment, relation, or media — used to surface active entries" },
+
+    "type_data":                { "type": "map",            "required": true,  "note": "Type-specific fields. Schema differs per content_type. See definitions below." }
+  },
+
+  "content_types": {
+
+    "oral_tradition": {
+      "_description": "Oral histories, origin narratives, fables, proverbs, creation myths. A story always belongs to a community. Multiple versions of the same story coexist.",
+      "_community_required": true,
+      "_cover_image": "recommended",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["origin_myth","oral_history","fable","proverb_collection","praise_poem","historical_account"] },
+        "body":                 { "type": "string",         "required": true,  "note": "The story itself, in original language" },
+        "body_swahili":         { "type": "string",         "required": false },
+        "body_english":         { "type": "string",         "required": false },
+        "occasion":             { "type": "string",         "required": false, "note": "When is this told? e.g. 'Fireside at night', 'Initiation season'" },
+        "narrator_type":        { "type": "string",         "required": false, "note": "Who traditionally tells this? e.g. 'Elders only', 'Grandmothers to grandchildren'" },
+        "moral_or_meaning":     { "type": "string",         "required": false },
+        "characters":           { "type": "array<string>",  "required": false, "note": "Named characters in the story" },
+        "is_restricted":        { "type": "boolean",        "required": true,  "default": false, "note": "Some stories may only be told in certain contexts or to certain people" }
+      },
+
+      "example": {
+        "id": "entry_luhya_mwambu_sela",
+        "content_type": "oral_tradition",
+        "org_id": "org_luhya_cultural_council",
+        "created_by_uid": "uid_margaret_otieno",
+        "title": "Mwambu na Sela — Kuanzia",
+        "title_english": "Mwambu and Sela — the Beginning",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_western_kenya",
+          "community_id": "community_luhya",
+          "community_unknown": false,
+          "sub_group_id": null
+        },
+        "primary_language": "luy",
+        "description": "Mwambu na Sela ni hadithi ya asili ya Waluhya...",
+        "description_english": "Mwambu and Sela is the Luhya origin story, recounting the first man and woman placed at the top of Mount Elgon...",
+        "visibility": "public",
+        "tags": ["origin","luhya","mwambu","sela","mount elgon","creation"],
+        "is_seeking_contributors": false,
+        "is_endangered": false,
+        "is_contested": true,
+        "has_active_dispute": false,
+        "version_count": 2,
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_luhya_mwambu_sela/cover.jpg",
+        "media_count": 2,
+        "relation_count": 3,
+        "comment_count": 7,
+        "view_count": 243,
+        "created_at": "2026-02-01T09:00:00Z",
+        "updated_at": "2026-03-10T14:00:00Z",
+        "last_activity_at": "2026-03-21T11:00:00Z",
+        "type_data": {
+          "subcategory": "origin_myth",
+          "body": "Mwambu na Sela balikuwa watu wa kwanza...",
+          "body_english": "Mwambu and Sela were the first people placed by Were (God) at the summit of Mount Elgon...",
+          "occasion": "Told by elders around the fire, especially during initiation seasons",
+          "narrator_type": "Elders only — specifically male elders to male initiates",
+          "moral_or_meaning": "Establishes the Luhya relationship with the land and with Mount Elgon as an ancestral home",
+          "characters": ["Mwambu", "Sela", "Were"],
+          "is_restricted": false
+        }
+      }
+    },
+
+    "food_tradition": {
+      "_description": "Food and drink traditions with cultural context. Community is optional — food can be documented as broadly as 'Kenyan' or as specifically as 'Bukusu ceremonial'.",
+      "_community_required": false,
+      "_cover_image": "required",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["staple_dish","ceremonial_food","fermented_or_brewed","preservation_technique","indigenous_ingredient_use","hospitality_tradition","street_food","harvest_food"] },
+        "occasion":             { "type": "string",         "required": false },
+        "who_prepares":         { "type": "string",         "required": false, "note": "Is preparation gendered, age-specific, or role-specific?" },
+        "main_ingredients":     { "type": "array<string>",  "required": false },
+        "ingredient_ids":       { "type": "array<string>",  "required": false, "ref": "cultural_entries where content_type=ingredient", "note": "Links to ingredient entries in the archive" },
+        "preparation_notes":    { "type": "string",         "required": false },
+        "what_is_being_lost":   { "type": "string",         "required": false, "note": "What knowledge around this food is disappearing in urban settings?" },
+        "is_ceremonial_only":   { "type": "boolean",        "required": true,  "default": false },
+        "season":               { "type": "string",         "required": false }
+      },
+
+      "example": {
+        "id": "entry_luhya_ingokho",
+        "content_type": "food_tradition",
+        "org_id": "org_luhya_cultural_council",
+        "created_by_uid": "uid_grace_nabwire",
+        "title": "Ingokho — Kuku wa Kienyeji",
+        "title_english": "Ingokho — Traditional chicken as cultural symbol",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_western_kenya",
+          "community_id": "community_luhya",
+          "community_unknown": false,
+          "sub_group_id": null
+        },
+        "primary_language": "luy",
+        "description": "Ingokho si chakula tu — ni ishara ya heshima na ukarimu miongoni mwa Waluhya...",
+        "description_english": "Ingokho (traditional chicken) is not simply food among the Luhya — it is the foremost symbol of hospitality and respect. To slaughter ingokho for a guest signals the highest honour...",
+        "visibility": "public",
+        "tags": ["ingokho","chicken","luhya","hospitality","food","western kenya"],
+        "is_seeking_contributors": false,
+        "is_endangered": false,
+        "is_contested": false,
+        "has_active_dispute": false,
+        "version_count": 1,
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_luhya_ingokho/cover.jpg",
+        "media_count": 3,
+        "relation_count": 2,
+        "comment_count": 4,
+        "view_count": 189,
+        "created_at": "2026-02-10T11:00:00Z",
+        "updated_at": "2026-02-10T11:00:00Z",
+        "last_activity_at": "2026-03-15T09:00:00Z",
+        "type_data": {
+          "subcategory": "hospitality_tradition",
+          "occasion": "When guests arrive, especially significant guests or in-laws",
+          "who_prepares": "Traditionally prepared by women of the household",
+          "main_ingredients": ["kuku wa kienyeji", "vitunguu", "nyanya", "chumvi"],
+          "ingredient_ids": [],
+          "preparation_notes": "The chicken is slaughtered and prepared fresh — not frozen. The gizzard is reserved for the male head of the household or honoured elder.",
+          "what_is_being_lost": "In urban Nairobi, the practice of specifically seeking out free-range chicken and the ritual significance of offering it are giving way to broiler chicken with no ceremonial weight.",
+          "is_ceremonial_only": false,
+          "season": null
+        }
+      }
+    },
+
+    "ingredient": {
+      "_description": "Indigenous plants, animals, fungi, and materials used in food, medicine, or craft. Often cross-community — attaches at region or country level.",
+      "_community_required": false,
+      "_cover_image": "required",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["plant_leaf_vegetable","root_tuber","grain_seed","fruit","animal_protein","fungi","spice_herb","medicinal_plant","craft_material"] },
+        "name_indigenous":      { "type": "string",         "required": true,  "note": "Name in the original language — this is the primary record" },
+        "name_swahili":         { "type": "string",         "required": false },
+        "name_english":         { "type": "string",         "required": false },
+        "scientific_name":      { "type": "string",         "required": false },
+        "uses":                 { "type": "array<string>",  "required": true,  "enum_values": ["food","medicine","ceremony","craft","dye","construction","other"] },
+        "season":               { "type": "string",         "required": false },
+        "where_it_grows":       { "type": "string",         "required": false },
+        "harvesting_knowledge": { "type": "string",         "required": false },
+        "is_endangered":        { "type": "boolean",        "required": true,  "default": false }
+      },
+
+      "example": {
+        "id": "entry_ingredient_mrenda",
+        "content_type": "ingredient",
+        "org_id": "org_luhya_cultural_council",
+        "created_by_uid": "uid_grace_nabwire",
+        "title": "Mrenda",
+        "title_english": "Mrenda — Jute mallow",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_western_kenya",
+          "community_id": null,
+          "community_unknown": false,
+          "locality_notes": "Grown and eaten across western Kenya — Luhya, Luo, and Teso communities all use mrenda. Not specific to one group."
+        },
+        "primary_language": "sw",
+        "description": "Mrenda ni mboga ya majani inayolimwa sana magharibi mwa Kenya...",
+        "description_english": "Mrenda (Corchorus olitorius, jute mallow) is a dark leafy vegetable widely grown in western Kenya. It is slimy when cooked and typically prepared with bicarbonate of soda to reduce the sliminess. A staple accompaniment to ugali.",
+        "visibility": "public",
+        "tags": ["mrenda","vegetable","western kenya","luhya","luo","jute mallow"],
+        "is_seeking_contributors": false,
+        "is_endangered": false,
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_ingredient_mrenda/cover.jpg",
+        "media_count": 2,
+        "relation_count": 3,
+        "comment_count": 2,
+        "view_count": 88,
+        "created_at": "2026-02-12T10:00:00Z",
+        "updated_at": "2026-02-12T10:00:00Z",
+        "last_activity_at": "2026-03-01T08:00:00Z",
+        "type_data": {
+          "subcategory": "plant_leaf_vegetable",
+          "name_indigenous": "Mrenda",
+          "name_swahili": "Mrenda",
+          "name_english": "Jute mallow",
+          "scientific_name": "Corchorus olitorius",
+          "uses": ["food"],
+          "season": "Rainy season — grows best during long and short rains",
+          "where_it_grows": "Home gardens, small farms throughout western Kenya and along the Lake Victoria basin",
+          "harvesting_knowledge": "Leaves picked by hand from young plants. Older plants become too fibrous. Usually harvested in the morning before the heat of the day.",
+          "is_endangered": false
+        }
+      }
+    },
+
+    "music_tradition": {
+      "_description": "Musical traditions, drum patterns, songs, lullabies, work songs. Audio is the primary record.",
+      "_community_required": true,
+      "_cover_image": "recommended",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["ceremony_song","work_song","lullaby","praise_song","drumming_tradition","chant_recitation","dance_music","funeral_music","harvest_song"] },
+        "occasion":             { "type": "string",         "required": true },
+        "who_performs":         { "type": "string",         "required": false, "note": "Is performance restricted by gender, age, or role?" },
+        "lyrics":               { "type": "string",         "required": false, "note": "Lyrics in original language" },
+        "lyrics_swahili":       { "type": "string",         "required": false },
+        "lyrics_english":       { "type": "string",         "required": false },
+        "instruments_used":     { "type": "array<string>",  "required": false, "note": "Instrument names — cross-referenced to instrument entries" },
+        "instrument_ids":       { "type": "array<string>",  "required": false, "ref": "cultural_entries where content_type=instrument" },
+        "rhythm_notes":         { "type": "string",         "required": false },
+        "is_restricted":        { "type": "boolean",        "required": true,  "default": false }
+      },
+
+      "example": {
+        "id": "entry_luhya_isukuti",
+        "content_type": "music_tradition",
+        "org_id": "org_luhya_cultural_council",
+        "created_by_uid": "uid_margaret_otieno",
+        "title": "Isukuti — Ngoma ya Waluhya",
+        "title_english": "Isukuti — the Luhya drum tradition",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_western_kenya",
+          "community_id": "community_luhya",
+          "community_unknown": false,
+          "sub_group_id": null
+        },
+        "primary_language": "luy",
+        "description": "Isukuti ni mfumo wa ngoma unaohusisha ngoma tatu za ukubwa tofauti...",
+        "description_english": "Isukuti is an interlocking three-drum tradition using drums of different sizes — the large lichiche, the medium isikulu, and the small kachicha — played together to create layered polyrhythmic patterns.",
+        "visibility": "public",
+        "tags": ["isukuti","drums","luhya","ceremony","imbalu","western kenya"],
+        "is_seeking_contributors": false,
+        "is_endangered": false,
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_luhya_isukuti/cover.jpg",
+        "media_count": 3,
+        "relation_count": 4,
+        "comment_count": 9,
+        "view_count": 412,
+        "created_at": "2026-02-15T09:00:00Z",
+        "updated_at": "2026-03-05T14:00:00Z",
+        "last_activity_at": "2026-03-20T16:00:00Z",
+        "type_data": {
+          "subcategory": "drumming_tradition",
+          "occasion": "Imbalu circumcision ceremony, weddings, harvest celebrations, cultural festivals",
+          "who_performs": "Traditionally performed by men. Women and children may dance to it but do not play the drums.",
+          "lyrics": null,
+          "instruments_used": ["Lichiche", "Isikulu", "Kachicha"],
+          "instrument_ids": ["entry_instrument_isukuti_set"],
+          "rhythm_notes": "The three drums interlock in a call-and-response pattern. The large lichiche sets the base. The kachicha plays the fastest pattern.",
+          "is_restricted": false
+        }
+      }
+    },
+
+    "instrument": {
+      "_description": "Traditional musical instruments — construction, who plays them, their occasions.",
+      "_community_required": false,
+      "_cover_image": "required",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["drum","string_instrument","wind_instrument","idiophone","chordophone","other"] },
+        "materials":            { "type": "string",         "required": false },
+        "construction_notes":   { "type": "string",         "required": false },
+        "who_plays":            { "type": "string",         "required": false },
+        "occasions":            { "type": "array<string>",  "required": false },
+        "pitch_or_tuning":      { "type": "string",         "required": false },
+        "is_endangered":        { "type": "boolean",        "required": true,  "default": false }
+      },
+
+      "example": {
+        "id": "entry_instrument_nyatiti",
+        "content_type": "instrument",
+        "org_id": "org_luo_heritage_trust",
+        "created_by_uid": "uid_john_oduya",
+        "title": "Nyatiti",
+        "title_english": "Nyatiti — Luo eight-string lyre",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_nyanza",
+          "community_id": "community_luo",
+          "community_unknown": false
+        },
+        "primary_language": "luo",
+        "description": "Nyatiti en thum mar Joluo ma en gi tende aboro...",
+        "description_english": "The nyatiti is an eight-string lyre of the Luo people, played with metal finger rings on the right hand and a metal toe ring on the left foot that strikes a bell attached to the instrument's body.",
+        "visibility": "public",
+        "tags": ["nyatiti","luo","lyre","string","nyanza","thum"],
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_instrument_nyatiti/cover.jpg",
+        "media_count": 4,
+        "relation_count": 2,
+        "comment_count": 5,
+        "view_count": 287,
+        "created_at": "2026-02-20T10:00:00Z",
+        "updated_at": "2026-02-20T10:00:00Z",
+        "last_activity_at": "2026-03-12T09:00:00Z",
+        "type_data": {
+          "subcategory": "string_instrument",
+          "materials": "Hardwood frame, animal hide soundboard, gut strings traditionally (now often nylon or wire), metal rings for playing",
+          "construction_notes": "The body is carved from a single piece of hardwood. Historically a specialised craft passed within certain families.",
+          "who_plays": "Traditionally played by men, often professional musicians (jogi). Playing while walking was a mark of skill.",
+          "occasions": ["Funerals","Ceremonies","Entertainment","Historical recitation"],
+          "pitch_or_tuning": "Pentatonic tuning, varies by player tradition",
+          "is_endangered": true
+        }
+      }
+    },
+
+    "ceremony": {
+      "_description": "Ceremonies, rites of passage, seasonal rituals. Always community-bound. Visibility defaults and community council control are critical here.",
+      "_community_required": true,
+      "_cover_image": "recommended",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["rite_of_passage","wedding_marriage","funeral_mourning","harvest_agricultural","healing_medicine","naming_ceremony","seasonal_calendar","ancestral_spiritual"] },
+        "when_it_occurs":       { "type": "string",         "required": true },
+        "duration":             { "type": "string",         "required": false },
+        "participants":         { "type": "string",         "required": true,  "note": "Who takes part? Who may witness?" },
+        "objects_used":         { "type": "array<string>",  "required": false },
+        "foods_used":           { "type": "array<string>",  "required": false },
+        "music_used":           { "type": "array<string>",  "required": false },
+        "clothing_worn":        { "type": "array<string>",  "required": false },
+        "site":                 { "type": "string",         "required": false },
+        "is_restricted":        { "type": "boolean",        "required": true },
+        "restriction_note":     { "type": "string",         "required": false }
+      },
+
+      "example": {
+        "id": "entry_bukusu_imbalu",
+        "content_type": "ceremony",
+        "org_id": "org_luhya_cultural_council",
+        "created_by_uid": "uid_margaret_otieno",
+        "title": "Imbalu — Tohara ya Babukusu",
+        "title_english": "Imbalu — the Bukusu male circumcision ceremony",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_western_kenya",
+          "community_id": "community_luhya",
+          "community_unknown": false,
+          "sub_group_id": "subgroup_bukusu"
+        },
+        "primary_language": "luy",
+        "description": "Imbalu ni sherehe ya tohara inayofanyika kila mwaka wenye nambari ya jozi...",
+        "description_english": "Imbalu is the Bukusu male circumcision ceremony held every even year. It is among the most significant cultural events in western Kenya, drawing participants and observers from across the Bukusu diaspora.",
+        "visibility": "community_only",
+        "visibility_reason": "Detailed ritual content is governed by the Bukusu community council. Public entry contains overview only.",
+        "tags": ["imbalu","bukusu","circumcision","rite of passage","luhya","western kenya"],
+        "is_seeking_contributors": false,
+        "is_endangered": false,
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_bukusu_imbalu/cover_public.jpg",
+        "media_count": 1,
+        "relation_count": 5,
+        "comment_count": 12,
+        "view_count": 684,
+        "created_at": "2026-02-18T08:00:00Z",
+        "updated_at": "2026-03-01T12:00:00Z",
+        "last_activity_at": "2026-03-18T10:00:00Z",
+        "type_data": {
+          "subcategory": "rite_of_passage",
+          "when_it_occurs": "Every even year — August. The next ceremony is 2026.",
+          "duration": "The full process spans several months from preparation through healing",
+          "participants": "Bukusu boys and young men of initiation age. Community members gather as witnesses. Full community participation.",
+          "objects_used": ["Isukuti drums", "Traditional clothing", "Siongo (mud)"],
+          "foods_used": ["Busaa (local brew)", "Roasted meat"],
+          "music_used": ["Isukuti drumming", "Circumcision songs"],
+          "clothing_worn": ["White ceremonial cloth"],
+          "site": "Family homesteads and community gathering grounds in Bungoma County",
+          "is_restricted": true,
+          "restriction_note": "Specific ritual details, sacred songs, and inner ceremony content are sealed. This entry contains community-approved overview only."
+        }
+      }
+    },
+
+    "craft_technique": {
+      "_description": "Traditional making techniques. The most free-standing type — does not require a community. Connects to Layer 2 marketplace artisan profiles.",
+      "_community_required": false,
+      "_cover_image": "required",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["weaving_basketry","pottery_ceramics","metalwork_smithing","woodwork_carving","beadwork_jewellery","textile_cloth","leather_hide","paper_pulp","glass_mosaic"] },
+        "materials":            { "type": "array<string>",  "required": true },
+        "tools":                { "type": "array<string>",  "required": false },
+        "who_practises":        { "type": "string",         "required": false },
+        "learning_method":      { "type": "string",         "required": false, "note": "How is this knowledge transmitted? e.g. 'Mother to daughter', 'Guild apprenticeship'" },
+        "technique_steps":      { "type": "string",         "required": false, "note": "Overview of the making process" },
+        "is_endangered":        { "type": "boolean",        "required": true,  "default": false },
+        "marketplace_link":     { "type": "string",         "required": false, "ref": "Layer 2 artisan profile ID", "note": "Direct link to a Canopy marketplace seller practising this technique" }
+      },
+
+      "example": {
+        "id": "entry_craft_kikoy_weaving",
+        "content_type": "craft_technique",
+        "org_id": "org_coast_cultural_trust",
+        "created_by_uid": "uid_fatuma_hassan",
+        "title": "Uusaji wa Kikoi — Pwani ya Kenya",
+        "title_english": "Kikoy weaving — Kenya coast tradition",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_coast",
+          "community_id": null,
+          "community_unknown": false,
+          "locality_notes": "Practiced across the Swahili coast communities — Mombasa, Malindi, Lamu. Cross-community craft."
+        },
+        "primary_language": "sw",
+        "description": "Kikoi ni kitambaa cha mapambo kilichosukwa kwenye mikono ya wavulana...",
+        "description_english": "Kikoy weaving is a centuries-old Swahili coast textile tradition producing the distinctive fringed cotton wrap worn by men and used across households as towel, garment, and gift.",
+        "visibility": "public",
+        "tags": ["kikoy","weaving","swahili","coast","textile","mombasa"],
+        "is_seeking_contributors": true,
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_craft_kikoy_weaving/cover.jpg",
+        "media_count": 5,
+        "relation_count": 2,
+        "comment_count": 3,
+        "view_count": 156,
+        "created_at": "2026-03-01T10:00:00Z",
+        "updated_at": "2026-03-01T10:00:00Z",
+        "last_activity_at": "2026-03-10T14:00:00Z",
+        "type_data": {
+          "subcategory": "textile_cloth",
+          "materials": ["Cotton thread", "Natural dyes (historically)", "Synthetic dyes (contemporary)"],
+          "tools": ["Traditional loom (using pit loom technique)", "Shuttle", "Comb beater"],
+          "who_practises": "Historically men — weaving on the Swahili coast was a male profession unlike in many other African traditions",
+          "learning_method": "Apprenticeship — young men learn from established weavers, typically within the family trade",
+          "technique_steps": "Cotton warped on a pit loom. Weft threads passed by hand shuttle. Pattern created by variation in colour sequence. Fringe knotted by hand at the cut ends.",
+          "is_endangered": true,
+          "marketplace_link": "seller_coast_textiles_collective"
+        }
+      }
+    },
+
+    "clothing_tradition": {
+      "_description": "Clothing, dress traditions, and body adornment. Usually community-specific. Some patterns carry restricted knowledge.",
+      "_community_required": true,
+      "_cover_image": "required",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["everyday_dress","ceremonial_dress","mourning_dress","initiation_dress","restricted_sacred","body_adornment","pattern_symbolism"] },
+        "occasion":             { "type": "string",         "required": false },
+        "who_wears":            { "type": "string",         "required": true },
+        "materials":            { "type": "array<string>",  "required": false },
+        "pattern_meaning":      { "type": "string",         "required": false },
+        "craft_technique_id":   { "type": "string",         "required": false, "ref": "cultural_entries where content_type=craft_technique" },
+        "is_restricted":        { "type": "boolean",        "required": true,  "default": false }
+      },
+
+      "example": {
+        "id": "entry_maasai_shuka",
+        "content_type": "clothing_tradition",
+        "org_id": "org_maasai_heritage",
+        "created_by_uid": "uid_naomi_senteu",
+        "title": "Shuka ya Kimasai",
+        "title_english": "Maasai shuka — the iconic red cloth",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_rift_valley",
+          "community_id": "community_maasai",
+          "community_unknown": false
+        },
+        "primary_language": "maa",
+        "description": "Shuka ni nguo ya msingi ya Wamasai, inayojulikana kwa rangi yake nyekundu...",
+        "description_english": "The shuka is the foundational garment of the Maasai, recognisable worldwide for its red colour and check pattern. It is worn as a toga-style wrap and carries status, age-grade, and ceremonial significance through its colours and how it is worn.",
+        "visibility": "public",
+        "tags": ["shuka","maasai","clothing","rift valley","red","pattern"],
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_maasai_shuka/cover.jpg",
+        "media_count": 4,
+        "relation_count": 3,
+        "comment_count": 6,
+        "view_count": 521,
+        "created_at": "2026-03-05T09:00:00Z",
+        "updated_at": "2026-03-05T09:00:00Z",
+        "last_activity_at": "2026-03-19T11:00:00Z",
+        "type_data": {
+          "subcategory": "everyday_dress",
+          "occasion": "Daily wear and all ceremonial occasions",
+          "who_wears": "All Maasai — colour and pattern signal age-grade, marital status, and gender. Warriors (moran) typically wear solid red. Elders wear blue or mixed.",
+          "materials": ["Cotton cloth (historically wool or animal hide)", "Natural dyes — red from ochre earth, blue from indigo"],
+          "pattern_meaning": "Solid red: warrior age-grade. Blue and red check: elder men. Pink and purple tones: women and young girls. The pattern itself is not restricted but its wearing context carries meaning.",
+          "craft_technique_id": null,
+          "is_restricted": false
+        }
+      }
+    },
+
+    "language_entry": {
+      "_description": "Language and dialect documentation. Can be a full language overview, a vocabulary collection, or a specific dialect record.",
+      "_community_required": true,
+      "_cover_image": "recommended",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["full_language","dialect_variant","vocabulary_collection","phrases_greetings","proverbs_expressions","naming_conventions","tonal_notes"] },
+        "iso_code":             { "type": "string",         "required": false },
+        "language_family":      { "type": "string",         "required": false },
+        "speakers_approx":      { "type": "string",         "required": false },
+        "endangerment_status":  { "type": "string",         "required": true,  "enum": ["thriving","stable","declining","endangered","critically_endangered","dormant"] },
+        "dialect_of_id":        { "type": "string",         "required": false, "ref": "cultural_entries where content_type=language_entry", "note": "If this is a dialect entry, link to the parent language" },
+        "sample_phrases":       { "type": "array<object>",  "required": false, "schema": { "phrase": "string", "meaning": "string", "pronunciation": "string" } },
+        "script":               { "type": "string",         "required": false },
+        "tonal":                { "type": "boolean",        "required": false }
+      },
+
+      "example": {
+        "id": "entry_language_dholuo",
+        "content_type": "language_entry",
+        "org_id": "org_luo_heritage_trust",
+        "created_by_uid": "uid_john_oduya",
+        "title": "Dholuo",
+        "title_english": "Dholuo — the Luo language",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_nyanza",
+          "community_id": "community_luo",
+          "community_unknown": false
+        },
+        "primary_language": "luo",
+        "description": "Dholuo en lep mar Joluo ma nitie yo ho apar....",
+        "description_english": "Dholuo is a Nilotic language spoken by approximately 4 million Luo people in Kenya and Tanzania, belonging to the Western Nilotic branch of the Nilo-Saharan language family.",
+        "visibility": "public",
+        "tags": ["dholuo","luo","language","nilotic","nyanza"],
+        "cover_image_url": null,
+        "media_count": 3,
+        "relation_count": 4,
+        "comment_count": 8,
+        "view_count": 302,
+        "created_at": "2026-02-25T10:00:00Z",
+        "updated_at": "2026-02-25T10:00:00Z",
+        "last_activity_at": "2026-03-14T12:00:00Z",
+        "type_data": {
+          "subcategory": "full_language",
+          "iso_code": "luo",
+          "language_family": "Nilotic",
+          "speakers_approx": "4 million",
+          "endangerment_status": "stable",
+          "dialect_of_id": null,
+          "sample_phrases": [
+            { "phrase": "Misawa ahinya", "meaning": "I love you very much", "pronunciation": "mee-SAH-wah ah-HIN-yah" },
+            { "phrase": "Idhi nade?", "meaning": "How are you? / How are you going?", "pronunciation": "EE-dee NAH-deh" },
+            { "phrase": "Adhi maber", "meaning": "I am going well", "pronunciation": "AH-dee MAH-bear" }
+          ],
+          "script": "Latin alphabet (no dedicated script)",
+          "tonal": true
+        }
+      }
+    },
+
+    "place_knowledge": {
+      "_description": "Traditional knowledge about sites, rivers, hills, boundaries, and settlements. Primarily geographic rather than tribal — multiple communities can contribute to the same place.",
+      "_community_required": false,
+      "_cover_image": "required",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["sacred_site","settlement_history","river_water","hill_mountain","traditional_boundary","migration_route","historical_event_site","informal_settlement_history"] },
+        "traditional_name":     { "type": "string",         "required": true },
+        "modern_name":          { "type": "string",         "required": false },
+        "gps_lat":              { "type": "float",          "required": false },
+        "gps_lng":              { "type": "float",          "required": false },
+        "gps_accuracy_note":    { "type": "string",         "required": false, "note": "e.g. 'Approximate — site spans 2km radius'" },
+        "cultural_significance":{ "type": "string",         "required": true },
+        "what_has_changed":     { "type": "string",         "required": false },
+        "communities_connected":{ "type": "array<string>",  "required": false, "note": "All community_ids with a relationship to this place" },
+        "is_at_risk":           { "type": "boolean",        "required": true,  "default": false }
+      },
+
+      "example": {
+        "id": "entry_place_kibera_ayany",
+        "content_type": "place_knowledge",
+        "org_id": "org_kibera_heritage_group",
+        "created_by_uid": "uid_peter_aloo",
+        "title": "Ayany — Ardhi ya Kabila la Nubian",
+        "title_english": "Ayany — the original Nubian land grant area",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_nairobi",
+          "community_id": null,
+          "community_unknown": false,
+          "locality_notes": "Kibera — the Ayany area is associated with the original Nubian land grant but is now home to many communities including Luo, Luhya, Kikuyu, and Nubian residents."
+        },
+        "primary_language": "sw",
+        "description": "Ayany ni eneo ndogo ndani ya Kibera ambalo lina historia ndefu ya Wanubia...",
+        "description_english": "Ayany is a sub-estate within Kibera with a layered history: the land was originally part of the 1904 land grant to Sudanese (Nubian) soldiers who served under the British colonial administration. The name 'Kibera' itself derives from the Nubian word 'kibra' meaning 'forest' or 'jungle'.",
+        "visibility": "public",
+        "tags": ["kibera","ayany","nubian","nairobi","land","history","informal settlement"],
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_place_kibera_ayany/cover.jpg",
+        "media_count": 3,
+        "relation_count": 1,
+        "comment_count": 5,
+        "view_count": 198,
+        "created_at": "2026-03-08T09:00:00Z",
+        "updated_at": "2026-03-08T09:00:00Z",
+        "last_activity_at": "2026-03-16T10:00:00Z",
+        "type_data": {
+          "subcategory": "informal_settlement_history",
+          "traditional_name": "Kibra / Ayany",
+          "modern_name": "Ayany Estate, Kibera",
+          "gps_lat": -1.3133,
+          "gps_lng": 36.7889,
+          "gps_accuracy_note": "General area — Ayany sub-estate",
+          "cultural_significance": "The original Nubian settlement gives Kibera its name and its founding community. The Nubian community's land rights here remain contested to this day.",
+          "what_has_changed": "Kibera has grown to a population estimated at 250,000-1 million. The original Nubian character of Ayany persists in the mosque, community gathering structures, and family compounds — but is rapidly changing under development pressure.",
+          "communities_connected": ["community_nubian", "community_luo", "community_luhya"],
+          "is_at_risk": true
+        }
+      }
+    },
+
+    "medicine_knowledge": {
+      "_description": "Traditional healing knowledge. Almost always restricted or community_only. Documented with care — the existence of the knowledge is recorded even when the content is sealed.",
+      "_community_required": true,
+      "_cover_image": "recommended",
+      "_default_visibility": "community_only",
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["medicinal_plant_use","healing_practice","healer_role","birth_midwifery","mental_health_tradition"] },
+        "who_practises":        { "type": "string",         "required": false },
+        "plants_used":          { "type": "array<string>",  "required": false },
+        "ingredient_ids":       { "type": "array<string>",  "required": false, "ref": "cultural_entries where content_type=ingredient" },
+        "conditions_treated":   { "type": "array<string>",  "required": false },
+        "is_restricted":        { "type": "boolean",        "required": true,  "default": true }
+      },
+
+      "example": {
+        "id": "entry_luo_medicine_overview",
+        "content_type": "medicine_knowledge",
+        "org_id": "org_luo_heritage_trust",
+        "created_by_uid": "uid_john_oduya",
+        "title": "Dawa ya Asili ya Joluo — Muhtasari",
+        "title_english": "Luo traditional medicine — overview",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_nyanza",
+          "community_id": "community_luo",
+          "community_unknown": false
+        },
+        "primary_language": "luo",
+        "description": "Joluo nigi system maduong' mar thieth mar chuny kod ringruok...",
+        "description_english": "The Luo hold an extensive system of plant-based and spiritual healing knowledge. This entry documents that the knowledge exists and is held by identified knowledge holders within the community. Detailed content is sealed at the community council's direction.",
+        "visibility": "community_only",
+        "visibility_reason": "Detailed plant use and healing practices are restricted to community members and practising healers. This entry serves as a record of existence and a contact point.",
+        "tags": ["luo","medicine","healing","dawa","nyanza"],
+        "cover_image_url": null,
+        "media_count": 0,
+        "relation_count": 2,
+        "comment_count": 1,
+        "view_count": 44,
+        "created_at": "2026-03-10T11:00:00Z",
+        "updated_at": "2026-03-10T11:00:00Z",
+        "last_activity_at": "2026-03-10T11:00:00Z",
+        "type_data": {
+          "subcategory": "healing_practice",
+          "who_practises": "Designated healers (ajuoga) — a role that is hereditary in certain families",
+          "plants_used": [],
+          "ingredient_ids": [],
+          "conditions_treated": [],
+          "is_restricted": true
+        }
+      }
+    },
+
+    "person": {
+      "_description": "Elders, knowledge holders, artisans, storytellers, and cultural figures. Always requires documented consent.",
+      "_community_required": true,
+      "_cover_image": "recommended",
+      "_consent_required": true,
+
+      "type_data_schema": {
+        "subcategory":          { "type": "string",         "required": true,  "enum": ["elder_knowledge_holder","artisan_craftsperson","healer","storyteller","musician","historical_figure"] },
+        "role":                 { "type": "string",         "required": true },
+        "bio":                  { "type": "string",         "required": true },
+        "knowledge_areas":      { "type": "array<string>",  "required": false },
+        "consent_on_file":      { "type": "boolean",        "required": true },
+        "is_living":            { "type": "boolean",        "required": true },
+        "born_approx":          { "type": "string",         "required": false },
+        "passed_approx":        { "type": "string",         "required": false },
+        "marketplace_link":     { "type": "string",         "required": false, "ref": "Layer 2 seller profile" }
+      },
+
+      "example": {
+        "id": "entry_person_mama_sarah_wekesa",
+        "content_type": "person",
+        "org_id": "org_luhya_cultural_council",
+        "created_by_uid": "uid_margaret_otieno",
+        "title": "Mama Sarah Wekesa",
+        "title_english": "Mama Sarah Wekesa — Luhya elder and story keeper",
+        "locality": {
+          "country_id": "country_kenya",
+          "region_id": "region_western_kenya",
+          "community_id": "community_luhya",
+          "community_unknown": false,
+          "sub_group_id": "subgroup_bukusu"
+        },
+        "primary_language": "luy",
+        "description": "Mama Sarah Wekesa ni mzee wa Babukusu...",
+        "description_english": "Mama Sarah Wekesa is a Bukusu elder from Bungoma County, one of the last living practitioners of the full Imbalu song repertoire and a keeper of Luhya origin stories.",
+        "visibility": "public",
+        "tags": ["elder","bukusu","storyteller","luhya","bungoma","imbalu","knowledge holder"],
+        "cover_image_url": "https://storage.googleapis.com/canopy-heritage/entries/entry_person_mama_sarah_wekesa/cover.jpg",
+        "media_count": 3,
+        "relation_count": 5,
+        "comment_count": 4,
+        "view_count": 167,
+        "created_at": "2026-02-28T10:00:00Z",
+        "updated_at": "2026-02-28T10:00:00Z",
+        "last_activity_at": "2026-03-11T14:00:00Z",
+        "type_data": {
+          "subcategory": "elder_knowledge_holder",
+          "role": "Story keeper and Imbalu song holder",
+          "bio": "Born in Bungoma County approximately 1948. Mama Sarah has participated in 12 Imbalu cycles and holds the full ceremonial song sequence. She learned from her grandmother, who was herself trained in the late colonial period.",
+          "knowledge_areas": ["Imbalu ceremony","Origin stories","Luhya women's songs","Medicinal plant identification"],
+          "consent_on_file": true,
+          "is_living": true,
+          "born_approx": "1948",
+          "passed_approx": null,
+          "marketplace_link": null
+        }
+      }
+    }
+  },
+
+  "indexes": [
+    { "collection": "cultural_entries", "fields": ["content_type", "locality.country_id", "created_at"],       "note": "Browse all food traditions in Kenya, newest first" },
+    { "collection": "cultural_entries", "fields": ["content_type", "locality.community_id", "created_at"],     "note": "Browse all entries for a specific community" },
+    { "collection": "cultural_entries", "fields": ["org_id", "content_type", "updated_at"],                    "note": "Org archive screen — all entries by type" },
+    { "collection": "cultural_entries", "fields": ["org_id", "visibility", "created_at"],                      "note": "Org archive screen — filter by visibility" },
+    { "collection": "cultural_entries", "fields": ["content_type", "locality.region_id", "is_seeking_contributors"], "note": "Surface entries seeking contributors in a region" },
+    { "collection": "cultural_entries", "fields": ["content_type", "is_endangered", "locality.country_id"],    "note": "AI endangerment detection queries" },
+    { "collection": "cultural_entries", "fields": ["visibility", "locality.community_id", "last_activity_at"], "note": "Community feed — recent activity on community entries" }
+  ]
+}

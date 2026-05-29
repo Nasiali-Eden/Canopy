@@ -1,0 +1,226 @@
+{
+  "_file": "layer4_media.json",
+  "_description": "All media attachments across all cultural entries. Audio and images now — video reserved for Phase 2. Every uploaded file is a separate document in this collection. The parent entry stores a denormalised cover_image_url pointing to the primary image document's storage_url to avoid an extra read on list views.",
+  "_collection": "cultural_media",
+  "_document_id": "Auto-generated Firestore ID",
+
+  "schema": {
+    "id":                 { "type": "string",     "required": true },
+    "entry_id":           { "type": "string",     "required": true,  "ref": "cultural_entries/{id}" },
+    "org_id":             { "type": "string",     "required": true,  "ref": "contributing_orgs/{id}" },
+    "uploaded_by_uid":    { "type": "string",     "required": true },
+
+    "media_type":         { "type": "string",     "required": true,
+      "enum": ["audio", "image", "video_future"],
+      "note": "video_future is reserved in schema — not yet supported in the upload UI"
+    },
+    "mime_type":          { "type": "string",     "required": true,
+      "note": "Must match the accepted formats listed under format_constraints"
+    },
+    "media_role":         { "type": "string",     "required": true,
+      "enum": [
+        "cover_image",
+        "documentation_image",
+        "process_image",
+        "artefact_image",
+        "context_image",
+        "historical_image",
+        "pattern_detail",
+        "audio_primary",
+        "audio_supplementary",
+        "audio_phrase",
+        "audio_interview"
+      ],
+      "note": "Determines how the media is displayed and labelled in the entry view and org media library"
+    },
+
+    "storage_url":        { "type": "string",     "required": true,  "note": "Firebase Storage public download URL" },
+    "storage_path":       { "type": "string",     "required": true,  "note": "Full Firebase Storage path — required for deletion. Pattern: cultural_media/{org_id}/{entry_id}/{filename}" },
+    "thumbnail_url":      { "type": "string",     "required": false, "note": "Smaller version for list/grid display. Same as storage_url for images below 200kb. Waveform PNG for audio if generated." },
+
+    "filename":           { "type": "string",     "required": true },
+    "file_size_bytes":    { "type": "integer",    "required": true },
+    "duration_seconds":   { "type": "integer",    "required": false, "note": "Audio only. Null for images." },
+    "width_px":           { "type": "integer",    "required": false, "note": "Images only" },
+    "height_px":          { "type": "integer",    "required": false, "note": "Images only" },
+
+    "caption":            { "type": "string",     "required": false, "note": "In original language preferred" },
+    "caption_english":    { "type": "string",     "required": false },
+    "language":           { "type": "string",     "required": false, "note": "For audio: the language spoken or sung in the recording" },
+
+    "is_primary":         { "type": "boolean",    "required": true,  "default": false,
+      "note": "Exactly one media document per entry should have is_primary: true. This document's storage_url is denormalised into the parent entry's cover_image_url. For audio entries with no image, the primary audio has is_primary: true."
+    },
+
+    "subject_notes":      { "type": "string",     "required": false, "note": "Who or what is depicted. Consent notes if identifiable people appear." },
+    "consent_on_file":    { "type": "boolean",    "required": true,  "default": false, "note": "Must be true before any media featuring identifiable people is set to public visibility" },
+
+    "location_lat":       { "type": "float",      "required": false, "note": "GPS latitude if the photograph was taken at a specific site" },
+    "location_lng":       { "type": "float",      "required": false },
+    "recorded_date":      { "type": "string",     "required": false, "note": "ISO 8601 date string — when the media was captured. e.g. '2025-03-15'" },
+
+    "visibility":         { "type": "string",     "required": true,  "default": "inherits_from_entry",
+      "enum": ["public", "community_only", "restricted", "sealed", "inherits_from_entry"],
+      "note": "Can be set more restrictively than the parent entry but never more permissively. A sealed entry cannot have public media."
+    },
+
+    "created_at":         { "type": "timestamp",  "required": true },
+    "updated_at":         { "type": "timestamp",  "required": false, "note": "Set when caption or visibility is edited" }
+  },
+
+  "format_constraints": {
+    "audio": {
+      "accepted_mime_types": [
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/ogg",
+        "audio/aac",
+        "audio/m4a",
+        "audio/x-m4a"
+      ],
+      "max_file_size_mb": 50,
+      "max_duration_seconds": 1800,
+      "recommended_format": "MP3 at 128kbps minimum for speech. WAV for archival quality where storage allows.",
+      "upload_ui_note": "Show duration and file size in the upload preview. Warn if duration exceeds 30 minutes."
+    },
+    "image": {
+      "accepted_mime_types": [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif"
+      ],
+      "max_file_size_mb": 20,
+      "min_dimension_px": 400,
+      "recommended_format": "JPEG for photographs. PNG for diagrams, patterns, and illustrations.",
+      "upload_ui_note": "Show a preview before confirming. Warn if the image is below 800px on the short side — it will look poor in the grid view."
+    },
+    "video_future": {
+      "status": "reserved — not yet enabled in upload UI",
+      "planned_mime_types": ["video/mp4", "video/quicktime", "video/webm"],
+      "planned_max_file_size_mb": 500,
+      "note": "Schema field exists. Upload UI will surface this in Phase 2."
+    }
+  },
+
+  "media_role_display_rules": {
+    "cover_image":            { "position": "Hero — full width at top of entry view",             "label": "Cover" },
+    "documentation_image":    { "position": "Gallery — appears in entry image carousel",          "label": "Documentation" },
+    "process_image":          { "position": "Gallery — labelled as process/making photograph",    "label": "Process" },
+    "artefact_image":         { "position": "Gallery — close-up of the object or craft",         "label": "Artefact" },
+    "context_image":          { "position": "Gallery — wider context scene",                      "label": "Context" },
+    "historical_image":       { "position": "Gallery — prominently labelled as historical",       "label": "Historical" },
+    "pattern_detail":         { "position": "Gallery — zoomed pattern detail for clothing/craft", "label": "Pattern Detail" },
+    "audio_primary":          { "position": "Pinned player at top of audio section",              "label": "Primary Recording" },
+    "audio_supplementary":    { "position": "Audio section — listed below primary",               "label": "Supplementary" },
+    "audio_phrase":           { "position": "Audio section — displayed inline with phrase text",  "label": "Phrase Recording" },
+    "audio_interview":        { "position": "Audio section — labelled as spoken interview",       "label": "Interview" }
+  },
+
+  "storage_path_convention": {
+    "pattern":  "cultural_media/{org_id}/{entry_id}/{sanitised_filename}",
+    "example":  "cultural_media/org_luhya_cultural_council/entry_luhya_isukuti/isukuti_kakamega_2025.mp3",
+    "note":     "Filenames are sanitised on upload — spaces replaced with underscores, special characters stripped. Original filename is preserved in the filename field of the document."
+  },
+
+  "examples": {
+    "audio_primary": {
+      "id": "media_isukuti_audio_01",
+      "entry_id": "entry_luhya_isukuti",
+      "org_id": "org_luhya_cultural_council",
+      "uploaded_by_uid": "uid_margaret_otieno",
+      "media_type": "audio",
+      "mime_type": "audio/mpeg",
+      "media_role": "audio_primary",
+      "storage_url": "https://storage.googleapis.com/canopy-heritage/cultural_media/org_luhya_cultural_council/entry_luhya_isukuti/isukuti_kakamega_2025.mp3",
+      "storage_path": "cultural_media/org_luhya_cultural_council/entry_luhya_isukuti/isukuti_kakamega_2025.mp3",
+      "thumbnail_url": null,
+      "filename": "isukuti_kakamega_2025.mp3",
+      "file_size_bytes": 4246000,
+      "duration_seconds": 174,
+      "width_px": null,
+      "height_px": null,
+      "caption": "Isukuti ensemble — Kakamega Cultural Festival, March 2025",
+      "caption_english": "Full three-drum isukuti ensemble performing the interlocking polyrhythmic pattern",
+      "language": "luy",
+      "is_primary": true,
+      "subject_notes": "Seven-member Kakamega Cultural Ensemble. Written consent held by org.",
+      "consent_on_file": true,
+      "location_lat": null,
+      "location_lng": null,
+      "recorded_date": "2025-03-15",
+      "visibility": "inherits_from_entry",
+      "created_at": "2026-02-15T09:30:00Z",
+      "updated_at": null
+    },
+    "cover_image": {
+      "id": "media_isukuti_cover",
+      "entry_id": "entry_luhya_isukuti",
+      "org_id": "org_luhya_cultural_council",
+      "uploaded_by_uid": "uid_margaret_otieno",
+      "media_type": "image",
+      "mime_type": "image/jpeg",
+      "media_role": "cover_image",
+      "storage_url": "https://storage.googleapis.com/canopy-heritage/cultural_media/org_luhya_cultural_council/entry_luhya_isukuti/cover.jpg",
+      "storage_path": "cultural_media/org_luhya_cultural_council/entry_luhya_isukuti/cover.jpg",
+      "thumbnail_url": "https://storage.googleapis.com/canopy-heritage/cultural_media/org_luhya_cultural_council/entry_luhya_isukuti/cover_thumb.jpg",
+      "filename": "cover.jpg",
+      "file_size_bytes": 1840000,
+      "duration_seconds": null,
+      "width_px": 1920,
+      "height_px": 1280,
+      "caption": "Wachezaji wa isukuti wakicheza ngomani — Kakamega, 2025",
+      "caption_english": "Isukuti drummers performing at Kakamega cultural grounds, 2025",
+      "language": null,
+      "is_primary": true,
+      "subject_notes": "Drummers are named members of the Kakamega Cultural Ensemble. Consent on file.",
+      "consent_on_file": true,
+      "location_lat": 0.2827,
+      "location_lng": 34.7519,
+      "recorded_date": "2025-03-15",
+      "visibility": "inherits_from_entry",
+      "created_at": "2026-02-15T09:25:00Z",
+      "updated_at": null
+    },
+    "process_image": {
+      "id": "media_kikoy_process_01",
+      "entry_id": "entry_craft_kikoy_weaving",
+      "org_id": "org_coast_cultural_trust",
+      "uploaded_by_uid": "uid_fatuma_hassan",
+      "media_type": "image",
+      "mime_type": "image/jpeg",
+      "media_role": "process_image",
+      "storage_url": "https://storage.googleapis.com/canopy-heritage/cultural_media/org_coast_cultural_trust/entry_craft_kikoy_weaving/loom_hands_01.jpg",
+      "storage_path": "cultural_media/org_coast_cultural_trust/entry_craft_kikoy_weaving/loom_hands_01.jpg",
+      "thumbnail_url": "https://storage.googleapis.com/canopy-heritage/cultural_media/org_coast_cultural_trust/entry_craft_kikoy_weaving/loom_hands_01_thumb.jpg",
+      "filename": "loom_hands_01.jpg",
+      "file_size_bytes": 2100000,
+      "duration_seconds": null,
+      "width_px": 2400,
+      "height_px": 1600,
+      "caption": "Mkono wa mfumaji akipitisha uzi — Mombasa, 2025",
+      "caption_english": "Weaver's hands passing the weft thread through the warps on a traditional pit loom — Mombasa, 2025",
+      "language": null,
+      "is_primary": false,
+      "subject_notes": "Master weaver Bwana Hamisi Ali. Verbal consent given, written consent on file.",
+      "consent_on_file": true,
+      "location_lat": -4.0435,
+      "location_lng": 39.6682,
+      "recorded_date": "2025-08-20",
+      "visibility": "inherits_from_entry",
+      "created_at": "2026-03-01T10:45:00Z",
+      "updated_at": null
+    }
+  },
+
+  "indexes": [
+    { "fields": ["entry_id", "media_type"],               "note": "Get all audio or all images for a single entry" },
+    { "fields": ["entry_id", "is_primary"],               "note": "Resolve cover quickly without reading all media docs" },
+    { "fields": ["org_id", "media_type", "created_at"],   "note": "Org media library screen — Images tab and Audio tab" },
+    { "fields": ["entry_id", "media_role"],               "note": "Filter by role — e.g. all process images for an entry" },
+    { "fields": ["org_id", "consent_on_file"],            "note": "Audit — flag any public media without consent on file" }
+  ]
+}

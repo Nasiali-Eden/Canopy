@@ -1,0 +1,444 @@
+{
+  "_file": "layer4_supporting.json",
+  "_description": "Supporting collections for the cultural archive: media attachments, entry relations, community comments, contributing orgs, and community councils.",
+
+  "collections": {
+
+    "cultural_media": {
+      "_description": "All media attachments across all cultural entries. Audio and images now. Video reserved. Each document is a single file. The entry's cover_image_url is a denormalised copy of the primary image media document's storage_url.",
+      "_collection": "cultural_media",
+      "_document_id": "Auto-generated",
+
+      "schema": {
+        "id":                   { "type": "string",         "required": true },
+        "entry_id":             { "type": "string",         "required": true,  "ref": "cultural_entries/{id}" },
+        "org_id":               { "type": "string",         "required": true,  "ref": "contributing_orgs/{id}" },
+        "uploaded_by_uid":      { "type": "string",         "required": true },
+
+        "media_type":           { "type": "string",         "required": true,  "enum": ["audio","image","video_future"] },
+        "mime_type":            { "type": "string",         "required": true },
+        "media_role":           { "type": "string",         "required": true,
+          "enum": ["cover_image","documentation_image","process_image","artefact_image","context_image","historical_image","pattern_detail","audio_primary","audio_supplementary","audio_phrase","audio_interview"]
+        },
+
+        "storage_url":          { "type": "string",         "required": true },
+        "storage_path":         { "type": "string",         "required": true,  "note": "Firebase Storage path. Used for deletion." },
+        "thumbnail_url":        { "type": "string",         "required": false, "note": "For images: same as storage_url at reduced size. For audio: waveform image if generated." },
+
+        "filename":             { "type": "string",         "required": true },
+        "file_size_bytes":      { "type": "integer",        "required": true },
+        "duration_seconds":     { "type": "integer",        "required": false, "note": "Audio and video only" },
+        "width_px":             { "type": "integer",        "required": false, "note": "Images only" },
+        "height_px":            { "type": "integer",        "required": false, "note": "Images only" },
+
+        "caption":              { "type": "string",         "required": false, "note": "In original language preferred" },
+        "caption_english":      { "type": "string",         "required": false },
+        "language":             { "type": "string",         "required": false, "note": "For audio: language spoken or sung" },
+        "is_primary":           { "type": "boolean",        "required": true,  "default": false, "note": "One per entry should be true — this is the cover" },
+
+        "subject_notes":        { "type": "string",         "required": false, "note": "Who or what is depicted" },
+        "consent_on_file":      { "type": "boolean",        "required": true,  "default": false },
+        "location_lat":         { "type": "float",          "required": false },
+        "location_lng":         { "type": "float",          "required": false },
+        "recorded_date":        { "type": "string",         "required": false, "note": "ISO date string — when was this taken or recorded" },
+
+        "visibility":           { "type": "string",         "required": true,  "default": "inherits_from_entry", "enum": ["public","community_only","restricted","sealed","inherits_from_entry"] },
+
+        "created_at":           { "type": "timestamp",      "required": true }
+      },
+
+      "format_constraints": {
+        "audio": {
+          "accepted_mime_types": ["audio/mpeg","audio/mp3","audio/wav","audio/x-wav","audio/ogg","audio/aac","audio/m4a","audio/x-m4a"],
+          "max_file_size_mb": 50,
+          "max_duration_seconds": 1800
+        },
+        "image": {
+          "accepted_mime_types": ["image/jpeg","image/png","image/webp","image/heic","image/heif"],
+          "max_file_size_mb": 20,
+          "min_dimension_px": 400
+        },
+        "video_future": {
+          "status": "reserved — not yet supported in upload UI",
+          "planned_mime_types": ["video/mp4","video/quicktime","video/webm"]
+        }
+      },
+
+      "example": {
+        "id": "media_isukuti_audio_primary",
+        "entry_id": "entry_luhya_isukuti",
+        "org_id": "org_luhya_cultural_council",
+        "uploaded_by_uid": "uid_margaret_otieno",
+        "media_type": "audio",
+        "mime_type": "audio/mpeg",
+        "media_role": "audio_primary",
+        "storage_url": "https://storage.googleapis.com/canopy-heritage/cultural_media/org_luhya_cultural_council/entry_luhya_isukuti/isukuti_kakamega_festival_2025.mp3",
+        "storage_path": "cultural_media/org_luhya_cultural_council/entry_luhya_isukuti/isukuti_kakamega_festival_2025.mp3",
+        "thumbnail_url": null,
+        "filename": "isukuti_kakamega_festival_2025.mp3",
+        "file_size_bytes": 4246000,
+        "duration_seconds": 174,
+        "width_px": null,
+        "height_px": null,
+        "caption": "Isukuti ensemble — Kakamega Cultural Festival, March 2025",
+        "caption_english": "Full isukuti three-drum ensemble performing the interlocking pattern",
+        "language": "luy",
+        "is_primary": true,
+        "subject_notes": "Seven-member Kakamega Cultural Ensemble. Consent on file with org.",
+        "consent_on_file": true,
+        "location_lat": null,
+        "location_lng": null,
+        "recorded_date": "2025-03-15",
+        "visibility": "inherits_from_entry",
+        "created_at": "2026-02-15T09:30:00Z"
+      },
+
+      "indexes": [
+        { "fields": ["entry_id", "media_type"],              "note": "Get all audio or all images for an entry" },
+        { "fields": ["org_id", "media_type", "created_at"],  "note": "Org media library screen" },
+        { "fields": ["entry_id", "is_primary"],              "note": "Resolve cover image quickly" }
+      ]
+    },
+
+    "cultural_relations": {
+      "_description": "Typed links between two cultural entries. Both entries display the relation from their own perspective using label_forward and label_reverse. AI suggests, council or org confirms.",
+      "_collection": "cultural_relations",
+      "_document_id": "Auto-generated",
+
+      "schema": {
+        "id":                       { "type": "string",     "required": true },
+        "from_entry_id":            { "type": "string",     "required": true,  "ref": "cultural_entries/{id}" },
+        "to_entry_id":              { "type": "string",     "required": true,  "ref": "cultural_entries/{id}" },
+
+        "relation_type":            { "type": "string",     "required": true,
+          "enum": [
+            "food_served_in_ceremony",
+            "music_played_in_ceremony",
+            "clothing_worn_in_ceremony",
+            "craft_used_in_ceremony",
+            "story_explains_tradition",
+            "craft_produces_clothing",
+            "craft_produces_instrument",
+            "ingredient_used_in_food",
+            "ingredient_used_in_medicine",
+            "ingredient_used_in_craft",
+            "music_uses_instrument",
+            "place_site_of_ceremony",
+            "language_names_tradition",
+            "person_holds_knowledge",
+            "craft_links_to_marketplace",
+            "same_tradition_variant",
+            "cross_community_parallel",
+            "historical_precedes",
+            "diaspora_variation",
+            "other"
+          ]
+        },
+
+        "label_forward":            { "type": "string",     "required": true,  "note": "How the relation reads from from_entry perspective. e.g. 'Played during'" },
+        "label_reverse":            { "type": "string",     "required": true,  "note": "How the relation reads from to_entry perspective. e.g. 'Music includes'" },
+        "relation_note":            { "type": "string",     "required": false, "note": "Specific note for this relation — more detail than the label" },
+
+        "status":                   { "type": "string",     "required": true,  "default": "suggested_by_ai",
+          "enum": ["suggested_by_ai","suggested_by_community","suggested_by_org","confirmed","rejected"]
+        },
+        "strength":                 { "type": "string",     "required": true,  "enum": ["strong","moderate","speculative"] },
+
+        "suggested_by_uid":         { "type": "string",     "required": false },
+        "suggested_via_comment_id": { "type": "string",     "required": false, "ref": "cultural_comments/{id}" },
+        "confirmed_by_uid":         { "type": "string",     "required": false },
+
+        "created_at":               { "type": "timestamp",  "required": true },
+        "confirmed_at":             { "type": "timestamp",  "required": false }
+      },
+
+      "relation_type_labels": {
+        "food_served_in_ceremony":      { "forward": "Served during",           "reverse": "Includes food" },
+        "music_played_in_ceremony":     { "forward": "Played during",           "reverse": "Music includes" },
+        "clothing_worn_in_ceremony":    { "forward": "Worn during",             "reverse": "Dress includes" },
+        "craft_used_in_ceremony":       { "forward": "Used in",                 "reverse": "Uses craft" },
+        "story_explains_tradition":     { "forward": "Origin story of",         "reverse": "Explained by" },
+        "craft_produces_clothing":      { "forward": "Used to make",            "reverse": "Made by" },
+        "craft_produces_instrument":    { "forward": "Used to make",            "reverse": "Made by" },
+        "ingredient_used_in_food":      { "forward": "Key ingredient in",       "reverse": "Uses ingredient" },
+        "ingredient_used_in_medicine":  { "forward": "Used in",                 "reverse": "Uses ingredient" },
+        "ingredient_used_in_craft":     { "forward": "Material for",            "reverse": "Uses ingredient" },
+        "music_uses_instrument":        { "forward": "Played on",               "reverse": "Featured in" },
+        "place_site_of_ceremony":       { "forward": "Site of",                 "reverse": "Takes place at" },
+        "language_names_tradition":     { "forward": "Names this tradition as", "reverse": "Named in language" },
+        "person_holds_knowledge":       { "forward": "Knowledge holder for",    "reverse": "Held by" },
+        "craft_links_to_marketplace":   { "forward": "Practiced by",            "reverse": "Technique documented in archive" },
+        "same_tradition_variant":       { "forward": "Variant of",              "reverse": "Has variant" },
+        "cross_community_parallel":     { "forward": "Similar tradition in",    "reverse": "Similar tradition in" },
+        "historical_precedes":          { "forward": "Historically precedes",   "reverse": "Follows from" },
+        "diaspora_variation":           { "forward": "Diaspora variation of",   "reverse": "Origin tradition" },
+        "other":                        { "forward": "Related to",              "reverse": "Related to" }
+      },
+
+      "example": {
+        "id": "relation_isukuti_imbalu",
+        "from_entry_id": "entry_luhya_isukuti",
+        "to_entry_id": "entry_bukusu_imbalu",
+        "relation_type": "music_played_in_ceremony",
+        "label_forward": "Played during",
+        "label_reverse": "Music includes",
+        "relation_note": "Isukuti drumming begins at dawn when the initiate begins their village walk. The rhythm pattern changes at each stage of the ceremony.",
+        "status": "confirmed",
+        "strength": "strong",
+        "suggested_by_uid": null,
+        "suggested_via_comment_id": null,
+        "confirmed_by_uid": "uid_council_elder_bungoma",
+        "created_at": "2026-02-16T10:00:00Z",
+        "confirmed_at": "2026-02-18T09:00:00Z"
+      },
+
+      "indexes": [
+        { "fields": ["from_entry_id", "status"],                    "note": "All relations from an entry, filter by status" },
+        { "fields": ["to_entry_id", "status"],                      "note": "All relations pointing to an entry" },
+        { "fields": ["status", "confirmed_by_uid"],                 "note": "All unconfirmed suggestions for a council member" },
+        { "fields": ["from_entry_id", "relation_type"],             "note": "Specific relation type for an entry" }
+      ]
+    },
+
+    "cultural_comments": {
+      "_description": "Community conversation on cultural entries. Three voice tiers with different display weights. Disputes route privately — not visible publicly until resolved.",
+      "_collection": "cultural_comments",
+      "_document_id": "Auto-generated",
+
+      "schema": {
+        "id":                       { "type": "string",     "required": true },
+        "entry_id":                 { "type": "string",     "required": true,  "ref": "cultural_entries/{id}" },
+
+        "author_uid":               { "type": "string",     "required": true,  "note": "Never null. No anonymous comments." },
+        "author_display_name":      { "type": "string",     "required": true },
+        "author_org_id":            { "type": "string",     "required": false, "note": "Set if the author is writing as an org representative" },
+
+        "comment_type":             { "type": "string",     "required": true,
+          "enum": ["community_voice","contributor_voice","open_voice"],
+          "note": "community_voice: verified community member. contributor_voice: the org that submitted the entry. open_voice: all others."
+        },
+        "author_community_id":      { "type": "string",     "required": false, "note": "For community_voice only" },
+
+        "comment_action":           { "type": "string",     "required": true,
+          "enum": ["add_variation","propose_relation","ask_question","dispute","extend","general"]
+        },
+
+        "body":                     { "type": "string",     "required": true },
+        "language":                 { "type": "string",     "required": false },
+
+        "is_visible_publicly":      { "type": "boolean",    "required": true,  "default": true, "note": "Set to false for dispute comments until council resolves" },
+
+        "dispute_status":           { "type": "string",     "required": false,
+          "enum": ["pending_council","under_review","resolved_accepted","resolved_rejected","resolved_entry_updated"],
+          "note": "Only present when comment_action is dispute"
+        },
+        "dispute_category":         { "type": "string",     "required": false,
+          "enum": ["inaccuracy_claimed","cultural_sensitivity","incomplete","inappropriate_visibility","other"]
+        },
+        "dispute_resolution_note":  { "type": "string",     "required": false },
+        "council_reviewer_uid":     { "type": "string",     "required": false },
+
+        "proposed_variation_text":  { "type": "string",     "required": false, "note": "For add_variation: the full alternate version being proposed" },
+        "spawned_version_entry_id": { "type": "string",     "required": false, "note": "If the variation was elevated to a full entry version by council" },
+
+        "proposed_relation_type":   { "type": "string",     "required": false, "note": "For propose_relation: the relation type" },
+        "proposed_to_entry_id":     { "type": "string",     "required": false },
+        "spawned_relation_id":      { "type": "string",     "required": false, "note": "If the proposed relation was accepted" },
+
+        "is_pinned_answer":         { "type": "boolean",    "required": true,  "default": false, "note": "Community voice answer pinned to a question comment" },
+        "parent_comment_id":        { "type": "string",     "required": false, "note": "For replies within same comment_type tier" },
+
+        "upvote_count":             { "type": "integer",    "required": true,  "default": 0 },
+        "reply_count":              { "type": "integer",    "required": true,  "default": 0 },
+
+        "created_at":               { "type": "timestamp",  "required": true },
+        "edited_at":                { "type": "timestamp",  "required": false }
+      },
+
+      "examples": {
+        "community_voice_variation": {
+          "id": "comment_isukuti_maragoli_variation",
+          "entry_id": "entry_luhya_isukuti",
+          "author_uid": "uid_grace_nabwire",
+          "author_display_name": "Grace Nabwire",
+          "comment_type": "community_voice",
+          "author_community_id": "community_luhya",
+          "comment_action": "add_variation",
+          "body": "Among the Maragoli, isukuti is played with only two drums — the large lichiche and the kachicha. The middle isikulu is a specifically Bukusu and Kabras addition. This distinction matters for accurate documentation.",
+          "language": "en",
+          "is_visible_publicly": true,
+          "proposed_variation_text": "Among the Maragoli sub-group, the isukuti tradition uses two drums rather than three — the lichiche and the kachicha — producing a different rhythmic character from the three-drum Bukusu form.",
+          "spawned_version_entry_id": null,
+          "upvote_count": 7,
+          "reply_count": 2,
+          "created_at": "2026-03-10T11:00:00Z",
+          "edited_at": null
+        },
+        "open_voice_question": {
+          "id": "comment_isukuti_question_diaspora",
+          "entry_id": "entry_luhya_isukuti",
+          "author_uid": "uid_samuel_wafula_nairobi",
+          "author_display_name": "Samuel Wafula",
+          "comment_type": "open_voice",
+          "comment_action": "ask_question",
+          "body": "Is isukuti still taught to young people in Kakamega? I grew up in Nairobi and have never heard it performed live. Is there anywhere in Nairobi where the tradition is practiced?",
+          "language": "en",
+          "is_visible_publicly": true,
+          "upvote_count": 12,
+          "reply_count": 1,
+          "is_pinned_answer": false,
+          "created_at": "2026-03-15T14:00:00Z",
+          "edited_at": null
+        },
+        "dispute_comment": {
+          "id": "comment_imbalu_dispute_001",
+          "entry_id": "entry_bukusu_imbalu",
+          "author_uid": "uid_community_member_bungoma",
+          "author_display_name": "Anonymous (dispute)",
+          "comment_type": "community_voice",
+          "author_community_id": "community_luhya",
+          "comment_action": "dispute",
+          "body": "The entry states the ceremony occurs every even year in August. This is incomplete — the preparation period begins in January and the dances start in July. August is only the circumcision day itself. The full ceremony is being misrepresented.",
+          "language": "en",
+          "is_visible_publicly": false,
+          "dispute_status": "pending_council",
+          "dispute_category": "inaccuracy_claimed",
+          "upvote_count": 0,
+          "reply_count": 0,
+          "created_at": "2026-03-18T08:00:00Z",
+          "edited_at": null
+        }
+      },
+
+      "indexes": [
+        { "fields": ["entry_id", "is_visible_publicly", "created_at"],        "note": "Public thread for an entry — ordered newest first" },
+        { "fields": ["entry_id", "comment_type", "created_at"],               "note": "All community_voice comments for an entry" },
+        { "fields": ["entry_id", "comment_action", "dispute_status"],         "note": "All pending disputes on an entry" },
+        { "fields": ["author_org_id", "created_at"],                          "note": "All comments from an org's reps — contributor voice feed" },
+        { "fields": ["comment_action", "dispute_status", "entry_id"],         "note": "Council dispute queue — all pending disputes" }
+      ]
+    },
+
+    "contributing_orgs": {
+      "_description": "Verified organisations authorised to contribute cultural content. Each org has one or more content managers. An org can contribute across multiple communities.",
+      "_collection": "contributing_orgs",
+      "_document_id": "Matches the org_id from the main Canopy organisations collection",
+
+      "schema": {
+        "id":                       { "type": "string",     "required": true,  "note": "Same as organisations/{id} in main Canopy Firestore" },
+        "org_name":                 { "type": "string",     "required": true },
+        "org_rep_uid":              { "type": "string",     "required": true,  "note": "Primary account holder" },
+        "content_manager_uids":     { "type": "array<string>", "required": true, "default": [], "note": "All UIDs authorised to create, edit, and submit cultural entries on behalf of this org" },
+        "is_heritage_verified":     { "type": "boolean",    "required": true,  "default": false, "note": "Separate from the general org verification — specifically verified as a cultural documentation partner" },
+        "communities_authorised":   { "type": "array<string>", "required": true, "default": [], "ref": "heritage_hierarchy/{community_id}", "note": "Communities this org is authorised to document. Empty means unrestricted — org can contribute to any community." },
+        "primary_language":         { "type": "string",     "required": false },
+        "description":              { "type": "string",     "required": false },
+        "total_entries":            { "type": "integer",    "required": true,  "default": 0 },
+        "total_media_uploads":      { "type": "integer",    "required": true,  "default": 0 },
+        "created_at":               { "type": "timestamp",  "required": true },
+        "heritage_verified_at":     { "type": "timestamp",  "required": false }
+      },
+
+      "example": {
+        "id": "org_luhya_cultural_council",
+        "org_name": "Luhya Cultural Council",
+        "org_rep_uid": "uid_margaret_otieno",
+        "content_manager_uids": ["uid_margaret_otieno", "uid_james_barasa", "uid_grace_nabwire"],
+        "is_heritage_verified": true,
+        "communities_authorised": ["community_luhya"],
+        "primary_language": "luy",
+        "description": "The Luhya Cultural Council is a community organisation dedicated to documenting and preserving the cultural knowledge of the 18 Luhya sub-groups of western Kenya.",
+        "total_entries": 0,
+        "total_media_uploads": 0,
+        "created_at": "2026-01-10T08:00:00Z",
+        "heritage_verified_at": "2026-01-15T10:00:00Z"
+      }
+    },
+
+    "community_councils": {
+      "_description": "Governance bodies for each community's cultural content. Council members review disputes, confirm relations, set visibility, and approve alternate entry versions.",
+      "_collection": "community_councils",
+      "_document_id": "Descriptive slug matching the community — e.g. 'council_luhya'",
+
+      "schema": {
+        "id":                       { "type": "string",     "required": true },
+        "community_id":             { "type": "string",     "required": true,  "ref": "heritage_hierarchy/{community_id}" },
+        "community_name":           { "type": "string",     "required": true },
+
+        "council_members": {
+          "type": "array<object>",
+          "required": true,
+          "schema": {
+            "uid":              { "type": "string",         "required": true },
+            "display_name":     { "type": "string",         "required": true },
+            "role":             { "type": "string",         "required": true,  "enum": ["chair","secretary","elder_representative","youth_representative","member"] },
+            "joined_at":        { "type": "timestamp",      "required": true },
+            "is_active":        { "type": "boolean",        "required": true,  "default": true }
+          }
+        },
+
+        "visibility_default":       { "type": "string",     "required": true,  "default": "public", "enum": ["public","community_only"] },
+        "ceremony_visibility_default": { "type": "string",  "required": true,  "default": "community_only", "note": "Ceremonies get a stricter default than other content types" },
+
+        "pending_disputes_count":   { "type": "integer",    "required": true,  "default": 0 },
+        "pending_relations_count":  { "type": "integer",    "required": true,  "default": 0 },
+
+        "created_at":               { "type": "timestamp",  "required": true },
+        "updated_at":               { "type": "timestamp",  "required": true }
+      },
+
+      "subcollection_council_decisions": {
+        "_path": "community_councils/{council_id}/council_decisions/{decisionId}",
+        "_description": "Permanent audit log of all council decisions — visibility changes, dispute resolutions, version elevations, relation confirmations.",
+        "schema": {
+          "id":                   { "type": "string",       "required": true },
+          "decision_type":        { "type": "string",       "required": true,  "enum": ["visibility_change","dispute_resolved","version_elevated","relation_confirmed","relation_rejected"] },
+          "entry_id":             { "type": "string",       "required": true,  "ref": "cultural_entries/{id}" },
+          "decided_by_uid":       { "type": "string",       "required": true },
+          "previous_state":       { "type": "string",       "required": false },
+          "new_state":            { "type": "string",       "required": false },
+          "notes":                { "type": "string",       "required": false },
+          "created_at":           { "type": "timestamp",    "required": true }
+        },
+        "example": {
+          "id": "decision_imbalu_visibility_2026_03",
+          "decision_type": "visibility_change",
+          "entry_id": "entry_bukusu_imbalu",
+          "decided_by_uid": "uid_council_elder_bungoma",
+          "previous_state": "public",
+          "new_state": "community_only",
+          "notes": "Council decision — March 2026. Detailed ceremony content to be restricted to community members only. Public entry retains overview and the connection map.",
+          "created_at": "2026-03-02T09:00:00Z"
+        }
+      },
+
+      "example": {
+        "id": "council_luhya",
+        "community_id": "community_luhya",
+        "community_name": "Luhya",
+        "council_members": [
+          {
+            "uid": "uid_council_elder_bungoma",
+            "display_name": "Mzee Joseph Simiyu",
+            "role": "chair",
+            "joined_at": "2026-01-20T10:00:00Z",
+            "is_active": true
+          },
+          {
+            "uid": "uid_margaret_otieno",
+            "display_name": "Margaret Otieno",
+            "role": "secretary",
+            "joined_at": "2026-01-20T10:00:00Z",
+            "is_active": true
+          }
+        ],
+        "visibility_default": "public",
+        "ceremony_visibility_default": "community_only",
+        "pending_disputes_count": 1,
+        "pending_relations_count": 3,
+        "created_at": "2026-01-20T10:00:00Z",
+        "updated_at": "2026-03-18T08:00:00Z"
+      }
+    }
+  }
+}

@@ -1,0 +1,247 @@
+{
+  "_meta": {
+    "screen": "env_territory.dart — EnvTerritoryScreen",
+    "tab": "Territory",
+    "firestore_collections": [
+      "organisations/{orgId}/collectionZones/{zoneId}",
+      "amenities/{amenityId}"
+    ],
+    "description": "Data shapes for the Territory map screen. Zones are polygon regions drawn by the org. Site markers are point pins. History strip is a read-only aggregate. Six months of zone data with verified collections inside it = plastic credit application foundation."
+  },
+
+  "FirestoreDocuments": {
+
+    "CollectionZone": {
+      "_firestore_path": "organisations/{orgId}/collectionZones/{zoneId}",
+      "_description": "Operational polygon. Drawn on-map by dragging — never entered as text coordinates. Linked to market orders and collection handoffs. The spatial evidence layer.",
+
+      "zoneId": "string",
+      "orgId": "string",
+      "label": "string — org-assigned name, e.g. Route A — Laini Saba, Mathare North Circuit",
+
+      "polygon": {
+        "coordinates": "array<GeoPoint> — ordered boundary vertices. Minimum 3 points to close polygon.",
+        "centroid": {
+          "lat": "number — computed on save, used for map label placement",
+          "lng": "number"
+        },
+        "areaEstimateSqm": "number | null — computed from polygon area"
+      },
+
+      "schedule": {
+        "days": "array<string> — subset of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']",
+        "startTime": "string — HH:MM 24h",
+        "endTime": "string — HH:MM 24h",
+        "timezone": "string — default Africa/Nairobi"
+      },
+
+      "materialTypes": "array<string> — material types collected in this zone. Linked to active market orders with matching material types.",
+      "linkedOrderIds": "array<string> — marketOrder IDs whose zone covers include this zoneId",
+
+      "isActive": "boolean",
+      "color": "string | null — hex, org can assign a colour per zone for map differentiation",
+
+      "stats": {
+        "totalCollectionsLogged": "number",
+        "totalKgVerified": "number",
+        "lastCollectionAt": "timestamp | null",
+        "firstCollectionAt": "timestamp | null",
+        "activeMonths": "number — count of calendar months with at least one verified collection"
+      },
+
+      "creditEligibility": {
+        "monthsActive": "number",
+        "thresholdMet": "boolean — true when activeMonths >= 6 and totalKgVerified >= platform minimum",
+        "plasticCreditEligibleKg": "number — verified kg eligible for credit issuance"
+      },
+
+      "createdAt": "timestamp",
+      "updatedAt": "timestamp",
+      "createdBy": "string — uid"
+    },
+
+    "SiteMarker": {
+      "_firestore_path": "organisations/{orgId}/siteMarkers/{markerId}",
+      "_description": "Point pin on the territory map — distinct from zone polygons. Three types: processing hub, drop-off point, active collection site.",
+
+      "markerId": "string",
+      "orgId": "string",
+      "markerType": "enum: processing_hub | drop_off_point | active_collection_site",
+
+      "label": "string — e.g. Kibera Hub, Laini Saba Drop-off",
+      "description": "string | null",
+
+      "location": {
+        "lat": "number — GPS captured, not manually entered",
+        "lng": "number",
+        "area": "string",
+        "physicalAddress": "string | null"
+      },
+
+      "operatingHours": "string | null — e.g. Mon–Sat 6am–3pm",
+
+      "hub_specific": {
+        "_only_when": "markerType == processing_hub",
+        "acceptedMaterials": "array<string>",
+        "currentBuyPrices": "map<string, number> — materialType to KSh/kg. Displayed to collectors approaching the hub.",
+        "hasWeighingScale": "boolean",
+        "hasStorageFacility": "boolean",
+        "mpesaPaybill": "string | null — for collectors paid at hub"
+      },
+
+      "dropOff_specific": {
+        "_only_when": "markerType == drop_off_point",
+        "acceptedMaterials": "array<string>",
+        "requiresAppointment": "boolean",
+        "linkedHubId": "string | null — hub that this drop-off feeds into"
+      },
+
+      "photos": "array<string> — Firebase Storage URLs",
+      "isActive": "boolean",
+      "createdAt": "timestamp",
+      "updatedAt": "timestamp"
+    },
+
+    "TerritoryHistoryEntry": {
+      "_firestore_path": "organisations/{orgId}/territoryHistory/{entryId}",
+      "_description": "Append-only audit log of territorial activity. Feeds the history strip. Never edited, only created.",
+
+      "entryId": "string",
+      "orgId": "string",
+      "eventType": "enum: zone_created | zone_updated | zone_deactivated | site_added | site_updated | collection_verified | zone_credit_threshold_met",
+      "zoneId": "string | null",
+      "siteMarkerId": "string | null",
+      "label": "string — human-readable description of the event",
+      "actorUid": "string — who performed the action",
+      "occurredAt": "timestamp"
+    }
+  },
+
+  "ViewModels": {
+
+    "CollectionZoneMapVM": {
+      "_description": "Shape consumed by the Google Maps polygon renderer and the zone info bottom sheet.",
+
+      "zoneId": "string",
+      "label": "string",
+      "polygonPoints": "array<LatLng> — Flutter google_maps_flutter LatLng objects",
+      "fillColor": "Color — AppTheme.primary.withOpacity(0.18), or org-assigned colour at same opacity",
+      "strokeColor": "Color — AppTheme.primary or org-assigned colour",
+      "strokeWidth": "double — 2.0",
+      "isActive": "boolean",
+      "centroid": "LatLng — for label marker placement",
+
+      "infoSheet": {
+        "_description": "Data shown in DraggableScrollableSheet when polygon is tapped.",
+        "label": "string",
+        "scheduleLabel": "string — e.g. Mon–Sat  ·  6:00 AM – 2:00 PM",
+        "materialChips": "array<string> — material type labels",
+        "linkedOrderCount": "number",
+        "totalKgVerified": "number",
+        "totalKgLabel": "string — e.g. 1.4t verified or 840 kg verified",
+        "lastCollectionLabel": "string | null — e.g. Last collection: 2 days ago",
+        "creditEligibilityLabel": "string — e.g. 4 of 6 months active or Credit eligible",
+        "isActive": "boolean"
+      }
+    },
+
+    "SiteMarkerMapVM": {
+      "_description": "Shape consumed by the Google Maps marker renderer.",
+
+      "markerId": "string",
+      "markerType": "enum: processing_hub | drop_off_point | active_collection_site",
+      "label": "string",
+      "position": "LatLng",
+
+      "markerStyle": {
+        "hue": "double — BitmapDescriptor hue value. Hub: hueYellow(60). Drop-off: hueCyan(180). Collection: hueGreen(120).",
+        "icon": "BitmapDescriptor — loaded from asset or defaultMarkerWithHue"
+      },
+
+      "infoWindowTitle": "string",
+      "infoWindowSnippet": "string | null — e.g. Accepts: PET, Carrier Bags · 6am–3pm"
+    },
+
+    "TerritoryStatBarVM": {
+      "_description": "The floating top info bar on the Territory screen.",
+
+      "zoneCount": "number",
+      "siteCount": "number",
+      "summaryLabel": "string — e.g. 2 zones  ·  3 sites",
+      "lastUpdatedLabel": "string — e.g. Updated 2h ago or Never updated"
+    },
+
+    "TerritoryHistoryStripVM": {
+      "_description": "The three-item horizontal strip floating at the bottom of the Territory screen.",
+
+      "lastZoneUpdate": {
+        "icon": "IconData — Icons.edit_outlined",
+        "label": "string — Zone updated",
+        "value": "string — e.g. 2h ago or Never"
+      },
+      "lastSiteAdded": {
+        "icon": "IconData — Icons.add_location_outlined",
+        "label": "string — Site added",
+        "value": "string — e.g. Yesterday or Never"
+      },
+      "lastVerifiedCollection": {
+        "icon": "IconData — Icons.check_circle_outline",
+        "label": "string — Last verified",
+        "value": "string — e.g. Today or Never"
+      }
+    }
+  },
+
+  "ScreenState": {
+
+    "EnvTerritoryScreenState": {
+      "_description": "Local state for the Territory screen.",
+
+      "isLoading": "boolean",
+      "hasError": "boolean",
+      "mapController": "GoogleMapController | null",
+      "mapStyleLoaded": "boolean",
+
+      "zones": "array<CollectionZoneMapVM>",
+      "siteMarkers": "array<SiteMarkerMapVM>",
+      "historyStrip": "TerritoryHistoryStripVM | null",
+      "statBar": "TerritoryStatBarVM | null",
+
+      "selectedZoneId": "string | null — zone tapped, triggers info sheet",
+      "selectedSiteMarkerId": "string | null",
+
+      "isDrawingZone": "boolean — true when draw zone flow is active",
+      "draftPolygonPoints": "array<LatLng> — points tapped during zone drawing",
+
+      "addSiteSheet": {
+        "_description": "State for the Add Site bottom sheet.",
+        "isOpen": "boolean",
+        "markerType": "enum: processing_hub | drop_off_point | active_collection_site | null",
+        "label": "string",
+        "description": "string",
+        "capturedLocation": "LatLng | null — GPS captured",
+        "isSubmitting": "boolean"
+      }
+    }
+  },
+
+  "MapConfiguration": {
+    "_description": "Canopy map style — applied via GoogleMapController.setMapStyle() on map creation. Suppresses Google POIs, warms the colour palette.",
+
+    "kCanopyMapStyle": "string — JSON string. Key overrides: featureType:poi visibility:off, featureType:landscape.natural color:#C8DCCA, featureType:water color:#A8C5C0, featureType:road.highway color:#E8E0D0, featureType:road.local color:#F0EBE0, background:#F5F1EB",
+
+    "initialCameraPosition": {
+      "_kibera": { "lat": -1.3133, "lng": 36.7862, "zoom": 14 },
+      "_mathare": { "lat": -1.2575, "lng": 36.8565, "zoom": 14 },
+      "_nairobi_city": { "lat": -1.2921, "lng": 36.8219, "zoom": 12 }
+    },
+
+    "mapOptions": {
+      "myLocationButtonEnabled": false,
+      "zoomControlsEnabled": false,
+      "mapToolbarEnabled": false,
+      "compassEnabled": true,
+      "liteModeEnabled": false
+    }
+  }
+}

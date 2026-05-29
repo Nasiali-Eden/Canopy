@@ -1,0 +1,225 @@
+{
+  "_meta": {
+    "screen": "env_fleet.dart — EnvFleetScreen",
+    "tab": "Fleet",
+    "firestore_collections": [
+      "organisations/{orgId}/fleetCollectors/{fleetMemberId}",
+      "organisations/{orgId}/collectionHandoffs/{handoffId}",
+      "users/{uid} — read-only for collector profile"
+    ],
+    "description": "Data shapes for the Fleet screen. Tracks collectors registered under the org, their activity, and collection handoffs. The org's operational record and each collector's Canopy identity are built by the same events — a handoff writes to both. Route sharing is always opt-in from the collector."
+  },
+
+  "FirestoreDocuments": {
+
+    "FleetCollector": {
+      "_firestore_path": "organisations/{orgId}/fleetCollectors/{fleetMemberId}",
+      "_description": "A collector operating under this org's fleet. Linked by collectorUid to the collector's user document. Org sees aggregated stats. Collector retains full ownership of their own profile and history.",
+
+      "fleetMemberId": "string",
+      "orgId": "string",
+      "collectorUid": "string — links to users/{uid}",
+
+      "profile": {
+        "_description": "Denormalized snapshot from users/{uid} — updated by Cloud Function on profile change.",
+        "displayName": "string",
+        "photoUrl": "string | null",
+        "phoneNumber": "string | null — only visible to org admin"
+      },
+
+      "assignment": {
+        "assignedZoneIds": "array<string> — collectionZone IDs this collector operates within",
+        "assignedZoneLabels": "array<string> — denormalized labels",
+        "primaryZoneId": "string | null"
+      },
+
+      "status": "enum: active | off_shift | uncontactable | inactive | suspended",
+      "statusUpdatedAt": "timestamp",
+      "statusUpdatedBy": "string — uid | system",
+
+      "routeSharing": {
+        "enabled": "boolean — collector-controlled opt-in. Org cannot set this to true.",
+        "currentRouteGeoJsonUrl": "string | null — today's GPS track. Expires at midnight.",
+        "lastRouteSharedAt": "timestamp | null"
+      },
+
+      "stats": {
+        "thisMonthKg": "number — rolling aggregate, resets on 1st of month",
+        "thisMonthTransactions": "number",
+        "thisMonthEarningsKes": "number",
+        "lastDeliveryAt": "timestamp | null",
+        "lastDeliveryKg": "number | null",
+        "totalKgAllTime": "number",
+        "totalTransactionsAllTime": "number",
+        "totalEarningsKesAllTime": "number",
+        "royaltiesReceivedKesAllTime": "number"
+      },
+
+      "joinedFleetAt": "timestamp",
+      "invitedBy": "string | null — uid of org rep who invited this collector",
+      "notes": "string | null — internal org notes, not visible to collector"
+    },
+
+    "CollectionHandoff": {
+      "_firestore_path": "organisations/{orgId}/collectionHandoffs/{handoffId}",
+      "_description": "Logged when a collector delivers material to the org's hub or drop-off. One event creates two records: this document under the org, and a MarketplaceTransaction under the top-level collection. Both reference each other.",
+
+      "handoffId": "string",
+      "orgId": "string",
+      "collectorUid": "string",
+
+      "material": {
+        "category": "enum: plastics | metals | glass | paper_cardboard | rubber_composites | reclaimed_wood | textiles | electronics",
+        "type": "string — e.g. PET Clean",
+        "grade": "string | null",
+        "weightKg": "number",
+        "impactScore": "number | null — 0 to 100 environmental impact rating"
+      },
+
+      "financials": {
+        "pricePerKg": "number — KSh",
+        "totalPaidKes": "number",
+        "impactPointsAwarded": "number",
+        "softPlasticBonus": "boolean — extra points for carrier bags and film",
+        "paymentMethod": "enum: mpesa | cash",
+        "mpesaTxRef": "string | null",
+        "paidAt": "timestamp | null"
+      },
+
+      "location": {
+        "lat": "number — GPS at handoff point",
+        "lng": "number",
+        "label": "string — hub or drop-off name, e.g. Kibera Hub",
+        "siteMarkerId": "string | null — links to siteMarkers/{markerId}"
+      },
+
+      "zoneId": "string | null — zone the material was collected from",
+      "linkedOrderId": "string | null — marketOrder this fulfills",
+      "linkedTransactionId": "string | null — marketplace_transactions/{id} created simultaneously",
+
+      "loggedAt": "timestamp",
+      "loggedBy": "string — uid of org rep"
+    }
+  },
+
+  "ViewModels": {
+
+    "FleetCollectorCardVM": {
+      "_description": "Shape consumed by the fleet collector card widget.",
+
+      "fleetMemberId": "string",
+      "collectorUid": "string",
+      "displayName": "string",
+      "photoUrl": "string | null",
+      "showPlaceholderAvatar": "boolean",
+
+      "primaryZoneLabel": "string | null — e.g. Kibera Zone A",
+      "allZoneLabels": "array<string>",
+
+      "status": "enum: active | off_shift | uncontactable | inactive | suspended",
+      "statusDotColor": "Color — green=active, grey=off_shift, amber=uncontactable, mid_grey=inactive",
+      "statusLabel": "string — Active today | Off shift | Uncontactable | Inactive | Suspended",
+
+      "stats": {
+        "thisMonthKgLabel": "string — e.g. 84 kg",
+        "thisMonthTransactionsLabel": "string — e.g. 12 deliveries",
+        "lastDeliveryLabel": "string — e.g. Today | Yesterday | 3 days ago | Never"
+      },
+
+      "routeSharingEnabled": "boolean",
+      "showRouteOnMap": "boolean — routeSharingEnabled && currentRouteGeoJsonUrl != null",
+
+      "canViewProfile": "boolean — always true",
+      "canLogHandoff": "boolean — status == active || status == off_shift"
+    },
+
+    "FleetStatStripVM": {
+      "_description": "Three-stat summary strip.",
+
+      "activeCollectorCount": "number",
+      "activeCollectorLabel": "string — Collectors Active",
+
+      "collectionsThisWeek": "number",
+      "collectionsLabel": "string — Collections This Week",
+
+      "kgVerifiedThisMonth": "number",
+      "kgVerifiedLabel": "string — Kg Verified This Month",
+      "kgVerifiedFormatted": "string — e.g. 1.2t or 840 kg"
+    },
+
+    "HandoffLogEntryVM": {
+      "_description": "Shape for entries in the Today's Handoffs list.",
+
+      "handoffId": "string",
+      "collectorName": "string",
+      "collectorPhotoUrl": "string | null",
+      "materialLabel": "string — e.g. PET Clean",
+      "weightKgLabel": "string — e.g. 84 kg",
+      "totalPaidLabel": "string — e.g. KSh 2,352",
+      "paymentMethodLabel": "string — M-Pesa | Cash",
+      "locationLabel": "string — e.g. Kibera Hub",
+      "loggedAtLabel": "string — e.g. 9:42 AM",
+      "impactPointsLabel": "string | null — e.g. +168 pts"
+    },
+
+    "RouteMapVM": {
+      "_description": "Shape for the route log section. Rendered as a lite-mode Google Map or placeholder.",
+
+      "hasActiveRoutes": "boolean",
+      "routeCount": "number — collectors sharing routes today",
+      "routeLines": "array<{collectorName: string, geoJsonUrl: string, color: Color}>",
+      "mapCenter": "LatLng",
+      "mapZoom": "double — default 13.0"
+    }
+  },
+
+  "ScreenState": {
+
+    "EnvFleetScreenState": {
+      "_description": "Local state for the Fleet screen.",
+
+      "isLoading": "boolean",
+      "hasError": "boolean",
+
+      "collectors": "array<FleetCollectorCardVM>",
+      "filterStatus": "enum: all | active | off_shift | uncontactable — default all",
+
+      "statStrip": "FleetStatStripVM | null",
+      "handoffLog": "array<HandoffLogEntryVM>",
+      "routeMap": "RouteMapVM | null",
+
+      "logHandoffSheet": {
+        "_description": "State for the Log Collection Handoff bottom sheet.",
+        "isOpen": "boolean",
+        "selectedCollectorUid": "string | null",
+        "selectedCollectorName": "string | null",
+        "materialCategory": "string | null",
+        "materialType": "string | null",
+        "weightKg": "number | null",
+        "pricePerKg": "number | null",
+        "totalKes": "number | null — computed: weightKg * pricePerKg",
+        "paymentMethod": "enum: mpesa | cash | null",
+        "locationLabel": "string",
+        "selectedSiteMarkerId": "string | null",
+        "capturedGps": { "lat": "number | null", "lng": "number | null" },
+        "linkedOrderId": "string | null",
+        "isSubmitting": "boolean",
+        "submitError": "string | null"
+      },
+
+      "inviteCollectorSheet": {
+        "_description": "State for inviting a new collector to the fleet.",
+        "isOpen": "boolean",
+        "phoneNumber": "string — used to look up existing Canopy user",
+        "lookupResult": "enum: idle | searching | found | not_found",
+        "foundUser": {
+          "uid": "string | null",
+          "displayName": "string | null",
+          "photoUrl": "string | null"
+        },
+        "selectedZoneIds": "array<string>",
+        "isSubmitting": "boolean"
+      }
+    }
+  }
+}

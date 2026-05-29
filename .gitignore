@@ -52,3 +52,20 @@ build
 
 lib/firebase_options.dart
 prompt.md
+
+# AI-related files (Qodo, Claude, implementation files)
+.qodo*
+.claude*
+qodo_*
+claude_*
+*_implementation.md
+.instructions.md
+.prompt.md
+.agent.md
+SKILL.md
+**/ai_generated/
+**/ai_temp/
+**/.ai/
+**/zencoder_*
+**/*_zencoder*
+zencoder.json

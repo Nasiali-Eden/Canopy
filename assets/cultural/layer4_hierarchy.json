@@ -1,0 +1,207 @@
+{
+  "_file": "layer4_hierarchy.json",
+  "_description": "Geographic and community hierarchy nodes. These are the anchor points that cultural content attaches to. Every content entry references at least one node from this hierarchy.",
+  "_collection_root": "heritage_hierarchy",
+  "_note": "All five node types live in the same top-level collection, distinguished by the 'node_type' field. This allows a single query to resolve a full ancestry chain without multiple collection hops.",
+
+  "collections": {
+
+    "heritage_hierarchy": {
+      "document_id_convention": "Descriptive slugs — e.g. 'country_kenya', 'region_western_kenya', 'community_luo'. Never auto-generated IDs for hierarchy nodes — they are referenced by human-readable ID across all content documents.",
+
+      "country": {
+        "schema": {
+          "id":                   { "type": "string",         "required": true,  "note": "Slug. e.g. 'country_kenya'" },
+          "node_type":            { "type": "string",         "required": true,  "value": "country" },
+          "name":                 { "type": "string",         "required": true },
+          "name_native":          { "type": "string",         "required": false, "note": "Name in the country's primary official language" },
+          "flag_emoji":           { "type": "string",         "required": true },
+          "continent":            { "type": "string",         "required": true,  "enum": ["Africa","Asia","Europe","Americas","Oceania"] },
+          "iso_code":             { "type": "string",         "required": true,  "note": "ISO 3166-1 alpha-2. e.g. 'KE'" },
+          "languages_official":   { "type": "array<string>", "required": true },
+          "description":          { "type": "string",         "required": false },
+          "cover_image_url":      { "type": "string",         "required": false },
+          "cover_image_credit":   { "type": "string",         "required": false },
+          "entry_count":          { "type": "integer",        "required": true,  "default": 0, "note": "Denormalised count of all cultural entries under this country" },
+          "community_count":      { "type": "integer",        "required": true,  "default": 0 },
+          "is_active":            { "type": "boolean",        "required": true,  "default": true },
+          "created_at":           { "type": "timestamp",      "required": true },
+          "created_by_org_id":    { "type": "string",         "required": true }
+        },
+        "example": {
+          "id": "country_kenya",
+          "node_type": "country",
+          "name": "Kenya",
+          "name_native": "Kenya",
+          "flag_emoji": "🇰🇪",
+          "continent": "Africa",
+          "iso_code": "KE",
+          "languages_official": ["Swahili", "English"],
+          "description": "Kenya is home to over 40 ethnic communities, each with distinct languages, traditions, food cultures, and oral histories. The Canopy archive begins here.",
+          "cover_image_url": "https://storage.googleapis.com/canopy-heritage/hierarchy/country_kenya/cover.jpg",
+          "cover_image_credit": "Canopy Archive",
+          "entry_count": 0,
+          "community_count": 0,
+          "is_active": true,
+          "created_at": "2026-01-15T08:00:00Z",
+          "created_by_org_id": "org_shield_international"
+        }
+      },
+
+      "region": {
+        "schema": {
+          "id":                   { "type": "string",         "required": true,  "note": "e.g. 'region_western_kenya'" },
+          "node_type":            { "type": "string",         "required": true,  "value": "region" },
+          "name":                 { "type": "string",         "required": true },
+          "country_id":           { "type": "string",         "required": true,  "ref": "heritage_hierarchy/{country_id}" },
+          "region_type":          { "type": "string",         "required": true,  "enum": ["region","city","informal_settlement","coastal_area","lake_basin","highland","arid_north","other"] },
+          "description":          { "type": "string",         "required": false },
+          "cover_image_url":      { "type": "string",         "required": false },
+          "primary_communities":  { "type": "array<string>",  "required": false, "note": "community_ids of the dominant communities in this region" },
+          "entry_count":          { "type": "integer",        "required": true,  "default": 0 },
+          "is_informal_settlement":{ "type": "boolean",       "required": false, "default": false, "note": "True for Kibera, Mathare, Korogocho etc." },
+          "created_at":           { "type": "timestamp",      "required": true },
+          "created_by_org_id":    { "type": "string",         "required": true }
+        },
+        "example": {
+          "id": "region_western_kenya",
+          "node_type": "region",
+          "name": "Western Kenya",
+          "country_id": "country_kenya",
+          "region_type": "region",
+          "description": "Western Kenya encompasses the counties of Kakamega, Bungoma, Busia, Vihiga, and Trans-Nzoia. Home primarily to the Luhya people and their sub-groups, and to the Luo of northern Nyanza.",
+          "cover_image_url": "https://storage.googleapis.com/canopy-heritage/hierarchy/region_western_kenya/cover.jpg",
+          "primary_communities": ["community_luhya", "community_luo"],
+          "entry_count": 0,
+          "is_informal_settlement": false,
+          "created_at": "2026-01-15T08:10:00Z",
+          "created_by_org_id": "org_shield_international"
+        }
+      },
+
+      "county": {
+        "schema": {
+          "id":                   { "type": "string",         "required": true,  "note": "e.g. 'county_kakamega'" },
+          "node_type":            { "type": "string",         "required": true,  "value": "county" },
+          "name":                 { "type": "string",         "required": true },
+          "country_id":           { "type": "string",         "required": true,  "ref": "heritage_hierarchy/{country_id}" },
+          "region_id":            { "type": "string",         "required": false, "ref": "heritage_hierarchy/{region_id}" },
+          "county_code":          { "type": "string",         "required": false, "note": "Kenya county number. e.g. '37' for Kakamega" },
+          "description":          { "type": "string",         "required": false },
+          "cover_image_url":      { "type": "string",         "required": false },
+          "entry_count":          { "type": "integer",        "required": true,  "default": 0 },
+          "created_at":           { "type": "timestamp",      "required": true },
+          "created_by_org_id":    { "type": "string",         "required": true }
+        },
+        "example": {
+          "id": "county_kakamega",
+          "node_type": "county",
+          "name": "Kakamega County",
+          "country_id": "country_kenya",
+          "region_id": "region_western_kenya",
+          "county_code": "37",
+          "description": "Kakamega County is the most populous county in western Kenya, home to several Luhya sub-groups including the Idakho, Isukha, Kabras, and Wanga.",
+          "cover_image_url": null,
+          "entry_count": 0,
+          "created_at": "2026-01-15T08:20:00Z",
+          "created_by_org_id": "org_shield_international"
+        }
+      },
+
+      "community": {
+        "schema": {
+          "id":                   { "type": "string",         "required": true,  "note": "e.g. 'community_luhya'. The single most important node type — opens the archive for a group." },
+          "node_type":            { "type": "string",         "required": true,  "value": "community" },
+          "name":                 { "type": "string",         "required": true },
+          "name_in_own_language": { "type": "string",         "required": false },
+          "name_variants":        { "type": "array<string>",  "required": false, "note": "Alternate spellings or names used elsewhere. e.g. ['Abaluhya','Abaluhyia']" },
+          "country_id":           { "type": "string",         "required": true,  "ref": "heritage_hierarchy/{country_id}" },
+          "region_ids":           { "type": "array<string>",  "required": false, "note": "All regions where this community is primarily found" },
+          "language_primary":     { "type": "string",         "required": false, "note": "Language name or ISO 639-3 code" },
+          "language_iso":         { "type": "string",         "required": false },
+          "language_family":      { "type": "string",         "required": false, "enum": ["Bantu","Nilotic","Cushitic","Semitic","Khoisan","Other"] },
+          "population_approx":    { "type": "string",         "required": false, "note": "e.g. '7 million'" },
+          "origin_area":          { "type": "string",         "required": false, "note": "e.g. 'Nilotic origin, primarily Lake Victoria basin'" },
+          "description":          { "type": "string",         "required": true,  "note": "Required. A community node without a description is incomplete." },
+          "cover_image_url":      { "type": "string",         "required": false },
+          "cover_image_credit":   { "type": "string",         "required": false },
+          "council_id":           { "type": "string",         "required": false, "ref": "community_councils/{council_id}", "note": "Null until a council is formally established" },
+          "entry_count":          { "type": "integer",        "required": true,  "default": 0 },
+          "sub_group_count":      { "type": "integer",        "required": true,  "default": 0 },
+          "is_verified":          { "type": "boolean",        "required": true,  "default": false, "note": "True when a contributing org with community ties has been verified" },
+          "created_at":           { "type": "timestamp",      "required": true },
+          "created_by_org_id":    { "type": "string",         "required": true },
+          "updated_at":           { "type": "timestamp",      "required": true }
+        },
+        "example": {
+          "id": "community_luhya",
+          "node_type": "community",
+          "name": "Luhya",
+          "name_in_own_language": "Abaluhya",
+          "name_variants": ["Luyia", "Abaluhyia", "Luhyia"],
+          "country_id": "country_kenya",
+          "region_ids": ["region_western_kenya"],
+          "language_primary": "Luhya",
+          "language_iso": "luy",
+          "language_family": "Bantu",
+          "population_approx": "7 million",
+          "origin_area": "Bantu-speaking peoples who migrated to the western Kenya highlands",
+          "description": "The Luhya (or Abaluhya) are a Bantu-speaking community and the second largest ethnic group in Kenya. They are not a single tribe but a confederation of 18 sub-groups sharing linguistic and cultural similarities, each with distinct traditions. The Bukusu are the largest sub-group, followed by the Maragoli, Kabras, Isukha, and others.",
+          "cover_image_url": "https://storage.googleapis.com/canopy-heritage/hierarchy/community_luhya/cover.jpg",
+          "cover_image_credit": "Luhya Cultural Council",
+          "council_id": null,
+          "entry_count": 0,
+          "sub_group_count": 0,
+          "is_verified": false,
+          "created_at": "2026-01-20T10:00:00Z",
+          "created_by_org_id": "org_luhya_cultural_council",
+          "updated_at": "2026-01-20T10:00:00Z"
+        }
+      },
+
+      "sub_group": {
+        "schema": {
+          "id":                     { "type": "string",         "required": true,  "note": "e.g. 'subgroup_bukusu'" },
+          "node_type":              { "type": "string",         "required": true,  "value": "sub_group" },
+          "name":                   { "type": "string",         "required": true },
+          "name_in_own_language":   { "type": "string",         "required": false },
+          "community_id":           { "type": "string",         "required": true,  "ref": "heritage_hierarchy/{community_id}" },
+          "country_id":             { "type": "string",         "required": true },
+          "region_ids":             { "type": "array<string>",  "required": false },
+          "county_ids":             { "type": "array<string>",  "required": false, "note": "Counties where this sub-group is primarily found" },
+          "language_dialect":       { "type": "string",         "required": false, "note": "Dialect name if distinct from parent community language" },
+          "distinguishing_features":{ "type": "string",         "required": false },
+          "description":            { "type": "string",         "required": false },
+          "cover_image_url":        { "type": "string",         "required": false },
+          "entry_count":            { "type": "integer",        "required": true,  "default": 0 },
+          "created_at":             { "type": "timestamp",      "required": true },
+          "created_by_org_id":      { "type": "string",         "required": true }
+        },
+        "example": {
+          "id": "subgroup_bukusu",
+          "node_type": "sub_group",
+          "name": "Bukusu",
+          "name_in_own_language": "Babukusu",
+          "community_id": "community_luhya",
+          "country_id": "country_kenya",
+          "region_ids": ["region_western_kenya"],
+          "county_ids": ["county_bungoma", "county_trans_nzoia"],
+          "language_dialect": "Lubukusu",
+          "distinguishing_features": "The Bukusu are the largest Luhya sub-group, known for the Imbalu circumcision ceremony held every even year, and for the Isukuti drum tradition.",
+          "description": "The Bukusu (Babukusu) occupy Bungoma County and parts of Trans-Nzoia. Their Imbalu circumcision ritual is among the most extensively documented cultural practices in western Kenya.",
+          "cover_image_url": "https://storage.googleapis.com/canopy-heritage/hierarchy/subgroup_bukusu/cover.jpg",
+          "entry_count": 0,
+          "created_at": "2026-01-22T09:00:00Z",
+          "created_by_org_id": "org_luhya_cultural_council"
+        }
+      }
+    }
+  },
+
+  "indexes": [
+    { "collection": "heritage_hierarchy", "fields": ["node_type", "country_id"],   "note": "Get all regions for a country, all communities for a country" },
+    { "collection": "heritage_hierarchy", "fields": ["node_type", "region_ids"],   "note": "Get all communities in a region — array-contains query" },
+    { "collection": "heritage_hierarchy", "fields": ["node_type", "community_id"], "note": "Get all sub-groups for a community" },
+    { "collection": "heritage_hierarchy", "fields": ["node_type", "is_active"],    "note": "List all active countries or communities" }
+  ]
+}

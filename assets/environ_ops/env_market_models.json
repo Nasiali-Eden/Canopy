@@ -1,0 +1,232 @@
+{
+  "_meta": {
+    "screen": "env_market.dart — EnvMarketScreen",
+    "tab": "Market",
+    "firestore_collections": [
+      "organisations/{orgId}/marketOrders/{orderId}",
+      "marketplace_transactions/{transactionId}"
+    ],
+    "description": "All data shapes consumed and produced by the Market screen. Three layers: Firestore document models (written/read from backend), view models (transformed for UI rendering), and state models (local screen state)."
+  },
+
+  "FirestoreDocuments": {
+
+    "MarketOrder": {
+      "_firestore_path": "organisations/{orgId}/marketOrders/{orderId}",
+      "_description": "Standing buy or sell declaration. Visible to collectors platform-wide as a live demand signal. The org creates these; collectors respond to them.",
+
+      "orderId": "string",
+      "orgId": "string",
+      "orderType": "enum: buy | sell",
+
+      "material": {
+        "category": "enum: plastics | metals | glass | paper_cardboard | rubber_composites | reclaimed_wood | textiles | electronics",
+        "type": "string — e.g. PET Clean, Carrier Bags, HDPE Mixed, Copper Wire",
+        "grade": "string | null — e.g. Grade A, Mixed, Processed, Baled",
+        "conditionNotes": "string | null"
+      },
+
+      "pricing": {
+        "pricePerKg": "number — KSh",
+        "currency": "string — KES",
+        "negotiable": "boolean"
+      },
+
+      "quantity": {
+        "minimumKg": "number",
+        "maximumKg": "number",
+        "filledKg": "number — running total as responses are confirmed, starts at 0"
+      },
+
+      "zone": {
+        "zoneIds": "array<string> — collectionZone IDs this order covers",
+        "zoneLabels": "array<string> — denormalized zone labels for display without a join",
+        "acceptsDelivery": "boolean — org will accept material brought to their hub",
+        "willCollect": "boolean — org will send a collector to pick up"
+      },
+
+      "responses": {
+        "count": "number",
+        "respondentUids": "array<string> — collectors who indicated they can fulfill"
+      },
+
+      "status": "enum: active | paused | fulfilled | expired | draft",
+      "notes": "string | null — visible to collectors",
+      "expiresAt": "timestamp | null",
+      "createdAt": "timestamp",
+      "updatedAt": "timestamp",
+      "createdBy": "string — uid of org rep"
+    },
+
+    "OrderResponse": {
+      "_firestore_path": "organisations/{orgId}/marketOrders/{orderId}/responses/{responseId}",
+      "_description": "A collector's response to a buy order. Subcollection of the order.",
+
+      "responseId": "string",
+      "orderId": "string",
+      "orgId": "string",
+      "collectorUid": "string",
+      "collectorDisplayName": "string — denormalized",
+      "collectorPhotoUrl": "string | null — denormalized",
+      "offeredKg": "number — how much the collector can supply",
+      "availableFrom": "timestamp | null",
+      "notes": "string | null",
+      "status": "enum: pending | accepted | rejected | fulfilled | expired",
+      "respondedAt": "timestamp",
+      "resolvedAt": "timestamp | null"
+    }
+  },
+
+  "ViewModels": {
+
+    "MarketOrderCardVM": {
+      "_description": "Transformed shape consumed by the buy/sell order card widget. Computed from MarketOrder. Never written to Firestore.",
+
+      "orderId": "string",
+      "orderType": "enum: buy | sell",
+
+      "materialLabel": "string — e.g. PET Clean",
+      "gradeChip": "string | null — e.g. Grade A",
+      "categoryColor": "string — hex colour code mapped from material.category, used for card accent",
+
+      "priceDisplay": "string — formatted, e.g. KSh 28",
+      "priceUnit": "string — always per kg",
+      "negotiable": "boolean",
+
+      "quantityFillFraction": "number — 0.0 to 1.0, computed as filledKg / maximumKg",
+      "quantityLabel": "string — e.g. 240 kg of 500 kg needed",
+      "isFulfilled": "boolean — filledKg >= maximumKg",
+
+      "primaryZoneLabel": "string | null — first zone label for card display",
+      "zoneCount": "number — total zones, shown as +N if >1",
+
+      "statusDotColor": "string — green=active, amber=paused, grey=fulfilled/expired",
+      "statusLabel": "string — Active | Paused | Fulfilled | Expired | Draft",
+
+      "responseCount": "number",
+      "hasNewResponses": "boolean — responses arrived since org last viewed",
+
+      "isExpiringSoon": "boolean — true if expiresAt within 72 hours",
+      "expiresInLabel": "string | null — e.g. Expires in 2 days"
+    },
+
+    "MarketStatStripVM": {
+      "_description": "The three-stat summary strip at the top of the Market screen. Aggregated from all org market orders.",
+
+      "activeOrderCount": "number",
+      "activeOrderLabel": "string — Active Orders",
+
+      "kgThisMonth": "number",
+      "kgThisMonthLabel": "string — Kg This Month",
+      "kgThisMonthFormatted": "string — e.g. 1.4t or 840 kg",
+
+      "avgPricePerKg": "number | null — null if no transactions this month",
+      "avgPriceLabel": "string — Avg KSh/kg",
+      "avgPriceFormatted": "string — e.g. KSh 24 or —"
+    },
+
+    "OrderResponseListVM": {
+      "_description": "Shape for the View Responses bottom sheet. One item per collector response.",
+
+      "responseId": "string",
+      "collectorName": "string",
+      "collectorPhotoUrl": "string | null",
+      "offeredKg": "number",
+      "offeredKgLabel": "string — e.g. 80 kg available",
+      "availableFromLabel": "string | null — e.g. Available from tomorrow",
+      "notes": "string | null",
+      "status": "enum: pending | accepted | rejected | fulfilled | expired",
+      "statusLabel": "string",
+      "statusColor": "string — hex",
+      "canAccept": "boolean — pending && order still active && not fulfilled",
+      "respondedAtLabel": "string — e.g. 3 hours ago"
+    }
+  },
+
+  "ScreenState": {
+
+    "EnvMarketScreenState": {
+      "_description": "Local state held in EnvMarketScreen StatefulWidget. Not persisted.",
+
+      "activeTab": "enum: buying | offered",
+      "isLoading": "boolean",
+      "hasError": "boolean",
+      "errorMessage": "string | null",
+
+      "buyOrders": "array<MarketOrderCardVM>",
+      "sellListings": "array<MarketOrderCardVM>",
+
+      "selectedOrderId": "string | null — for View Responses sheet",
+      "responsesLoading": "boolean",
+      "responses": "array<OrderResponseListVM>",
+
+      "postOrderDraft": {
+        "_description": "Draft state for the Post Order bottom sheet before submission.",
+        "orderType": "enum: buy | sell | null",
+        "materialCategory": "string | null",
+        "materialType": "string | null",
+        "grade": "string | null",
+        "pricePerKg": "number | null",
+        "minimumKg": "number | null",
+        "maximumKg": "number | null",
+        "selectedZoneIds": "array<string>",
+        "acceptsDelivery": "boolean",
+        "willCollect": "boolean",
+        "notes": "string | null",
+        "isSubmitting": "boolean",
+        "validationErrors": "map<string, string> — fieldName to error message"
+      }
+    }
+  },
+
+  "EnumsAndConstants": {
+
+    "MaterialCategory": {
+      "_type": "Dart enum",
+      "values": ["plastics", "metals", "glass", "paperCardboard", "rubberComposites", "reclaimedWood", "textiles", "electronics"],
+      "displayLabels": {
+        "plastics": "Plastics",
+        "metals": "Metals",
+        "glass": "Glass",
+        "paperCardboard": "Paper & Cardboard",
+        "rubberComposites": "Rubber & Composites",
+        "reclaimedWood": "Reclaimed Wood",
+        "textiles": "Textiles",
+        "electronics": "Electronics"
+      },
+      "cardColors": {
+        "_description": "AppTheme-derived accent per category for card borders and chips",
+        "plastics": "AppTheme.primary",
+        "metals": "AppTheme.tertiary",
+        "glass": "AppTheme.accent",
+        "paperCardboard": "Color(0xFF8D6E63)",
+        "rubberComposites": "AppTheme.darkGreen",
+        "reclaimedWood": "Color(0xFF795548)",
+        "textiles": "Color(0xFF7B5EA7)",
+        "electronics": "Color(0xFF5C6BC0)"
+      }
+    },
+
+    "MaterialTypesByCategory": {
+      "_description": "Controlled list of material types per category. Rendered as dropdown options in Post Order flow.",
+      "plastics": ["PET Clean", "PET Contaminated", "HDPE Natural", "HDPE Mixed", "LDPE Film", "Carrier Bags", "Soft Film", "PP Mixed", "PVC", "Polystyrene"],
+      "metals": ["Copper Wire", "Copper Scrap", "Aluminium Cans", "Aluminium Sheet", "Steel", "Iron", "Tin"],
+      "glass": ["Clear Glass", "Green Glass", "Brown Glass", "Mixed Glass"],
+      "paperCardboard": ["Cardboard OCC", "Newspaper", "Office Paper", "Mixed Paper"],
+      "rubberComposites": ["Tyres", "Rubber Sheet", "Mixed Rubber"],
+      "reclaimedWood": ["Pallets", "Hardwood", "Softwood", "MDF"],
+      "textiles": ["Cotton", "Denim", "Mixed Fabric", "Leather"],
+      "electronics": ["Cables", "PCBs", "Mobile Phones", "Computer Parts"]
+    },
+
+    "OrderStatus": {
+      "_type": "Dart enum",
+      "values": ["active", "paused", "fulfilled", "expired", "draft"]
+    },
+
+    "OrderType": {
+      "_type": "Dart enum",
+      "values": ["buy", "sell"]
+    }
+  }
+}

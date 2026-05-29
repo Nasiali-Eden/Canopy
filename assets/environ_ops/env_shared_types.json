@@ -1,0 +1,251 @@
+{
+  "_meta": {
+    "screen": "env_ops_shell.dart — EnvOpsShell + shared types across all 5 screens",
+    "description": "Shared data shapes, enums, and constants used across the entire Environmental Operations section. Centralised here to avoid duplication across the 5 screen model files. Dart files importing from this model go in lib/models/environmental/shared/.",
+    "note": "Every model in this file is referenced by at least two screen models. Screen-specific models live in their own files."
+  },
+
+  "SharedEnums": {
+
+    "EnvironmentalOrgType": {
+      "_type": "Dart enum",
+      "_description": "Determines which features are available within the Environmental Ops section.",
+      "values": [
+        "recycler",
+        "upcycler",
+        "processor",
+        "wasteCollector",
+        "conservationBody",
+        "urbanGreening",
+        "waterwayClearance",
+        "multi"
+      ],
+      "displayLabels": {
+        "recycler": "Recycler",
+        "upcycler": "Upcycler",
+        "processor": "Processor",
+        "wasteCollector": "Waste Collector",
+        "conservationBody": "Conservation Body",
+        "urbanGreening": "Urban Greening",
+        "waterwayClearance": "Waterway Clearance",
+        "multi": "Multi-activity"
+      }
+    },
+
+    "MaterialCategory": {
+      "_type": "Dart enum",
+      "_description": "Used across Market (order creation), Fleet (handoff logging), and Verified (credit pipeline).",
+      "values": ["plastics", "metals", "glass", "paperCardboard", "rubberComposites", "reclaimedWood", "textiles", "electronics"],
+      "firestoreKeys": {
+        "plastics": "plastics",
+        "metals": "metals",
+        "glass": "glass",
+        "paperCardboard": "paper_cardboard",
+        "rubberComposites": "rubber_composites",
+        "reclaimedWood": "reclaimed_wood",
+        "textiles": "textiles",
+        "electronics": "electronics"
+      },
+      "displayLabels": {
+        "plastics": "Plastics",
+        "metals": "Metals",
+        "glass": "Glass",
+        "paperCardboard": "Paper & Cardboard",
+        "rubberComposites": "Rubber & Composites",
+        "reclaimedWood": "Reclaimed Wood",
+        "textiles": "Textiles",
+        "electronics": "Electronics"
+      },
+      "accentColors": {
+        "_description": "AppTheme-derived or hex — for card accents and chips. All hex values are production-ready.",
+        "plastics": "#2D7A4F",
+        "metals": "#C4A961",
+        "glass": "#3B8A7A",
+        "paperCardboard": "#8D6E63",
+        "rubberComposites": "#1F5539",
+        "reclaimedWood": "#795548",
+        "textiles": "#7B5EA7",
+        "electronics": "#5C6BC0"
+      }
+    },
+
+    "VerificationTier": {
+      "_type": "Dart enum",
+      "_description": "Used in Verified screen badge and org registration state.",
+      "values": ["registered", "verified", "impactPartner", "creditIssuer"],
+      "firestoreKeys": {
+        "registered": "registered",
+        "verified": "verified",
+        "impactPartner": "impact_partner",
+        "creditIssuer": "credit_issuer"
+      },
+      "displayLabels": {
+        "registered": "Registered",
+        "verified": "Verified",
+        "impactPartner": "Impact Partner",
+        "creditIssuer": "Credit Issuer"
+      }
+    },
+
+    "CreditType": {
+      "_type": "Dart enum",
+      "_description": "Used across Verified screen panels and EnvironmentalCredit documents.",
+      "values": ["plasticRecovery", "dumpsiteTransformation", "urbanGreening", "waterwayClearance", "fairCollector"],
+      "firestoreKeys": {
+        "plasticRecovery": "plastic_recovery",
+        "dumpsiteTransformation": "dumpsite_transformation",
+        "urbanGreening": "urban_greening",
+        "waterwayClearance": "waterway_clearance",
+        "fairCollector": "fair_collector"
+      },
+      "displayLabels": {
+        "plasticRecovery": "Plastic Recovery Credits",
+        "dumpsiteTransformation": "Dumpsite Transformation Credits",
+        "urbanGreening": "Urban Greening Credits",
+        "waterwayClearance": "Waterway Clearance Credits",
+        "fairCollector": "Fair Collector Credits"
+      }
+    },
+
+    "PaymentMethod": {
+      "_type": "Dart enum",
+      "_description": "Used in Fleet handoff logging and Market order responses.",
+      "values": ["mpesa", "cash", "cardano", "stripe"],
+      "displayLabels": {
+        "mpesa": "M-Pesa",
+        "cash": "Cash",
+        "cardano": "Cardano",
+        "stripe": "Card"
+      }
+    },
+
+    "EnvOpsTab": {
+      "_type": "Dart enum",
+      "_description": "The five tabs of the EnvOpsShell.",
+      "values": ["market", "territory", "trees", "fleet", "verified"],
+      "displayLabels": {
+        "market": "Market",
+        "territory": "Territory",
+        "trees": "Trees",
+        "fleet": "Fleet",
+        "verified": "Verified"
+      },
+      "icons": {
+        "market": "Icons.storefront_outlined",
+        "territory": "Icons.map_outlined",
+        "trees": "Icons.park_outlined",
+        "fleet": "Icons.local_shipping_outlined",
+        "verified": "Icons.verified_outlined"
+      }
+    }
+  },
+
+  "SharedDataModels": {
+
+    "OrgEnvSummary": {
+      "_description": "Lightweight summary of an org's environmental ops state. Loaded once by the shell, passed down to child screens to avoid each screen re-querying the same org document.",
+      "_source": "organisations/{orgId} — partial read",
+
+      "orgId": "string",
+      "orgName": "string",
+      "orgType": "EnvironmentalOrgType",
+      "verificationTier": "VerificationTier",
+
+      "capabilityFlags": {
+        "isEnvironmentalOps": "boolean — always true in this section",
+        "isMarketplaceSeller": "boolean",
+        "sellerRole": "enum: collector | processor | maker | null",
+        "hasCollectionZones": "boolean",
+        "hasTrees": "boolean",
+        "hasFleetCollectors": "boolean"
+      },
+
+      "impactRecord": {
+        "_description": "Read-only. Source of truth for all summary stats. Never written by the app — always written by system.",
+        "eventsRun": "number",
+        "sitesCleaned": "number",
+        "treesPlanted": "number",
+        "treesConfirmed90Day": "number",
+        "plasticDivertedKg": "number",
+        "transformationConfirmations": "number",
+        "lastUpdated": "timestamp"
+      }
+    },
+
+    "GpsCoordinate": {
+      "_description": "Shared coordinate model used across zone polygons, tree pins, handoff locations, site markers.",
+      "lat": "number",
+      "lng": "number",
+      "accuracyMeters": "number | null",
+      "capturedAt": "timestamp | null",
+      "source": "enum: device_gps | manual | map_tap — manual is allowed for display-only coordinates, never for verified evidence"
+    },
+
+    "MaterialTypeLookup": {
+      "_description": "Two-level lookup: category → array of types. Single source of truth across Market order creation, Fleet handoff logging, and Territory zone configuration.",
+      "plastics": ["PET Clean", "PET Contaminated", "HDPE Natural", "HDPE Mixed", "LDPE Film", "Carrier Bags", "Soft Film", "PP Mixed", "PVC", "Polystyrene"],
+      "metals": ["Copper Wire", "Copper Scrap", "Aluminium Cans", "Aluminium Sheet", "Steel", "Iron", "Tin"],
+      "glass": ["Clear Glass", "Green Glass", "Brown Glass", "Mixed Glass"],
+      "paperCardboard": ["Cardboard OCC", "Newspaper", "Office Paper", "Mixed Paper"],
+      "rubberComposites": ["Tyres", "Rubber Sheet", "Mixed Rubber"],
+      "reclaimedWood": ["Pallets", "Hardwood", "Softwood", "MDF"],
+      "textiles": ["Cotton", "Denim", "Mixed Fabric", "Leather"],
+      "electronics": ["Cables", "PCBs", "Mobile Phones", "Computer Parts"]
+    },
+
+    "KenyanAreasLookup": {
+      "_description": "Seed data for area/ward dropdowns in zone and site creation. Scoped to current pilot areas — extend as Canopy expands.",
+      "nairobi": {
+        "kibera": ["Laini Saba", "Lindi", "Makina", "Silanga", "Gatwekera", "Kisumu Ndogo", "Kianda", "Soweto East", "Mashimoni"],
+        "mathare": ["Mathare North", "Mathare South", "4A", "Mabatini", "Hospital", "Village III", "Kosovo", "Gitathuru"],
+        "langata": ["Mugumoini", "Karen", "Nairobi West", "South C", "Nyayo Highrise"]
+      },
+      "mombasa": {
+        "mvita": ["Old Town", "Tudor", "Tononoka", "Shimanzi", "Ganjoni"],
+        "kisauni": ["Bamburi", "Mwakirunge", "Mjambere", "Junda", "Shanzu"]
+      }
+    }
+  },
+
+  "ShellState": {
+
+    "EnvOpsShellState": {
+      "_description": "State held at the shell level. Shared across all five child screens.",
+
+      "activeTab": "EnvOpsTab — default market",
+      "isLoadingOrgSummary": "boolean",
+      "orgSummary": "OrgEnvSummary | null",
+
+      "tabBadgeCounts": {
+        "_description": "Badge counts shown on tab pills. Fetched at shell level to avoid each screen computing independently.",
+        "market": "number — new responses to buy orders since last viewed",
+        "territory": "number — zones overdue for activity",
+        "trees": "number — trees overdue for monthly update",
+        "fleet": "number — collectors flagged as uncontactable",
+        "verified": "number — credits ready to claim or actions required"
+      }
+    }
+  },
+
+  "PlatformConstants": {
+    "_description": "Numeric thresholds and defaults. Centralised to make policy changes a single-file edit.",
+
+    "urbanGreeningCreditThresholdTrees": 50,
+    "treeUpdateIntervalDays": 30,
+    "treeOverdueThresholdDays": 30,
+    "treeCriticalThresholdDays": 60,
+    "treeGpsProximityToleranceMeters": 100,
+    "plasticRecoveryCreditThresholdKg": 500,
+    "dumpsiteTransformation30DayDays": 30,
+    "dumpsiteTransformation90DayDays": 90,
+    "zoneActivityCreditEligibilityMonths": 6,
+    "verifierConsensusMinimum": 3,
+    "crowdsourcedBaselineMinimum": 3,
+    "collectorRoyaltyDefaultPct": 4,
+    "collectorRoyaltyMaxPct": 5,
+    "platformCommissionDefaultPct": 8,
+    "storyFieldMinimumChars": 80,
+    "marketOrderDefaultExpiryDays": 30,
+    "scaffoldBackgroundColor": "0xFFF7F5F0"
+  }
+}

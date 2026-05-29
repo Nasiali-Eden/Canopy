@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../Shared/theme/app_theme.dart';
 import 'Heritage/Archive/heritage_archive_screen.dart';
+import 'Heritage/Create/create_entry_screen.dart';
 import 'Heritage/Feedback/heritage_feedback_screen.dart';
 import 'Heritage/Disputes/heritage_disputes_screen.dart';
 import 'Heritage/Connections/heritage_connections_screen.dart';
@@ -82,7 +83,12 @@ class _CultureHomeScreenState extends State<CultureHomeScreen> {
         floatingActionButton: _currentIndex == 0
             ? FloatingActionButton.extended(
                 onPressed: () {
-                  // TODO: Open contribute entry flow
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreateEntryScreen(orgId: widget.orgId),
+                    ),
+                  );
                 },
                 backgroundColor: AppTheme.tertiary,
                 foregroundColor: Colors.white,

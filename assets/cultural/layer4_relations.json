@@ -1,0 +1,171 @@
+{
+  "_file": "layer4_relations.json",
+  "_description": "Typed links between two cultural entries. Every relation is directional but rendered bidirectionally — both linked entries display the relationship from their own perspective. AI suggests, orgs and community members propose, council confirms.",
+  "_collection": "cultural_relations",
+
+  "schema": {
+    "id":                       { "type": "string",     "required": true },
+    "from_entry_id":            { "type": "string",     "required": true,  "ref": "cultural_entries/{id}" },
+    "to_entry_id":              { "type": "string",     "required": true,  "ref": "cultural_entries/{id}" },
+    "from_content_type":        { "type": "string",     "required": true,  "note": "Denormalised — avoids a join on list queries" },
+    "to_content_type":          { "type": "string",     "required": true,  "note": "Denormalised" },
+    "relation_type":            { "type": "string",     "required": true,
+      "enum": [
+        "food_served_in_ceremony", "music_played_in_ceremony", "clothing_worn_in_ceremony",
+        "craft_used_in_ceremony", "story_explains_tradition", "craft_produces_clothing",
+        "craft_produces_instrument", "ingredient_used_in_food", "ingredient_used_in_medicine",
+        "ingredient_used_in_craft", "music_uses_instrument", "place_site_of_ceremony",
+        "language_names_tradition", "person_holds_knowledge", "craft_links_to_marketplace",
+        "same_tradition_variant", "cross_community_parallel", "historical_precedes",
+        "diaspora_variation", "other"
+      ]
+    },
+    "label_forward":            { "type": "string",     "required": true,  "note": "How the relation reads from from_entry perspective. e.g. Played during" },
+    "label_reverse":            { "type": "string",     "required": true,  "note": "How the relation reads from to_entry perspective. e.g. Music includes" },
+    "relation_note":            { "type": "string",     "required": false, "note": "Specific explanatory note for this particular link" },
+    "status":                   { "type": "string",     "required": true,  "default": "suggested_by_ai",
+      "enum": ["suggested_by_ai", "suggested_by_community", "suggested_by_org", "confirmed", "rejected"]
+    },
+    "strength":                 { "type": "string",     "required": true,
+      "enum": ["strong", "moderate", "speculative"]
+    },
+    "suggested_by_uid":         { "type": "string",     "required": false },
+    "suggested_via_comment_id": { "type": "string",     "required": false, "ref": "cultural_comments/{id}" },
+    "confirmed_by_uid":         { "type": "string",     "required": false },
+    "created_at":               { "type": "timestamp",  "required": true },
+    "confirmed_at":             { "type": "timestamp",  "required": false }
+  },
+
+  "relation_type_catalogue": {
+    "food_served_in_ceremony":     { "forward": "Served during",           "reverse": "Includes food",             "valid_from": ["food_tradition"],     "valid_to": ["ceremony"] },
+    "music_played_in_ceremony":    { "forward": "Played during",           "reverse": "Music includes",            "valid_from": ["music_tradition"],    "valid_to": ["ceremony"] },
+    "clothing_worn_in_ceremony":   { "forward": "Worn during",             "reverse": "Dress includes",            "valid_from": ["clothing_tradition"], "valid_to": ["ceremony"] },
+    "craft_used_in_ceremony":      { "forward": "Used in",                 "reverse": "Uses craft",                "valid_from": ["craft_technique"],    "valid_to": ["ceremony"] },
+    "story_explains_tradition":    { "forward": "Origin story of",         "reverse": "Explained by story",        "valid_from": ["oral_tradition"],     "valid_to": ["ceremony","food_tradition","place_knowledge","craft_technique","clothing_tradition"] },
+    "craft_produces_clothing":     { "forward": "Used to make",            "reverse": "Made using",                "valid_from": ["craft_technique"],    "valid_to": ["clothing_tradition"] },
+    "craft_produces_instrument":   { "forward": "Used to make",            "reverse": "Made using",                "valid_from": ["craft_technique"],    "valid_to": ["instrument"] },
+    "ingredient_used_in_food":     { "forward": "Key ingredient in",       "reverse": "Uses ingredient",           "valid_from": ["ingredient"],         "valid_to": ["food_tradition"] },
+    "ingredient_used_in_medicine": { "forward": "Used in",                 "reverse": "Uses ingredient",           "valid_from": ["ingredient"],         "valid_to": ["medicine_knowledge"] },
+    "ingredient_used_in_craft":    { "forward": "Material for",            "reverse": "Uses material",             "valid_from": ["ingredient"],         "valid_to": ["craft_technique"] },
+    "music_uses_instrument":       { "forward": "Played on",               "reverse": "Featured in",               "valid_from": ["music_tradition"],    "valid_to": ["instrument"] },
+    "place_site_of_ceremony":      { "forward": "Site of",                 "reverse": "Takes place at",            "valid_from": ["place_knowledge"],    "valid_to": ["ceremony"] },
+    "language_names_tradition":    { "forward": "Names this tradition as", "reverse": "Named in language",         "valid_from": ["language_entry"],     "valid_to": ["oral_tradition","food_tradition","ceremony","craft_technique","music_tradition"] },
+    "person_holds_knowledge":      { "forward": "Knowledge holder for",    "reverse": "Held by",                   "valid_from": ["person"],             "valid_to": ["oral_tradition","craft_technique","medicine_knowledge","music_tradition","language_entry"] },
+    "craft_links_to_marketplace":  { "forward": "Practiced by",            "reverse": "Technique in archive",      "valid_from": ["craft_technique"],    "valid_to": ["marketplace_artisan"], "note": "Cross-layer link to Layer 2" },
+    "same_tradition_variant":      { "forward": "Variant of",              "reverse": "Has variant",               "valid_from": "any",                  "valid_to": "any" },
+    "cross_community_parallel":    { "forward": "Similar tradition in",    "reverse": "Similar tradition in",      "valid_from": "any",                  "valid_to": "any", "note": "AI suggests these most frequently" },
+    "historical_precedes":         { "forward": "Historically precedes",   "reverse": "Follows from",              "valid_from": "any",                  "valid_to": "any" },
+    "diaspora_variation":          { "forward": "Diaspora variation of",   "reverse": "In-Africa origin",          "valid_from": "any",                  "valid_to": "any" },
+    "other":                       { "forward": "Related to",              "reverse": "Related to",                "valid_from": "any",                  "valid_to": "any", "note": "relation_note required when using other" }
+  },
+
+  "status_visibility_rules": {
+    "suggested_by_ai":        { "visible_on_entry_page": false, "visible_in_org_connections_screen": true,  "org_actions": ["endorse","dismiss"] },
+    "suggested_by_community": { "visible_on_entry_page": false, "visible_in_org_connections_screen": true,  "org_actions": ["endorse","dismiss"],   "council_actions": ["confirm","reject"] },
+    "suggested_by_org":       { "visible_on_entry_page": false, "visible_in_org_connections_screen": true,  "council_actions": ["confirm","reject"] },
+    "confirmed":              { "visible_on_entry_page": true,  "visible_in_org_connections_screen": true,  "council_actions": ["reverse"] },
+    "rejected":               { "visible_on_entry_page": false, "visible_in_org_connections_screen": false, "note": "Kept for audit. Not shown to users." }
+  },
+
+  "examples": {
+    "confirmed_music_to_ceremony": {
+      "id": "relation_isukuti_imbalu",
+      "from_entry_id": "entry_luhya_isukuti",
+      "to_entry_id": "entry_bukusu_imbalu",
+      "from_content_type": "music_tradition",
+      "to_content_type": "ceremony",
+      "relation_type": "music_played_in_ceremony",
+      "label_forward": "Played during",
+      "label_reverse": "Music includes",
+      "relation_note": "Isukuti drumming begins at dawn when the initiate starts their village walk. The rhythm changes at each ceremonial stage. Without the Isukuti the Imbalu cannot begin.",
+      "status": "confirmed",
+      "strength": "strong",
+      "suggested_by_uid": null,
+      "suggested_via_comment_id": null,
+      "confirmed_by_uid": "uid_council_elder_bungoma",
+      "created_at": "2026-02-16T10:00:00Z",
+      "confirmed_at": "2026-02-18T09:00:00Z"
+    },
+    "suggested_by_community_food_to_ceremony": {
+      "id": "relation_ingokho_marriage",
+      "from_entry_id": "entry_luhya_ingokho",
+      "to_entry_id": "entry_luhya_marriage_ceremony",
+      "from_content_type": "food_tradition",
+      "to_content_type": "ceremony",
+      "relation_type": "food_served_in_ceremony",
+      "label_forward": "Served during",
+      "label_reverse": "Includes food",
+      "relation_note": "Ingokho is slaughtered and served on the day the bride's family receives the groom's family. It is the centrepiece of that meal.",
+      "status": "suggested_by_community",
+      "strength": "strong",
+      "suggested_by_uid": "uid_grace_nabwire",
+      "suggested_via_comment_id": "comment_ingokho_ceremony_link",
+      "confirmed_by_uid": null,
+      "created_at": "2026-03-05T14:00:00Z",
+      "confirmed_at": null
+    },
+    "ai_cross_community_parallel": {
+      "id": "relation_luo_luhya_harvest_parallel",
+      "from_entry_id": "entry_luo_harvest_ceremony",
+      "to_entry_id": "entry_luhya_harvest_tradition",
+      "from_content_type": "ceremony",
+      "to_content_type": "ceremony",
+      "relation_type": "cross_community_parallel",
+      "label_forward": "Similar tradition in",
+      "label_reverse": "Similar tradition in",
+      "relation_note": "AI detected shared structural elements: community gathering at start of maize harvest, ritual offerings before eating new crop, and songs directed to ancestral figures. Requires community verification.",
+      "status": "suggested_by_ai",
+      "strength": "speculative",
+      "suggested_by_uid": null,
+      "suggested_via_comment_id": null,
+      "confirmed_by_uid": null,
+      "created_at": "2026-03-12T08:00:00Z",
+      "confirmed_at": null
+    },
+    "ingredient_to_food": {
+      "id": "relation_mrenda_ugali",
+      "from_entry_id": "entry_ingredient_mrenda",
+      "to_entry_id": "entry_luhya_ugali_mrenda",
+      "from_content_type": "ingredient",
+      "to_content_type": "food_tradition",
+      "relation_type": "ingredient_used_in_food",
+      "label_forward": "Key ingredient in",
+      "label_reverse": "Uses ingredient",
+      "relation_note": "Mrenda is the defining vegetable in ugali na mrenda — the combination is so common in Luhya cuisine that the dish is named for the vegetable.",
+      "status": "confirmed",
+      "strength": "strong",
+      "suggested_by_uid": "uid_margaret_otieno",
+      "suggested_via_comment_id": null,
+      "confirmed_by_uid": "uid_council_elder_bungoma",
+      "created_at": "2026-02-14T11:00:00Z",
+      "confirmed_at": "2026-02-16T09:00:00Z"
+    },
+    "craft_to_marketplace": {
+      "id": "relation_kikoy_marketplace",
+      "from_entry_id": "entry_craft_kikoy_weaving",
+      "to_entry_id": null,
+      "from_content_type": "craft_technique",
+      "to_content_type": "marketplace_artisan",
+      "relation_type": "craft_links_to_marketplace",
+      "label_forward": "Practiced by",
+      "label_reverse": "Technique documented in archive",
+      "relation_note": "The Coast Textiles Collective currently lists hand-woven kikoy on the Canopy marketplace. Their Layer 2 seller profile links back to this archive entry.",
+      "status": "confirmed",
+      "strength": "strong",
+      "suggested_by_uid": "uid_fatuma_hassan",
+      "suggested_via_comment_id": null,
+      "confirmed_by_uid": "uid_council_coast",
+      "created_at": "2026-03-02T10:00:00Z",
+      "confirmed_at": "2026-03-04T09:00:00Z"
+    }
+  },
+
+  "indexes": [
+    { "fields": ["from_entry_id", "status"],                   "note": "All confirmed relations from an entry — entry detail page forward links" },
+    { "fields": ["to_entry_id", "status"],                     "note": "All confirmed relations pointing to an entry — entry detail page reverse links" },
+    { "fields": ["from_entry_id", "relation_type", "status"],  "note": "Specific relation type filter on an entry" },
+    { "fields": ["status", "from_content_type"],               "note": "Council queue — unconfirmed suggestions by content type" },
+    { "fields": ["suggested_by_uid", "status"],                "note": "Community member contribution history" },
+    { "fields": ["confirmed_by_uid", "confirmed_at"],          "note": "Council activity audit" }
+  ]
+}

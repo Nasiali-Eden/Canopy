@@ -1,0 +1,333 @@
+{
+  "_meta": {
+    "screen": "env_verified.dart — EnvVerifiedScreen",
+    "tab": "Verified",
+    "firestore_collections": [
+      "organisations/{orgId}",
+      "environmental_credits/{creditId}",
+      "transformation_records/{transformationId}",
+      "bounties/{bountyId}"
+    ],
+    "description": "Data shapes for the Verified screen. The org's standing in the Canopy verification system. Four credit pipelines, each backed by a complete on-chain evidence chain. The export generates a structured proof document — the org's work on the platform is the report."
+  },
+
+  "FirestoreDocuments": {
+
+    "EnvironmentalCredit": {
+      "_firestore_path": "environmental_credits/{creditId}",
+      "_description": "The tradeable environmental asset. Backed by GPS-verified site, photo evidence, DID-linked verifier consensus, and 30-90 day transformation confirmation. Aligned with UNEP Global Plastics Treaty framework.",
+
+      "creditId": "string",
+      "creditType": "enum: plastic_recovery | dumpsite_transformation | urban_greening | waterway_clearance | fair_collector",
+      "issuedTo": "string — orgId",
+      "issuedAt": "timestamp",
+
+      "evidenceChain": {
+        "reportId": "string | null",
+        "verificationTaskIds": "array<string>",
+        "transformationId": "string | null",
+        "collectorIds": "array<string>",
+        "processorIds": "array<string>",
+        "stage3ConfirmedAt": "timestamp",
+        "gpsCoordinates": { "lat": "number", "lng": "number" },
+        "photoUrls": "array<string>",
+        "onChainAnchor": {
+          "txHash": "string",
+          "anchoredAt": "timestamp",
+          "blockchainExplorerUrl": "string — e.g. cardanoscan.io/transaction/{hash}"
+        }
+      },
+
+      "quantity": {
+        "unit": "enum: kg | tonne | tree | meter",
+        "amount": "number",
+        "displayLabel": "string — e.g. 2.4 tonnes of soft plastic diverted from Nairobi waterways"
+      },
+
+      "certificate": {
+        "serialNumber": "string — e.g. CANOPY-KE-PRC-2026-00042",
+        "pdfUrl": "string | null",
+        "jsonUrl": "string | null",
+        "blockchainVerificationUrl": "string | null"
+      },
+
+      "unepAlignment": {
+        "methodology": "string — Canopy Verification Standard v1.0",
+        "treatyFramework": "string | null",
+        "complianceNotes": "string | null"
+      },
+
+      "tradingStatus": "enum: held | listed | sold | retired",
+      "listedAt": "timestamp | null",
+      "soldAt": "timestamp | null",
+      "buyerId": "string | null",
+      "salePriceKes": "number | null",
+      "salePriceUsd": "number | null",
+      "linkedBountyId": "string | null",
+      "createdAt": "timestamp"
+    },
+
+    "TransformationRecord_Summary": {
+      "_description": "Lightweight summary read for the Verified screen pipeline cards. Full document is in transformation_records/{transformationId}.",
+      "_firestore_path": "transformation_records/{transformationId}",
+
+      "transformationId": "string",
+      "category": "string",
+      "location": { "area": "string", "siteLabel": "string | null" },
+      "interventionDate": "timestamp",
+      "stage1": { "confirmed": "boolean", "confirmedAt": "timestamp | null" },
+      "stage2": { "confirmed": "boolean", "confirmedAt": "timestamp | null" },
+      "stage3": {
+        "confirmed": "boolean",
+        "confirmedAt": "timestamp | null",
+        "followUpDueAt": "timestamp | null",
+        "siteHeld": "boolean | null",
+        "siteFailureReason": "string | null"
+      },
+      "creditIssued": "boolean",
+      "creditId": "string | null"
+    }
+  },
+
+  "ViewModels": {
+
+    "VerificationTierBadgeVM": {
+      "_description": "The prominent gradient badge at the top of the Verified screen.",
+
+      "currentTier": "enum: registered | verified | impact_partner | credit_issuer",
+      "tierDisplayName": "string — Registered | Verified | Impact Partner | Credit Issuer",
+      "activeSinceLabel": "string — e.g. Active since Jan 2026",
+      "gradientColors": "array<Color> — [AppTheme.darkGreen, AppTheme.primary]",
+
+      "completedConditions": "array<string> — e.g. ['✓ 3 buy orders', '✓ Zone mapped', '✓ 30-day site', '✓ 6 months active']",
+
+      "nextTier": {
+        "exists": "boolean",
+        "tierName": "string | null — e.g. Credit Issuer",
+        "remainingConditions": "array<string> — what the org still needs",
+        "progressFraction": "number — 0.0 to 1.0 toward next tier",
+        "progressLabel": "string — e.g. 43 of 50 trees needed"
+      }
+    },
+
+    "PlasticRecoveryCreditPanelVM": {
+      "_description": "Expandable panel for the Plastic Recovery Credit pipeline.",
+
+      "creditType": "plastic_recovery",
+      "icon": "IconData — Icons.recycling",
+      "accentColor": "Color — AppTheme.primary",
+      "panelTitle": "string — Plastic Recovery Credits",
+
+      "issuedCredits": "array<IssuedCreditVM>",
+      "issuedCount": "number",
+
+      "inProgress": {
+        "kgLogged": "number — verified kg not yet at credit threshold",
+        "kgThreshold": "number — platform minimum for issuance",
+        "progressFraction": "number",
+        "progressLabel": "string — e.g. 280 kg of 500 kg threshold"
+      },
+
+      "evidenceChainPreview": {
+        "_description": "The tap-to-expand chain for the most recent issued credit.",
+        "collectorStep": "string — e.g. James Odhiambo · Collector ID #C-0019",
+        "collectionStep": "string — e.g. GPS: Kibera Zone A · 14 Jan 2026",
+        "handoffStep": "string — e.g. Kibera Hub · 84 kg weighed and confirmed",
+        "creditStep": "string — e.g. Credit issued · CANOPY-KE-PRC-2026-00042",
+        "onChainTxHash": "string",
+        "onChainUrl": "string"
+      }
+    },
+
+    "DumpsiteTransformationPanelVM": {
+      "_description": "Expandable panel for the Dumpsite Transformation Credit pipeline.",
+
+      "creditType": "dumpsite_transformation",
+      "icon": "IconData — Icons.delete_sweep_outlined",
+      "accentColor": "Color — AppTheme.accent",
+      "panelTitle": "string — Dumpsite Transformation Credits",
+
+      "sites": "array<TransformationSiteVM>",
+      "sitesAt30Day": "number",
+      "sitesAt90Day": "number",
+      "sitesFullyCredited": "number",
+      "sitesFailed": "number — honest record, never hidden"
+    },
+
+    "TransformationSiteVM": {
+      "_description": "One site card within the Dumpsite Transformation panel.",
+
+      "transformationId": "string",
+      "siteLabel": "string — e.g. Laini Saba Dumpsite, Mathare River Bank C",
+      "interventionDateLabel": "string — e.g. Cleared 3 Feb 2026",
+
+      "stageStatus": {
+        "stage1": "enum: pending | confirmed | null",
+        "stage2": "enum: pending | confirmed | null",
+        "stage3": "enum: pending | overdue | confirmed | failed | null"
+      },
+
+      "followUpDueLabel": "string | null — e.g. 30-day check due in 8 days | 60-day check due in 3 weeks",
+      "followUpColor": "Color — green if >14 days, amber if 1–14, red if overdue",
+
+      "outcome": "enum: in_progress | holding | credit_eligible | credited | failed",
+      "outcomeLabel": "string — In progress | Holding ✓ | Credit eligible | Credited | Site not held",
+      "outcomeColor": "Color",
+
+      "failureReason": "string | null — shown honestly when outcome=failed",
+      "creditId": "string | null",
+      "creditSerial": "string | null"
+    },
+
+    "UrbanGreeningPanelVM": {
+      "_description": "Expandable panel for Urban Greening Credits. Reads from Trees tab data.",
+
+      "creditType": "urban_greening",
+      "icon": "IconData — Icons.park_outlined",
+      "accentColor": "Color — AppTheme.secondary",
+      "panelTitle": "string — Urban Greening Credits",
+
+      "confirmedTrees": "number",
+      "thresholdTrees": "number — default 50",
+      "progressFraction": "number",
+      "progressLabel": "string — e.g. 43 of 50 trees confirmed",
+      "thresholdMet": "boolean",
+
+      "ctaLabel": "string — e.g. Confirm 7 more trees at 90 days | Apply for first credit",
+      "ctaAction": "enum: go_to_trees | apply_for_credit",
+
+      "issuedCreditCount": "number",
+      "issuedCredits": "array<IssuedCreditVM>"
+    },
+
+    "WaterwayClearancePanelVM": {
+      "_description": "Expandable panel for Waterway Clearance Credits.",
+
+      "creditType": "waterway_clearance",
+      "icon": "IconData — Icons.water_outlined",
+      "accentColor": "Color — Color(0xFF5C6BC0) — indigo",
+      "panelTitle": "string — Waterway Clearance Credits",
+
+      "sections": "array<WaterwaySectionVM>",
+      "totalMetersCleared": "number",
+      "sectionsCleared": "number",
+      "sectionsHolding": "number",
+      "sectionsFailed": "number"
+    },
+
+    "WaterwaySectionVM": {
+      "_description": "One waterway section card.",
+
+      "transformationId": "string",
+      "sectionLabel": "string — e.g. Section A — Nairobi River km 4.2–4.6",
+      "clearedDateLabel": "string",
+      "lengthMeters": "number",
+
+      "followUpStatus": "enum: pending | due_soon | overdue | holding | failed",
+      "followUpLabel": "string — e.g. 30-day follow-up due in 8 days | Holding ✓ | Not held",
+      "followUpColor": "Color",
+
+      "beforePhotoUrl": "string | null",
+      "afterPhotoUrl": "string | null",
+      "creditEligible": "boolean"
+    },
+
+    "IssuedCreditVM": {
+      "_description": "Compact card for an individual issued credit — reused across all credit type panels.",
+
+      "creditId": "string",
+      "serialNumber": "string — e.g. CANOPY-KE-PRC-2026-00042",
+      "issuedAtLabel": "string — e.g. Issued 15 Mar 2026",
+      "quantityLabel": "string — e.g. 2.4t plastic | 50 trees | 80m waterway",
+      "txHashShort": "string — first 4 + ... + last 4 chars, e.g. 0x4a2f...c91b",
+      "txHashFull": "string — for copy action",
+      "explorerUrl": "string",
+      "tradingStatus": "enum: held | listed | sold | retired",
+      "tradingStatusLabel": "string",
+      "pdfUrl": "string | null"
+    },
+
+    "VerifiedStatStripVM": {
+      "_description": "Optional summary strip if used above the tier badge.",
+
+      "totalCreditsIssued": "number",
+      "totalKgVerified": "number",
+      "totalKgVerifiedFormatted": "string",
+      "activeTransformations": "number"
+    },
+
+    "ExportButtonVM": {
+      "_description": "The Export Verification Summary card at the bottom of the screen.",
+
+      "label": "string — Export Verification Summary",
+      "sublabel": "string — PDF & JSON  ·  Ready for sponsors, grants, credit buyers",
+      "isGenerating": "boolean",
+      "lastExportedLabel": "string | null — e.g. Last exported 2 Jan 2026",
+      "exportReady": "boolean — true when org has at least one issued credit or verified transformation"
+    }
+  },
+
+  "ScreenState": {
+
+    "EnvVerifiedScreenState": {
+      "_description": "Local state for the Verified screen.",
+
+      "isLoading": "boolean",
+      "hasError": "boolean",
+
+      "tierBadge": "VerificationTierBadgeVM | null",
+
+      "expandedPanels": {
+        "_description": "Track which credit panels are expanded.",
+        "plasticRecovery": "boolean — default true",
+        "dumpsiteTransformation": "boolean — default false",
+        "urbanGreening": "boolean — default false",
+        "waterwayClearance": "boolean — default false"
+      },
+
+      "plasticPanel": "PlasticRecoveryCreditPanelVM | null",
+      "dumpsitePanel": "DumpsiteTransformationPanelVM | null",
+      "urbanGreeningPanel": "UrbanGreeningPanelVM | null",
+      "waterwayClearancePanel": "WaterwayClearancePanelVM | null",
+
+      "exportState": {
+        "isExporting": "boolean",
+        "exportError": "string | null",
+        "lastExportUrl": "string | null"
+      },
+
+      "evidenceChainExpanded": "string | null — creditId of the credit whose chain is expanded"
+    }
+  },
+
+  "VerificationTierConfig": {
+    "_description": "Platform constants defining tier unlock conditions. Evaluated server-side, displayed client-side.",
+
+    "registered": {
+      "conditions": ["Profile complete", "Taxonomy assigned"],
+      "unlocks": ["Marketplace access", "Community map pin", "Bounty visibility"]
+    },
+    "verified": {
+      "conditions": [
+        "3 completed buy orders with weight confirmation",
+        "1 transformation site with 30-day follow-up",
+        "Territory map with at least 1 active zone"
+      ],
+      "unlocks": ["Bounty application", "Sponsor visibility", "Impact Partner pathway"]
+    },
+    "impact_partner": {
+      "conditions": [
+        "Verified tier",
+        "6 months of consistent activity (no gap > 30 days)"
+      ],
+      "unlocks": ["Credit issuance eligibility", "Priority bounty matching", "UNEP report inclusion"]
+    },
+    "credit_issuer": {
+      "conditions": [
+        "Impact Partner tier",
+        "Minimum 500 kg verified plastic OR 50 trees at 90 days OR 100m waterway cleared"
+      ],
+      "unlocks": ["Credit marketplace listing", "International buyer access", "Pre-purchase agreements"]
+    }
+  }
+}
