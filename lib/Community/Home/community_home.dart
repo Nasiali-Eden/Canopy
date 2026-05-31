@@ -9,7 +9,7 @@ import '../../MarketPlace/The Market/eco_shop.dart';
 import '../../Models/user.dart';
 import '../../Shared/theme/app_theme.dart';
 import '../../Shared/Activities/activity_home_logic.dart';
-import '../Impact/impact_dashboard.dart';
+import '../Heritage/community_heritage_tab.dart';
 import '../Profile/profile_screen.dart';
 import '../Map/map.dart';
 import '../Contributions/log_contribution.dart';
@@ -47,7 +47,7 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
         onViewImpact: () => setState(() => _index = 2),
       ),
       ActivityHomeLogic.buildActivityTab(),
-      const ImpactDashboardScreen(embedded: true),
+      const CommunityHeritageTab(),
       const MapScreen(),
       const ProfileScreen(),
     ];
@@ -210,13 +210,13 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
                   label: 'Activities',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.analytics_outlined,
+                  icon: Icon(Icons.auto_stories_outlined,
                       color: _isMapTab
                           ? Colors.white.withOpacity(0.70)
                           : AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.analytics,
+                  selectedIcon: Icon(Icons.auto_stories,
                       color: _isMapTab ? Colors.white : AppTheme.primary),
-                  label: 'Impact',
+                  label: 'Heritage',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.map_outlined,
@@ -418,10 +418,10 @@ class _HomeTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _QuickActionCard(
-                  title: 'View My Impact',
-                  icon: Icons.analytics,
+                  title: 'Explore Heritage',
+                  icon: Icons.auto_stories_outlined,
                   gradient: LinearGradient(
-                    colors: [AppTheme.tertiary, const Color(0xFFFF8E53)],
+                    colors: [AppTheme.darkGreen, AppTheme.primary],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),

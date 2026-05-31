@@ -265,6 +265,9 @@ class _BottomBar extends StatelessWidget {
                     foregroundColor: AppTheme.darkGreen,
                     side: BorderSide(color: AppTheme.darkGreen.withOpacity(0.35)),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    // Override theme's Size.fromHeight(48) which forces infinite width in a Row.
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: const Text('Back'),
                 ),
@@ -275,6 +278,8 @@ class _BottomBar extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.tertiary,
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: const Text('Continue'),
                 )
@@ -284,6 +289,8 @@ class _BottomBar extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: isSubmitting
                       ? const SizedBox(

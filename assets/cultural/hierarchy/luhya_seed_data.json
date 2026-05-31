@@ -1,0 +1,271 @@
+{
+  "_comment": "Firestore seed data. Top-level keys map to collection names. Import via Firebase CLI or Admin SDK.",
+
+  "heritage_countries": {
+    "kenya": {
+      "name": "Kenya",
+      "flag": "🇰🇪",
+      "emblem": "🌿",
+      "status": "live",
+      "continent": "Africa",
+      "region": "East Africa",
+      "independence_year": 1963,
+      "ethnic_count": 45,
+      "county_count": 47,
+      "language_count": 68,
+      "population": "55M",
+      "banner_image_url": null,
+      "hero_gradient_start": "#0D2A1A",
+      "hero_gradient_end": "#2D7A4F",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z",
+
+      "_subcollections": {
+        "peoples": {
+          "luhya": {
+            "id": "luhya",
+            "name": "Luhya",
+            "alternate_names": ["Luyia", "Abaluyia"],
+            "region": "Western Kenya",
+            "counties": ["Kakamega", "Bungoma", "Vihiga", "Trans Nzoia", "Busia"],
+            "population": "~7 million",
+            "origin": "Bantu",
+            "language_family": "Bantu (Niger-Congo)",
+            "primary_language": "Oluhya",
+            "dialects": ["Lubukusu", "Luragoli", "Luwanga", "Lutiriki", "Luisukha"],
+            "emblem": "🌿",
+            "hero_gradient_start": "#1A2E0D",
+            "hero_gradient_end": "#3D7022",
+            "tags": ["Bantu origin", "18 sub-groups", "Oluhya language", "Kakamega heartland"],
+            "has_content": true,
+            "attribution_org": "Luhya Cultural Council",
+            "attribution_location": "Kakamega",
+            "banner_image_url": null,
+            "created_at": "2024-01-01T00:00:00Z",
+            "updated_at": "2024-01-01T00:00:00Z",
+
+            "overview": "The Luhya — also written Luyia or Abaluyia — are the second-largest ethnic group in Kenya, numbering approximately 7 million people. They occupy the fertile lands of western Kenya, primarily in the counties of Kakamega, Bungoma, Vihiga, Trans Nzoia, and parts of Busia. The name Abaluyia means 'those of the same hearth' — a reference to the shared fireplace that once symbolised community belonging. The Luhya are not a single tribe but a confederation of 18 sub-groups, each with distinct dialects, traditions, and historical identities, united by a shared Bantu origin, cultural practices, and geographic proximity.",
+
+            "sub_groups": [
+              { "id": "bukusu",   "name": "Bukusu",   "county": "Bungoma County" },
+              { "id": "maragoli", "name": "Maragoli", "county": "Vihiga County" },
+              { "id": "banyore",  "name": "Banyore",  "county": "Vihiga County" },
+              { "id": "batsotso", "name": "Batsotso", "county": "Kakamega" },
+              { "id": "idakho",   "name": "Idakho",   "county": "Kakamega" },
+              { "id": "isukha",   "name": "Isukha",   "county": "Kakamega" },
+              { "id": "kabras",   "name": "Kabras",   "county": "Kakamega" },
+              { "id": "tiriki",   "name": "Tiriki",   "county": "Vihiga" },
+              { "id": "wanga",    "name": "Wanga",    "county": "Mumias, Kakamega" },
+              { "id": "marachi",  "name": "Marachi",  "county": "Busia County" },
+              { "id": "samia",    "name": "Samia",    "county": "Busia County" },
+              { "id": "kisa",     "name": "Kisa",     "county": "Kakamega" },
+              { "id": "marama",   "name": "Marama",   "county": "Kakamega" },
+              { "id": "tachoni",  "name": "Tachoni",  "county": "Bungoma" },
+              { "id": "nyala",    "name": "Nyala",    "county": "Kakamega" },
+              { "id": "banyala",  "name": "Banyala",  "county": "Kakamega" },
+              { "id": "khayo",    "name": "Khayo",    "county": "Busia" },
+              { "id": "nyore",    "name": "Nyore",    "county": "Vihiga" }
+            ],
+
+            "language_notes": "Oluhya is not a single language but a dialect continuum — a family of related Bantu dialects that are mutually intelligible to varying degrees. Lubukusu (spoken by the Bukusu) and Luragoli (spoken by the Maragoli) are the most divergent. Most Luhya speak both their sub-group dialect and a regional creole form of Oluhya, alongside Swahili and English.",
+
+            "key_phrases": [
+              { "phrase": "Oli otyani?",  "meaning": "How are you?" },
+              { "phrase": "Ndi mwega",    "meaning": "I am fine" },
+              { "phrase": "Amina",        "meaning": "Amen / so be it" },
+              { "phrase": "Mwana wange",  "meaning": "my child" },
+              { "phrase": "Omwana ka omukana", "meaning": "a child is the child of everyone" }
+            ],
+
+            "origin_stories": [
+              {
+                "id": "mwambu_and_sela",
+                "title": "Mwambu and Sela — the first Luhya man and woman",
+                "tag": "Oral tradition · creation myth",
+                "content_type": "Stories",
+                "visibility": "public",
+                "body": "In the beginning, Were — the supreme creator — made Mwambu, the first man, and placed him on earth. He gave him Sela for a wife. Mwambu and Sela were the ancestors of the Abaluyia. Were told them: 'The land is yours, tend it well. The cattle are yours, care for them. Your children shall fill the earth.'\n\nMwambu and Sela had many children, and as the family grew they spread across the western highlands. Each child became the founder of a sub-group — Bukusu, Maragoli, Wanga — each carrying a part of the original instruction from Were. The Luhya say: Omwana ka omukana — a child is the child of everyone.",
+                "attribution": "Oral tradition · documented in Oluhya and English · Western Kenya",
+                "sub_group": null,
+                "tags": ["creation", "Were", "origin", "oral tradition"]
+              },
+              {
+                "id": "bukusu_imbalu",
+                "title": "Maina wa Mutsembi and the Bukusu circumcision rite",
+                "tag": "Historical story · The Bukusu",
+                "content_type": "Ceremony",
+                "visibility": "public",
+                "body": "The Bukusu circumcision — Imbalu — is performed every even-numbered year and is among the most significant cultural events in western Kenya. Young men are circumcised publicly without anaesthetic as a test of courage and entry into adulthood.\n\nThe ceremony begins with the candidate smearing white clay on their body and dancing through the village before dawn. Elders, family, and community gather to witness. A man who flinches is considered to have shamed his lineage. The scar is permanent — it is the mark of having stood.",
+                "attribution": "Documented by Luhya Cultural Council · Bungoma County",
+                "sub_group": "bukusu",
+                "tags": ["circumcision", "Imbalu", "Bukusu", "ceremony", "rite of passage"]
+              }
+            ],
+
+            "food_traditions": [
+              {
+                "id": "ugali",
+                "name": "Ugali",
+                "emoji": "🫘",
+                "description": "Maize or sorghum flour ugali — the daily staple, served with vegetables or stew.",
+                "visibility": "public"
+              },
+              {
+                "id": "isombe",
+                "name": "Isombe",
+                "emoji": "🌿",
+                "description": "Pounded cassava leaves cooked with groundnuts. A Luhya staple particularly associated with Kakamega.",
+                "visibility": "public"
+              },
+              {
+                "id": "ingokho",
+                "name": "Ingokho",
+                "emoji": "🍗",
+                "description": "Local free-range chicken, central to celebrations and hospitality. A household that serves ingokho honours its guests.",
+                "visibility": "public"
+              },
+              {
+                "id": "kunde",
+                "name": "Kunde",
+                "emoji": "🌱",
+                "description": "Cowpea leaves — a nutritious green vegetable cooked with onions and tomatoes.",
+                "visibility": "public"
+              },
+              {
+                "id": "mrenda",
+                "name": "Mrenda",
+                "emoji": "🥬",
+                "description": "A mucilaginous leafy vegetable (jute mallow) popular in western Kenya.",
+                "visibility": "public"
+              },
+              {
+                "id": "ekeberi",
+                "name": "Ekeberi",
+                "emoji": "🥩",
+                "description": "Cow innards prepared as a delicacy, typically during celebrations.",
+                "visibility": "public"
+              }
+            ],
+
+            "music_traditions": [
+              {
+                "id": "imbalu_chant",
+                "name": "Imbalu circumcision chant",
+                "description": "Pre-dawn ceremony song performed before the circumcision rite begins.",
+                "sub_group": "bukusu",
+                "language": "Lubukusu",
+                "content_type": "Music",
+                "visibility": "public",
+                "audio_url": null
+              },
+              {
+                "id": "isukuti_drums",
+                "name": "Isukuti drum ensemble",
+                "description": "Traditional celebration drumming performed at weddings, funerals, and harvest festivals. The isukuti is a large double-headed drum.",
+                "sub_group": null,
+                "language": "Oluhya",
+                "content_type": "Music",
+                "visibility": "public",
+                "audio_url": null
+              },
+              {
+                "id": "omwana_alilira",
+                "name": "Omwana alilira",
+                "description": "A lullaby sung by mothers during the harvest season.",
+                "sub_group": "maragoli",
+                "language": "Luragoli",
+                "content_type": "Music",
+                "visibility": "public",
+                "audio_url": null
+              }
+            ],
+
+            "notable_practices": [
+              {
+                "id": "bull_slaughter",
+                "name": "Ceremonial bull slaughter",
+                "description": "A household that can slaughter a bull for a guest demonstrates wealth and honour. The act of sharing food from a common pot (esindu) is itself a statement of kinship.",
+                "content_type": "Ceremony",
+                "visibility": "public"
+              },
+              {
+                "id": "were_worship",
+                "name": "Were — the supreme being",
+                "description": "The Luhya supreme creator, Were, is acknowledged in daily speech and invoked during important life events. The relationship between humans and Were shapes Luhya moral cosmology.",
+                "content_type": "Stories",
+                "visibility": "public"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+
+  "_heritage_entries_examples": [
+    {
+      "collection": "heritage_entries",
+      "document_id": "luhya_mwambu_sela",
+      "fields": {
+        "org_id": "luhya_cultural_council",
+        "title": "Mwambu and Sela — the first Luhya man and woman",
+        "content_type": "Stories",
+        "subcategory": "Creation myth",
+        "description": "In the beginning, Were — the supreme creator — made Mwambu, the first man, and placed him on earth. He gave him Sela for a wife...",
+        "tags": ["creation", "Were", "oral tradition", "Luhya", "Kenya"],
+        "visibility": "public",
+        "locality": "Western Kenya",
+        "image_url": null,
+        "comment_count": 0,
+        "connection_count": 0,
+        "has_active_dispute": false,
+        "created_by": "seed",
+        "country": "kenya",
+        "people": "luhya"
+      }
+    },
+    {
+      "collection": "heritage_entries",
+      "document_id": "bukusu_imbalu",
+      "fields": {
+        "org_id": "luhya_cultural_council",
+        "title": "Imbalu — the Bukusu circumcision rite",
+        "content_type": "Ceremony",
+        "subcategory": "Rite of passage",
+        "description": "The Bukusu circumcision — Imbalu — is performed every even-numbered year and is among the most significant cultural events in western Kenya...",
+        "tags": ["circumcision", "Imbalu", "Bukusu", "ceremony", "Kenya"],
+        "visibility": "public",
+        "locality": "Bungoma County, Kenya",
+        "image_url": null,
+        "comment_count": 0,
+        "connection_count": 0,
+        "has_active_dispute": false,
+        "created_by": "seed",
+        "country": "kenya",
+        "people": "luhya",
+        "sub_group": "bukusu"
+      }
+    },
+    {
+      "collection": "heritage_entries",
+      "document_id": "luhya_isukuti_drums",
+      "fields": {
+        "org_id": "luhya_cultural_council",
+        "title": "Isukuti drum ensemble",
+        "content_type": "Music",
+        "subcategory": "Traditional instrument",
+        "description": "Traditional celebration drumming performed at weddings, funerals, and harvest festivals. The isukuti is a large double-headed drum central to Luhya ceremony.",
+        "tags": ["isukuti", "drums", "music", "Luhya", "Kenya", "ceremony"],
+        "visibility": "public",
+        "locality": "Western Kenya",
+        "image_url": null,
+        "comment_count": 0,
+        "connection_count": 0,
+        "has_active_dispute": false,
+        "created_by": "seed",
+        "country": "kenya",
+        "people": "luhya"
+      }
+    }
+  ]
+}

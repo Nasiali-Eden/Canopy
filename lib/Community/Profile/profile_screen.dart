@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../Culture/culture_home.dart';
+import '../../EnvironmentalOps/env_ops_shell.dart';
 import '../../Features/marketplace/marketplace_seller_stub.dart';
 import '../../MarketPlace/market_home.dart';
 import '../../Organization/Home/org_home.dart';
@@ -80,6 +82,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = Provider.of<F_User?>(context);
 
+    // Guard against null user during sign-out (auth stream fires null
+    // before the Navigator.pushReplacement completes).
+    if (user == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return FutureBuilder<Map<String, dynamic>?>(
       future: _userDataFuture,
       builder: (context, userSnapshot) {
@@ -89,7 +97,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final orgId = userData?['orgId'] as String?;
 
         return StreamBuilder<ProfileData>(
-          stream: ProfileService().watchProfile(userId: user!.uid),
+          stream: ProfileService().watchProfile(userId: user.uid),
           builder: (context, snapshot) {
             final profile = snapshot.data;
 
@@ -109,28 +117,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           final orgData = orgSnapshot.data;
                           final hasMarketplace =
                               orgData?['marketplaceStatus'] == 'approved';
-                          final sellerRole = orgData?['sellerRole'] as String?;
+                          final hasEnvOps =
+                              orgData?['envOpsStatus'] == 'approved';
+                          final hasCultural =
+                              orgData?['culturalStatus'] == 'approved';
 
                           return Column(
                             children: [
                               _buildMemberRoleContextSwitcher(
                                 context,
-                                hasMarketplace,
-                                sellerRole,
-                                orgId,
+                                hasMarketplace: hasMarketplace,
+                                hasEnvOps: hasEnvOps,
+                                hasCultural: hasCultural,
+                                orgId: orgId,
                               ),
                               const SizedBox(height: 24),
                             ],
                           );
                         },
                       ),
+                    _buildImpactStats(context, user.uid),
+                    const SizedBox(height: 24),
                     _buildPersonalInfo(context, profile),
                     const SizedBox(height: 24),
                     _buildAccountSection(context),
                     const SizedBox(height: 16),
                     _buildNotificationsSection(context),
                     const SizedBox(height: 16),
-                    _buildImpactSection(context, user!.uid),
+                    _buildImpactSection(context, user.uid),
                     const SizedBox(height: 16),
                     _buildRecognitionSection(context),
                     const SizedBox(height: 16),
@@ -149,36 +163,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildMemberRoleContextSwitcher(
-    BuildContext context,
-    bool hasMarketplace,
-    String? sellerRole,
-    String orgId,
-  ) {
+    BuildContext context, {
+    required bool hasMarketplace,
+    required bool hasEnvOps,
+    required bool hasCultural,
+    required String orgId,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: RoleContextSwitcher(
         activeContext: 'member',
         hasMarketplace: hasMarketplace,
+        hasEnvOps: hasEnvOps,
+        hasCultural: hasCultural,
         onOrgTap: () {
-          // Switch to Org context (full shell)
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(
-              builder: (_) => const OrganizationHome(),
-            ),
+            MaterialPageRoute(builder: (_) => const OrganizationHome()),
             (route) => false,
           );
         },
-        onMemberTap: () {
-          // Already on member context, no-op
-        },
+        onMemberTap: () {},
         onMarketplaceTap: () {
-          // Switch to Marketplace context (full shell)
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(
-              builder: (_) => const SellerHomeScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const SellerHomeScreen()),
+            (route) => false,
+          );
+        },
+        onEnvOpsTap: () {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const EnvOpsShell()),
+            (route) => false,
+          );
+        },
+        onCulturalTap: () {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => CultureHomeScreen(orgId: orgId)),
             (route) => false,
           );
         },
@@ -268,6 +291,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildImpactStats(BuildContext context, String userId) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots(),
+      builder: (context, snap) {
+        final d = snap.data?.data() as Map<String, dynamic>? ?? {};
+        final points = (d['totalPoints'] ?? 0).toString();
+        final contributions = (d['contributions'] ?? 0).toString();
+        final rank = (d['rank'] ?? '-').toString();
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: _ImpactTile(
+                  label: 'Impact Points',
+                  value: points,
+                  icon: Icons.bolt_outlined,
+                  color: AppTheme.tertiary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ImpactTile(
+                  label: 'Contributions',
+                  value: contributions,
+                  icon: Icons.volunteer_activism_outlined,
+                  color: AppTheme.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ImpactTile(
+                  label: 'Rank',
+                  value: rank == '-' ? '-' : '#$rank',
+                  icon: Icons.emoji_events_outlined,
+                  color: AppTheme.accent,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -710,7 +781,6 @@ class _SettingsCard extends StatelessWidget {
       ),
       child: Column(
         children: items.asMap().entries.map((entry) {
-          final isLast = entry.key == items.length - 1;
           return Column(
             children: [
               if (entry.key > 0)
@@ -782,6 +852,63 @@ class _SettingsItemContent extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ImpactTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _ImpactTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.darkGreen.withOpacity(0.65),
+            ),
+          ),
+        ],
       ),
     );
   }

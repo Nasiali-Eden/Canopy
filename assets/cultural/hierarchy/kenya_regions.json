@@ -1,0 +1,168 @@
+{
+  "_file": "kenya_regions.json",
+  "_collection": "heritage_hierarchy",
+  "_note": "Kenya's 8 former provinces, used as the mid-level browse layer. Each region groups multiple communities and counties. primary_communities lists the dominant community IDs — these must exist in kenya_communities.json.",
+  "_created_by": "org_canopy_admin",
+
+  "documents": [
+    {
+      "id": "region_nairobi",
+      "node_type": "region",
+      "name": "Nairobi",
+      "country_id": "country_kenya",
+      "region_type": "city",
+      "description": "Kenya's capital and largest city. A meeting point of all of Kenya's communities and a significant diaspora hub for many ethnic groups, including a historic Nubian settlement (Kibera's Ayany) and large Luo, Luhya, Kikuyu, and Kamba urban populations. Nairobi is where many cultural practices are adapted, contested, and revived in urban contexts.",
+      "cover_image_url": null,
+      "primary_communities": [
+        "community_kikuyu",
+        "community_luo",
+        "community_luhya",
+        "community_kamba",
+        "community_nubian"
+      ],
+      "entry_count": 0,
+      "is_informal_settlement": false,
+      "created_at": "2026-01-15T08:05:00Z",
+      "created_by_org_id": "org_canopy_admin"
+    },
+    {
+      "id": "region_central_kenya",
+      "node_type": "region",
+      "name": "Central Kenya",
+      "country_id": "country_kenya",
+      "region_type": "highland",
+      "description": "The fertile highland region on the slopes of Mount Kenya and the Aberdare ranges. Historically the heartland of the Kikuyu people, with the Embu and Meru communities to the north-east. The region carries deep oral traditions around land, ancestry, and the sacred fig tree (mũgumo).",
+      "cover_image_url": null,
+      "primary_communities": [
+        "community_kikuyu",
+        "community_embu",
+        "community_meru"
+      ],
+      "entry_count": 0,
+      "is_informal_settlement": false,
+      "created_at": "2026-01-15T08:06:00Z",
+      "created_by_org_id": "org_canopy_admin"
+    },
+    {
+      "id": "region_coast",
+      "node_type": "region",
+      "name": "Coast",
+      "country_id": "country_kenya",
+      "region_type": "coastal_area",
+      "description": "Kenya's Indian Ocean coastline, stretching from Kwale in the south to Lamu in the north. Home to the nine Mijikenda communities, the Swahili-speaking coastal towns, the Pokomo and Orma of the Tana River, and the Taita highlands. The region has been a trade crossroads for centuries — Swahili culture, Islamic heritage, and indigenous Bantu traditions interweave here more than anywhere else in Kenya.",
+      "cover_image_url": null,
+      "primary_communities": [
+        "community_mijikenda",
+        "community_giriama",
+        "community_digo",
+        "community_duruma",
+        "community_pokomo",
+        "community_orma",
+        "community_taita",
+        "community_taveta"
+      ],
+      "entry_count": 0,
+      "is_informal_settlement": false,
+      "created_at": "2026-01-15T08:07:00Z",
+      "created_by_org_id": "org_canopy_admin"
+    },
+    {
+      "id": "region_eastern",
+      "node_type": "region",
+      "name": "Eastern",
+      "country_id": "country_kenya",
+      "region_type": "region",
+      "description": "A vast and ecologically diverse region stretching from the slopes of Mount Kenya to the semi-arid lowlands bordering Somalia. Primarily home to the Kamba (Akamba) in the south, with Meru, Embu, Tharaka, and Mbeere communities in the north and west. The eastern plains are also home to pastoralist Borana and Somali communities.",
+      "cover_image_url": null,
+      "primary_communities": [
+        "community_kamba",
+        "community_meru",
+        "community_tharaka",
+        "community_mbeere",
+        "community_borana"
+      ],
+      "entry_count": 0,
+      "is_informal_settlement": false,
+      "created_at": "2026-01-15T08:08:00Z",
+      "created_by_org_id": "org_canopy_admin"
+    },
+    {
+      "id": "region_north_eastern",
+      "node_type": "region",
+      "name": "North Eastern",
+      "country_id": "country_kenya",
+      "region_type": "arid_north",
+      "description": "Kenya's largest and most sparsely populated region, bordering Somalia and Ethiopia. Predominantly home to Somali clans, along with Borana, Gabra, Rendille, Daasanach, Sakuye, and Burji pastoralist communities. The region holds a distinct Islamic cultural tradition, camel herding knowledge, oral poetry (gabay), and survival practices adapted to one of East Africa's most demanding environments.",
+      "cover_image_url": null,
+      "primary_communities": [
+        "community_somali",
+        "community_borana",
+        "community_gabra",
+        "community_rendille",
+        "community_daasanach"
+      ],
+      "entry_count": 0,
+      "is_informal_settlement": false,
+      "created_at": "2026-01-15T08:09:00Z",
+      "created_by_org_id": "org_canopy_admin"
+    },
+    {
+      "id": "region_nyanza",
+      "node_type": "region",
+      "name": "Nyanza",
+      "country_id": "country_kenya",
+      "region_type": "lake_basin",
+      "description": "The Lake Victoria basin in south-western Kenya. The Luo are the dominant community on the lakeshores, with the Kisii/Gusii in the highlands to the east and the Kuria to the south near the Tanzanian border. This region carries one of Kenya's richest concentrations of music traditions — the nyatiti lyre, ohangla drumming, and the Kisii soapstone carving heritage.",
+      "cover_image_url": null,
+      "primary_communities": [
+        "community_luo",
+        "community_kisii",
+        "community_kuria"
+      ],
+      "entry_count": 0,
+      "is_informal_settlement": false,
+      "created_at": "2026-01-15T08:10:00Z",
+      "created_by_org_id": "org_canopy_admin"
+    },
+    {
+      "id": "region_rift_valley",
+      "node_type": "region",
+      "name": "Rift Valley",
+      "country_id": "country_kenya",
+      "region_type": "region",
+      "description": "Kenya's largest region by area, running through the Great Rift Valley from the Ethiopian border to Tanzania. Home to the Kalenjin confederation in the highlands (Nandi, Kipsigis, Tugen, Elgeyo, Marakwet), the Maasai and Samburu in the central and southern plains, and the Turkana and Pokot in the north. It is also home to the Ogiek forest communities, one of Kenya's most endangered indigenous groups.",
+      "cover_image_url": null,
+      "primary_communities": [
+        "community_kalenjin",
+        "community_maasai",
+        "community_samburu",
+        "community_turkana",
+        "community_pokot",
+        "community_ilchamus",
+        "community_ogiek",
+        "community_sengwer"
+      ],
+      "entry_count": 0,
+      "is_informal_settlement": false,
+      "created_at": "2026-01-15T08:11:00Z",
+      "created_by_org_id": "org_canopy_admin"
+    },
+    {
+      "id": "region_western_kenya",
+      "node_type": "region",
+      "name": "Western Kenya",
+      "country_id": "country_kenya",
+      "region_type": "region",
+      "description": "The region bordering Uganda and Lake Victoria to the west, encompassing Kakamega, Bungoma, Busia, Vihiga, and Trans-Nzoia counties. Predominantly home to the 18 sub-groups of the Luhya people — Kenya's second largest ethnic group — and the Teso (Iteso) in the north-west. Known for the Isukuti drum tradition, Imbalu circumcision ceremonies, Kakamega rainforest knowledge, and a rich agricultural heritage.",
+      "cover_image_url": null,
+      "primary_communities": [
+        "community_luhya",
+        "community_teso"
+      ],
+      "entry_count": 0,
+      "is_informal_settlement": false,
+      "created_at": "2026-01-15T08:12:00Z",
+      "created_by_org_id": "org_canopy_admin"
+    }
+  ]
+}

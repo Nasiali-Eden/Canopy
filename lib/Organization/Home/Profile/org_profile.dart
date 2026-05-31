@@ -709,21 +709,15 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
           .collection('organizations')
           .doc(_orgId)
           .update({
-        'culturalStatus': 'approved',
+        'culturalStatus': 'pending',
         'culturalRole': _culturalRole,
         'culturalRegisteredAt': FieldValue.serverTimestamp(),
       });
       setState(() {
-        _culturalStatus = 'approved';
+        _culturalStatus = 'pending';
         _culturalRole = null;
       });
       widget.onChanged();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(_snack(
-          'Cultural Archive enabled. Use the Culture tab to switch.',
-          const Color(0xFF7A5230),
-        ));
-      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(_errSnack());
     } finally {
@@ -731,12 +725,11 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
     }
   }
 
+  // Fixed (not floating) so the snackbar doesn't conflict with the parent
+  // Scaffold's bottomNavigationBar when shown from inside a bottom sheet.
   SnackBar _snack(String msg, Color bg) => SnackBar(
         content: Text(msg),
         backgroundColor: bg,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
       );
 
   SnackBar _errSnack() => _snack('Something went wrong. Please try again.', Colors.red.shade700);
