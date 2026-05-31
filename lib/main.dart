@@ -5,14 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'dart:io';
-import 'EnvironmentalOps/env_ops_shell.dart';
 import 'Services/storage/user_persistence.dart';
 
 import 'Models/user.dart';
 import 'Providers/theme_provider.dart';
 import 'Services/Authentication/auth.dart';
-import 'Culture/culture_home.dart';
-
 import 'Shared/Pages/splash_screen.dart';
 
 import 'Shared/theme/app_theme.dart';
@@ -223,7 +220,7 @@ class MyApp extends StatelessWidget {
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: themeProvider.mode,
-            home: const EnvOpsShell(),
+            home: const SplashScreen(),
           );
         },
       ),

@@ -2,19 +2,27 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 class RoleContextSwitcher extends StatelessWidget {
-  final String activeContext; // 'org' | 'member' | 'marketplace'
+  final String activeContext; // 'org' | 'member' | 'marketplace' | 'envOps' | 'cultural'
   final bool hasMarketplace;
+  final bool hasEnvOps;
+  final bool hasCultural;
   final VoidCallback onOrgTap;
   final VoidCallback onMemberTap;
   final VoidCallback? onMarketplaceTap;
+  final VoidCallback? onEnvOpsTap;
+  final VoidCallback? onCulturalTap;
 
   const RoleContextSwitcher({
     super.key,
     required this.activeContext,
     required this.hasMarketplace,
+    this.hasEnvOps = false,
+    this.hasCultural = false,
     required this.onOrgTap,
     required this.onMemberTap,
     this.onMarketplaceTap,
+    this.onEnvOpsTap,
+    this.onCulturalTap,
   });
 
   @override
@@ -53,6 +61,30 @@ class RoleContextSwitcher extends StatelessWidget {
                 color: AppTheme.tertiary,
                 isActive: activeContext == 'marketplace',
                 onTap: onMarketplaceTap ?? () {},
+              ),
+            ],
+
+            // ── Environmental Ops Tab (conditional) ───────────────────────
+            if (hasEnvOps) ...[
+              const SizedBox(width: 8),
+              _buildTab(
+                label: 'Env Ops',
+                icon: Icons.eco_outlined,
+                color: const Color(0xFF2E7D5E),
+                isActive: activeContext == 'envOps',
+                onTap: onEnvOpsTap ?? () {},
+              ),
+            ],
+
+            // ── Cultural Archive Tab (conditional) ────────────────────────
+            if (hasCultural) ...[
+              const SizedBox(width: 8),
+              _buildTab(
+                label: 'Culture',
+                icon: Icons.auto_stories_outlined,
+                color: const Color(0xFF7A5230),
+                isActive: activeContext == 'cultural',
+                onTap: onCulturalTap ?? () {},
               ),
             ],
           ],
