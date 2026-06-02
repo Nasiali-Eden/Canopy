@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Services/Authentication/auth.dart';
 import '../../Shared/Pages/login.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/widgets/role_context_switcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SellerProfilePage
@@ -22,7 +23,22 @@ import '../../Shared/theme/app_theme.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SellerProfilePage extends StatefulWidget {
-  const SellerProfilePage({super.key});
+  final WidgetBuilder? orgContextBuilder;
+  final WidgetBuilder? memberContextBuilder;
+  final WidgetBuilder? envOpsContextBuilder;
+  final WidgetBuilder? culturalContextBuilder;
+  final bool hasEnvOps;
+  final bool hasCultural;
+
+  const SellerProfilePage({
+    super.key,
+    this.orgContextBuilder,
+    this.memberContextBuilder,
+    this.envOpsContextBuilder,
+    this.culturalContextBuilder,
+    this.hasEnvOps = false,
+    this.hasCultural = false,
+  });
 
   @override
   State<SellerProfilePage> createState() => _SellerProfilePageState();
@@ -137,6 +153,51 @@ class _SellerProfilePageState extends State<SellerProfilePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Context switcher — only shown when context builders were injected
+                if (widget.orgContextBuilder != null ||
+                    widget.memberContextBuilder != null) ...[
+                  const SizedBox(height: 12),
+                  RoleContextSwitcher(
+                    activeContext: 'marketplace',
+                    hasMarketplace: true,
+                    hasEnvOps: widget.hasEnvOps,
+                    hasCultural: widget.hasCultural,
+                    onOrgTap: () {
+                      if (widget.orgContextBuilder != null) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                              builder: widget.orgContextBuilder!),
+                          (_) => false,
+                        );
+                      }
+                    },
+                    onMemberTap: () {
+                      if (widget.memberContextBuilder != null) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                              builder: widget.memberContextBuilder!),
+                          (_) => false,
+                        );
+                      }
+                    },
+                    onMarketplaceTap: () {},
+                    onEnvOpsTap: widget.envOpsContextBuilder != null
+                        ? () => Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                  builder: widget.envOpsContextBuilder!),
+                              (_) => false,
+                            )
+                        : null,
+                    onCulturalTap: widget.culturalContextBuilder != null
+                        ? () => Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                  builder: widget.culturalContextBuilder!),
+                              (_) => false,
+                            )
+                        : null,
+                  ),
+                  const SizedBox(height: 4),
+                ],
                 // Shop Header
                 _buildShopHeader(
                   shopName: shopName,

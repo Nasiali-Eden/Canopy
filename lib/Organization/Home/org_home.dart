@@ -51,7 +51,7 @@ class _OrganizationHomeState extends State<OrganizationHome> {
       const OrgPeopleScreen(),
       const OrgOperations(),
       const OrgProgrammes(),
-      const OrgProfile(),
+      OrgProfile(orgHomeBuilder: (_) => const OrganizationHome()),
     ];
 
     return WillPopScope(

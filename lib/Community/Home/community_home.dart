@@ -27,7 +27,8 @@ class CommunityHomeScreen extends StatefulWidget {
 class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
   int _index = 0;
 
-  bool get _isMapTab => _index == 3;
+  // Heritage (2) and Map (3) both use a dark/transparent bottom nav
+  bool get _isDarkTab => _index == 2 || _index == 3;
 
   @override
   Widget build(BuildContext context) {
@@ -158,8 +159,8 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
           ),
         )
             : null,
-        // Map extends to bottom edge; all other tabs sit above nav bar normally
-        extendBody: _isMapTab,
+        // Dark tabs (Heritage + Map) extend body behind transparent nav bar
+        extendBody: _isDarkTab,
         body: pages[_index],
         floatingActionButton: _index == 1
             ? ActivityHomeLogic.buildFloatingActionButton(context, user)
@@ -167,8 +168,8 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
         bottomNavigationBar: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: _isMapTab ? Colors.transparent : Colors.white,
-            boxShadow: _isMapTab
+            color: _isDarkTab ? Colors.transparent : Colors.white,
+            boxShadow: _isDarkTab
                 ? []
                 : [
               BoxShadow(
@@ -179,64 +180,78 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
             ],
           ),
           child: SafeArea(
-            child: NavigationBar(
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              selectedIndex: _index,
-              onDestinationSelected: (i) => setState(() => _index = i),
-              indicatorColor: _isMapTab
-                  ? Colors.white.withOpacity(0.20)
-                  : AppTheme.primary.withOpacity(0.15),
-              height: 70,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              destinations: [
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined,
-                      color: _isMapTab
-                          ? Colors.white.withOpacity(0.70)
-                          : AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.home,
-                      color: _isMapTab ? Colors.white : AppTheme.primary),
-                  label: 'Home',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.event_note_outlined,
-                      color: _isMapTab
-                          ? Colors.white.withOpacity(0.70)
-                          : AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.event_note,
-                      color: _isMapTab ? Colors.white : AppTheme.primary),
-                  label: 'Activities',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.auto_stories_outlined,
-                      color: _isMapTab
-                          ? Colors.white.withOpacity(0.70)
-                          : AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.auto_stories,
-                      color: _isMapTab ? Colors.white : AppTheme.primary),
-                  label: 'Heritage',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.map_outlined,
-                      color: _isMapTab
-                          ? Colors.white.withOpacity(0.70)
-                          : AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.map,
-                      color: _isMapTab ? Colors.white : AppTheme.primary),
-                  label: 'Map',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.person_outline,
-                      color: _isMapTab
-                          ? Colors.white.withOpacity(0.70)
-                          : AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.person,
-                      color: _isMapTab ? Colors.white : AppTheme.primary),
-                  label: 'Profile',
-                ),
-              ],
+            child: NavigationBarTheme(
+              data: NavigationBarThemeData(
+                labelTextStyle: WidgetStateProperty.resolveWith((states) {
+                  final selected = states.contains(WidgetState.selected);
+                  return TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: _isDarkTab
+                        ? (selected ? Colors.white : Colors.white.withOpacity(0.55))
+                        : (selected ? AppTheme.primary : AppTheme.darkGreen.withOpacity(0.50)),
+                  );
+                }),
+              ),
+              child: NavigationBar(
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                selectedIndex: _index,
+                onDestinationSelected: (i) => setState(() => _index = i),
+                indicatorColor: _isDarkTab
+                    ? Colors.white.withOpacity(0.20)
+                    : AppTheme.primary.withOpacity(0.15),
+                height: 70,
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                destinations: [
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined,
+                        color: _isDarkTab
+                            ? Colors.white.withOpacity(0.70)
+                            : AppTheme.darkGreen.withOpacity(0.50)),
+                    selectedIcon: Icon(Icons.home,
+                        color: _isDarkTab ? Colors.white : AppTheme.primary),
+                    label: 'Home',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.event_note_outlined,
+                        color: _isDarkTab
+                            ? Colors.white.withOpacity(0.70)
+                            : AppTheme.darkGreen.withOpacity(0.50)),
+                    selectedIcon: Icon(Icons.event_note,
+                        color: _isDarkTab ? Colors.white : AppTheme.primary),
+                    label: 'Activities',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.auto_stories_outlined,
+                        color: _isDarkTab
+                            ? Colors.white.withOpacity(0.70)
+                            : AppTheme.darkGreen.withOpacity(0.50)),
+                    selectedIcon: Icon(Icons.auto_stories,
+                        color: _isDarkTab ? Colors.white : AppTheme.primary),
+                    label: 'Heritage',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.map_outlined,
+                        color: _isDarkTab
+                            ? Colors.white.withOpacity(0.70)
+                            : AppTheme.darkGreen.withOpacity(0.50)),
+                    selectedIcon: Icon(Icons.map,
+                        color: _isDarkTab ? Colors.white : AppTheme.primary),
+                    label: 'Map',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person_outline,
+                        color: _isDarkTab
+                            ? Colors.white.withOpacity(0.70)
+                            : AppTheme.darkGreen.withOpacity(0.50)),
+                    selectedIcon: Icon(Icons.person,
+                        color: _isDarkTab ? Colors.white : AppTheme.primary),
+                    label: 'Profile',
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -12,7 +12,11 @@ import '../../../Shared/theme/app_theme.dart';
 import '../../../Shared/widgets/role_context_switcher.dart';
 
 class OrgProfile extends StatefulWidget {
-  const OrgProfile({super.key});
+  /// Passed by OrganizationHome so context-switch destinations can navigate back
+  /// without creating a circular import (org_home → org_profile → org_home).
+  final WidgetBuilder? orgHomeBuilder;
+
+  const OrgProfile({super.key, this.orgHomeBuilder});
 
   @override
   State<OrgProfile> createState() => _OrgProfileState();
@@ -217,14 +221,50 @@ class _OrgProfileState extends State<OrgProfile> {
         onMarketplaceTap: () {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => const SellerHomeScreen()),
+            MaterialPageRoute(
+              builder: (_) => SellerHomeScreen(
+                hasEnvOps: hasEnvOps,
+                hasCultural: hasCultural,
+                orgContextBuilder: widget.orgHomeBuilder,
+                memberContextBuilder: (_) => const CommunityHomeScreen(),
+                envOpsContextBuilder: hasEnvOps
+                    ? (_) => EnvOpsShell(
+                          hasMarketplace: hasMarketplace,
+                          hasCultural: hasCultural,
+                          orgContextBuilder: widget.orgHomeBuilder,
+                          memberContextBuilder: (_) => const CommunityHomeScreen(),
+                        )
+                    : null,
+                culturalContextBuilder: hasCultural
+                    ? (_) => CultureHomeScreen(orgId: orgId)
+                    : null,
+              ),
+            ),
             (route) => false,
           );
         },
         onEnvOpsTap: () {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => const EnvOpsShell()),
+            MaterialPageRoute(
+              builder: (_) => EnvOpsShell(
+                hasMarketplace: hasMarketplace,
+                hasCultural: hasCultural,
+                orgContextBuilder: widget.orgHomeBuilder,
+                memberContextBuilder: (_) => const CommunityHomeScreen(),
+                marketplaceContextBuilder: hasMarketplace
+                    ? (_) => SellerHomeScreen(
+                          hasEnvOps: hasEnvOps,
+                          hasCultural: hasCultural,
+                          orgContextBuilder: widget.orgHomeBuilder,
+                          memberContextBuilder: (_) => const CommunityHomeScreen(),
+                        )
+                    : null,
+                culturalContextBuilder: hasCultural
+                    ? (_) => CultureHomeScreen(orgId: orgId)
+                    : null,
+              ),
+            ),
             (route) => false,
           );
         },

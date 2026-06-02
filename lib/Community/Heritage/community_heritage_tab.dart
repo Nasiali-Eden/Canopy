@@ -98,9 +98,9 @@ class _CommunityHeritageTabState extends State<CommunityHeritageTab> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 1 — Heritage Home
+// SCREEN 1 — Heritage Home (redesigned with BG.png)
 // ─────────────────────────────────────────────────────────────────────────────
-class _HeritageHome extends StatefulWidget {
+class _HeritageHome extends StatelessWidget {
   final VoidCallback onKenyaTap;
   final void Function(String name, String subtitle) onCountryComingSoon;
 
@@ -108,323 +108,285 @@ class _HeritageHome extends StatefulWidget {
       {required this.onKenyaTap, required this.onCountryComingSoon});
 
   @override
-  State<_HeritageHome> createState() => _HeritageHomeState();
-}
-
-class _HeritageHomeState extends State<_HeritageHome> {
-  final List<String> _filters = [
-    'Explore', 'Stories', 'Food', 'Myths', 'Craft', 'Music'
-  ];
-  String _activeFilter = 'Explore';
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _deep,
-      body: CustomScrollView(
-        slivers: [
-          // ── Sticky header ──
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: _deep,
-            surfaceTintColor: Colors.transparent,
-            expandedHeight: 200,
-            flexibleSpace: FlexibleSpaceBar(
-              background: _HeroBg(),
-              collapseMode: CollapseMode.parallax,
-            ),
-            title: const Text(
-              'Heritage',
-              style: TextStyle(
-                color: _textColor,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.02,
-              ),
-            ),
-            centerTitle: true,
-            actions: [
-              Container(
-                margin: const EdgeInsets.only(right: 12),
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _surface2,
-                  borderRadius: BorderRadius.circular(50),
-                  border: Border.all(color: _border),
-                ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: () {},
-                  icon: const Icon(Icons.search, size: 18, color: _textColor),
-                ),
-              ),
-            ],
-          ),
+    final mq = MediaQuery.of(context);
+    final topInset = mq.padding.top;
+    final bottomInset = mq.padding.bottom;
 
-          // ── Search bar ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '"Every culture has its own logic,\nits own reason for being."',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontStyle: FontStyle.italic,
-                      color: _textDim,
-                      height: 1.6,
-                    ),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        title: const Text(
+          'Heritage',
+          style: TextStyle(
+            color: _textColor,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.35),
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(color: _border),
+            ),
+            child: IconButton(
+              padding: const EdgeInsets.all(8),
+              onPressed: () => _showSearch(context),
+              icon: const Icon(Icons.search, size: 20, color: _textColor),
+            ),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // ── Full-screen background image ──
+          Positioned.fill(
+            child: Image.asset(
+              'images/BG.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+            ),
+          ),
+          // ── Gradient overlay — keeps content legible ──
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.22),
+                    Colors.black.withOpacity(0.40),
+                    Colors.black.withOpacity(0.65),
+                    Colors.black.withOpacity(0.82),
+                  ],
+                  stops: const [0.0, 0.28, 0.60, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // ── Scrollable content on top ──
+          CustomScrollView(
+            slivers: [
+              // Space under transparent app bar
+              SliverToBoxAdapter(child: SizedBox(height: topInset + 60 + 4)),
+
+              // Quote
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 2,
+                        color: _gold,
+                        margin: const EdgeInsets.only(bottom: 8),
+                      ),
+                      const Text(
+                        '"Every culture has its own logic,\nits own reason for being."',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontStyle: FontStyle.italic,
+                          color: _textDim,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _surface2,
-                      borderRadius: BorderRadius.circular(40),
-                      border: Border.all(color: _border),
-                    ),
-                    child: const Row(
-                      children: [
-                        SizedBox(width: 14),
-                        Icon(Icons.search, size: 16, color: _textFaint),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            style: TextStyle(
-                                color: _textColor,
-                                fontSize: 14),
-                            decoration: InputDecoration(
-                              hintText:
-                                  'Search stories, traditions, foods...',
-                              hintStyle:
-                                  TextStyle(color: _textFaint, fontSize: 13),
-                              border: InputBorder.none,
-                              contentPadding:
-                                  EdgeInsets.symmetric(vertical: 13),
+                ),
+              ),
+
+              // Section label
+              const SliverToBoxAdapter(child: _SectionLabel('Choose a country')),
+
+              // Country grid
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      _CountryCard(
+                        name: 'Kenya',
+                        flag: '🇰🇪',
+                        emblem: '🌿',
+                        subtitle: '45 ethnic groups · 47 counties',
+                        gradientStart: const Color(0xFF0D2A1A),
+                        gradientEnd: const Color(0xFF2D7A4F),
+                        isLive: true,
+                        fullWidth: true,
+                        onTap: onKenyaTap,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _CountryCard(
+                              name: 'Uganda',
+                              flag: '🇺🇬',
+                              emblem: '🦅',
+                              subtitle: '56 ethnic groups',
+                              gradientStart: const Color(0xFF2A1A0A),
+                              gradientEnd: const Color(0xFF5C3810),
+                              isLive: false,
+                              onTap: () => onCountryComingSoon(
+                                'Uganda',
+                                '56 ethnic groups · Cultural content is being '
+                                    'documented by community knowledge holders and '
+                                    'partner organisations.',
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Filter pills ──
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 52,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                itemCount: _filters.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, i) {
-                  final f = _filters[i];
-                  final active = f == _activeFilter;
-                  return GestureDetector(
-                    onTap: () => setState(() => _activeFilter = f),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: active ? _green : _surface2,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: active ? _green : _border,
-                        ),
-                      ),
-                      child: Text(
-                        f,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: active ? Colors.white : _textDim,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-
-          // ── Section label ──
-          const SliverToBoxAdapter(child: _SectionLabel('Choose a country')),
-
-          // ── Country grid ──
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                children: [
-                  // Kenya — full width
-                  _CountryCard(
-                    name: 'Kenya',
-                    flag: '🇰🇪',
-                    emblem: '🌿',
-                    subtitle: '45 ethnic groups · 47 counties',
-                    gradientStart: const Color(0xFF0D2A1A),
-                    gradientEnd: const Color(0xFF2D7A4F),
-                    isLive: true,
-                    fullWidth: true,
-                    onTap: widget.onKenyaTap,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _CountryCard(
-                          name: 'Uganda',
-                          flag: '🇺🇬',
-                          emblem: '🦅',
-                          subtitle: '56 ethnic groups',
-                          gradientStart: const Color(0xFF2A1A0A),
-                          gradientEnd: const Color(0xFF5C3810),
-                          isLive: false,
-                          onTap: () => widget.onCountryComingSoon(
-                            'Uganda',
-                            '56 ethnic groups · Cultural content is being '
-                                'documented by community knowledge holders and '
-                                'partner organisations.',
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _CountryCard(
+                              name: 'Nigeria',
+                              flag: '🇳🇬',
+                              emblem: '🔥',
+                              subtitle: '250+ ethnic groups',
+                              gradientStart: const Color(0xFF0A1A2A),
+                              gradientEnd: const Color(0xFF0E3D2E),
+                              isLive: false,
+                              onTap: () => onCountryComingSoon(
+                                'Nigeria',
+                                '250+ ethnic groups · Cultural content is being '
+                                    'documented.',
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _CountryCard(
-                          name: 'Nigeria',
-                          flag: '🇳🇬',
-                          emblem: '🔥',
-                          subtitle: '250+ ethnic groups',
-                          gradientStart: const Color(0xFF0A1A2A),
-                          gradientEnd: const Color(0xFF0E3D2E),
-                          isLive: false,
-                          onTap: () => widget.onCountryComingSoon(
-                            'Nigeria',
-                            '250+ ethnic groups · Cultural content is being '
-                                'documented.',
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _CountryCard(
+                              name: 'Ghana',
+                              flag: '🇬🇭',
+                              emblem: '🪘',
+                              subtitle: '100+ ethnic groups',
+                              gradientStart: const Color(0xFF1A0A00),
+                              gradientEnd: const Color(0xFF4A2800),
+                              isLive: false,
+                              onTap: () => onCountryComingSoon(
+                                'Ghana',
+                                '100+ ethnic groups · Cultural content is being '
+                                    'documented.',
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _CountryCard(
+                              name: 'Tanzania',
+                              flag: '🇹🇿',
+                              emblem: '🦁',
+                              subtitle: '120+ ethnic groups',
+                              gradientStart: const Color(0xFF0D1A0D),
+                              gradientEnd: const Color(0xFF1A3D2E),
+                              isLive: false,
+                              onTap: () => onCountryComingSoon(
+                                'Tanzania',
+                                '120+ ethnic groups · Cultural content is being '
+                                    'documented.',
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _CountryCard(
-                          name: 'Ghana',
-                          flag: '🇬🇭',
-                          emblem: '🪘',
-                          subtitle: '100+ ethnic groups',
-                          gradientStart: const Color(0xFF1A0A00),
-                          gradientEnd: const Color(0xFF4A2800),
-                          isLive: false,
-                          onTap: () => widget.onCountryComingSoon(
-                            'Ghana',
-                            '100+ ethnic groups · Cultural content is being '
-                                'documented.',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _CountryCard(
-                          name: 'Tanzania',
-                          flag: '🇹🇿',
-                          emblem: '🦁',
-                          subtitle: '120+ ethnic groups',
-                          gradientStart: const Color(0xFF0D1A0D),
-                          gradientEnd: const Color(0xFF1A3D2E),
-                          isLive: false,
-                          onTap: () => widget.onCountryComingSoon(
-                            'Tanzania',
-                            '120+ ethnic groups · Cultural content is being '
-                                'documented.',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
 
-          // ── Featured stories ──
-          const SliverToBoxAdapter(child: _SectionLabel('Featured stories')),
-          SliverToBoxAdapter(child: _FeaturedStoriesRow()),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              // Featured stories
+              const SliverToBoxAdapter(child: _SectionLabel('Featured stories')),
+              SliverToBoxAdapter(child: _FeaturedStoriesRow()),
+
+              // Bottom padding for transparent nav bar
+              SliverToBoxAdapter(child: SizedBox(height: 80 + bottomInset)),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  void _showSearch(BuildContext context) {
+    showSearch(context: context, delegate: _HeritageSearchDelegate());
+  }
+}
+
+// ─── Search delegate ──────────────────────────────────────────────────────────
+class _HeritageSearchDelegate extends SearchDelegate<String> {
+  @override
+  ThemeData appBarTheme(BuildContext context) {
+    return Theme.of(context).copyWith(
+      scaffoldBackgroundColor: _deep,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: _surface2,
+        iconTheme: IconThemeData(color: _textColor),
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        hintStyle: TextStyle(color: _textFaint),
+        border: InputBorder.none,
+      ),
+      textTheme: const TextTheme(
+        titleLarge: TextStyle(color: _textColor, fontSize: 16),
+      ),
+    );
+  }
+
+  @override
+  List<Widget> buildActions(BuildContext context) => [
+        IconButton(
+          icon: const Icon(Icons.clear, color: _textFaint),
+          onPressed: () => query = '',
+        )
+      ];
+
+  @override
+  Widget buildLeading(BuildContext context) => IconButton(
+        icon: const Icon(Icons.arrow_back, color: _textColor),
+        onPressed: () => close(context, ''),
+      );
+
+  @override
+  Widget buildResults(BuildContext context) => _buildSearchBody();
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildSearchBody();
+
+  Widget _buildSearchBody() {
+    if (query.isEmpty) {
+      return Container(
+        color: _deep,
+        child: Center(
+          child: Text('Search stories, traditions, foods...',
+              style: TextStyle(color: _textFaint, fontSize: 14)),
+        ),
+      );
+    }
+    return Container(
+      color: _deep,
+      child: Center(
+        child: Text('No results for "$query" yet.',
+            style: const TextStyle(color: _textDim, fontSize: 14)),
       ),
     );
   }
 }
 
-// ─── Hero background widget ───────────────────────────────────────────────────
-class _HeroBg extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Base gradient
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF061409), Color(0xFF122B1A), Color(0xFF0D1F14)],
-            ),
-          ),
-        ),
-        // Large faded pattern emoji
-        const Positioned.fill(
-          child: Align(
-            alignment: Alignment(0, -0.2),
-            child: Text('🌿', style: TextStyle(fontSize: 120)),
-          ),
-        ),
-        // Overlay gradient — fades the emoji
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                const Color(0xFF0D1F14).withOpacity(0.3),
-                const Color(0xFF0D1F14).withOpacity(0.85),
-                const Color(0xFF0D1F14),
-              ],
-            ),
-          ),
-        ),
-        // Bottom fade to body
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 60,
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.transparent, _deep],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 // ─── Country card ─────────────────────────────────────────────────────────────
 class _CountryCard extends StatelessWidget {
@@ -464,7 +426,6 @@ class _CountryCard extends StatelessWidget {
         ),
         child: Stack(
           children: [
-            // Large emblem faded
             Positioned.fill(
               child: Align(
                 alignment: Alignment.center,
@@ -474,7 +435,6 @@ class _CountryCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Gradient overlay
             Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
@@ -487,7 +447,6 @@ class _CountryCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Live / Soon badge
             Positioned(
               top: 10,
               right: 10,
@@ -503,15 +462,12 @@ class _CountryCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w600,
-                    color: isLive
-                        ? const Color(0xFF1A0E00)
-                        : Colors.white60,
+                    color: isLive ? const Color(0xFF1A0E00) : Colors.white60,
                     letterSpacing: 0.5,
                   ),
                 ),
               ),
             ),
-            // Info
             Positioned(
               bottom: 0,
               left: 0,
@@ -656,23 +612,20 @@ class _FeaturedCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Card top image / gradient
-          Expanded(
-            flex: 0,
-            child: SizedBox(
-              height: 90,
-              width: double.infinity,
-              child: item.imageUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl: item.imageUrl!,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => _CardGradientTop(item: item),
-                    )
-                  : _CardGradientTop(item: item),
-            ),
+          SizedBox(
+            height: 84,
+            width: double.infinity,
+            child: item.imageUrl != null
+                ? CachedNetworkImage(
+                    imageUrl: item.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => _CardGradientTop(item: item),
+                  )
+                : _CardGradientTop(item: item),
           ),
-          Padding(
-            padding: const EdgeInsets.all(12),
+          Expanded(
+            child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -704,6 +657,7 @@ class _FeaturedCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
           ),
         ],
       ),
@@ -797,121 +751,131 @@ class _KenyaScreenState extends State<_KenyaScreen>
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
     return Scaffold(
-      backgroundColor: _deep,
-      body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [
-          SliverAppBar(
-            expandedHeight: 220,
-            pinned: true,
-            backgroundColor: const Color(0xFF0D2A1A),
-            surfaceTintColor: Colors.transparent,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white70),
-              onPressed: widget.onBack,
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF0D2A1A), Color(0xFF1F5539), Color(0xFF2D7A4F)],
-                      ),
-                    ),
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: widget.onBack,
+        ),
+      ),
+      body: Stack(
+        children: [
+          // ── Full-screen kenya.png ──
+          Positioned.fill(
+            child: Image.asset(
+              'images/kenya.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF0D2A1A), Color(0xFF1F5539)],
                   ),
-                  const Positioned.fill(
-                    child: Align(
-                      alignment: Alignment(0, -0.1),
-                      child: Text('🌿', style: TextStyle(fontSize: 110)),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.7),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    left: 20,
-                    right: 20,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('🇰🇪', style: TextStyle(fontSize: 28)),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Kenya',
-                          style: TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            height: 1.0,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          'East Africa · 1963 independence',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withOpacity(0.5)),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: const [
-                            _KenyaStat(label: 'Ethnic groups', value: '45'),
-                            SizedBox(width: 20),
-                            _KenyaStat(label: 'Counties', value: '47'),
-                            SizedBox(width: 20),
-                            _KenyaStat(label: 'Languages', value: '68+'),
-                            SizedBox(width: 20),
-                            _KenyaStat(label: 'Population', value: '55M'),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-            bottom: TabBar(
-              controller: _tabController,
-              indicatorColor: _lgGreen,
-              labelColor: _lgGreen,
-              unselectedLabelColor: _textDim,
-              indicatorWeight: 2,
-              labelStyle: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w500),
-              tabs: const [
-                Tab(text: 'Cultures'),
-                Tab(text: 'Food'),
-                Tab(text: 'History'),
-              ],
+          ),
+          // ── Scrim: darkens only the very top so white text is legible ──
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.25),
+                    Colors.black.withOpacity(0.25),
+                    Colors.black.withOpacity(0.25),
+                  ],
+                  stops: const [0.0, 0.20, 0.38],
+                ),
+              ),
             ),
           ),
+          // ── Column layout — no NestedScrollView ──
+          Column(
+            children: [
+              // Kenya header (below status bar + transparent app bar)
+              Padding(
+                padding: EdgeInsets.fromLTRB(20, topInset + 56, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('🇰🇪', style: TextStyle(fontSize: 26)),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Kenya',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'East Africa · 1963 independence',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.65)),
+                    ),
+                    const SizedBox(height: 12),
+                    const Row(
+                      children: [
+                        _KenyaStat(label: 'Ethnic groups', value: '45'),
+                        SizedBox(width: 20),
+                        _KenyaStat(label: 'Counties', value: '47'),
+                        SizedBox(width: 20),
+                        _KenyaStat(label: 'Languages', value: '68+'),
+                        SizedBox(width: 20),
+                        _KenyaStat(label: 'Population', value: '55M'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Tab bar with translucent dark strip
+              Container(
+                color: Colors.black.withOpacity(0.28),
+                child: TabBar(
+                  controller: _tabController,
+                  indicatorColor: Colors.white,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white54,
+                  indicatorWeight: 2,
+                  labelStyle: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                  tabs: const [
+                    Tab(text: 'Cultures'),
+                    Tab(text: 'Food'),
+                    Tab(text: 'History'),
+                  ],
+                ),
+              ),
+              // Tab content — fills remaining space, transparent so bg shows
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _CulturesTab(
+                      onLuhyaTap: widget.onLuhyaTap,
+                      onTribeComingSoon: widget.onTribeComingSoon,
+                    ),
+                    const _FoodTab(),
+                    const _HistoryTab(),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _CulturesTab(
-              onLuhyaTap: widget.onLuhyaTap,
-              onTribeComingSoon: widget.onTribeComingSoon,
-            ),
-            const _FoodTab(),
-            const _HistoryTab(),
-          ],
-        ),
       ),
     );
   }
@@ -933,8 +897,7 @@ class _KenyaStat extends StatelessWidget {
                 fontWeight: FontWeight.w500,
                 color: Colors.white)),
         Text(label,
-            style:
-                TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.45))),
+            style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.45))),
       ],
     );
   }
@@ -955,113 +918,85 @@ class _CulturesTab extends StatelessWidget {
       children: [
         _RegionHeader('Western Kenya'),
         _TribeItem(
-          num: '01',
-          emoji: '🌿',
-          name: 'Luhya',
+          num: '01', emoji: '🌿', name: 'Luhya',
           location: 'Kakamega, Bungoma, Vihiga, Trans Nzoia',
-          hasContent: true,
-          onTap: onLuhyaTap,
+          hasContent: true, onTap: onLuhyaTap,
         ),
         _TribeItem(
-          num: '02',
-          emoji: '🎣',
-          name: 'Luo',
+          num: '02', emoji: '🎣', name: 'Luo',
           location: 'Kisumu, Siaya, Homa Bay, Migori',
           onTap: () => onTribeComingSoon('Luo'),
         ),
         _TribeItem(
-          num: '03',
-          emoji: '🏃',
-          name: 'Kipsigis',
+          num: '03', emoji: '🏃', name: 'Kipsigis',
           location: 'Kericho, Bomet',
           onTap: () => onTribeComingSoon('Kipsigis'),
         ),
         _RegionHeader('Central Kenya'),
         _TribeItem(
-          num: '04',
-          emoji: '🏔️',
-          name: 'Kikuyu',
+          num: '04', emoji: '🏔️', name: 'Kikuyu',
           location: 'Kiambu, Muranga, Nyeri, Kirinyaga',
           onTap: () => onTribeComingSoon('Kikuyu'),
         ),
         _TribeItem(
-          num: '05',
-          emoji: '🌲',
-          name: 'Meru',
+          num: '05', emoji: '🌲', name: 'Meru',
           location: 'Meru, Tharaka-Nithi',
           onTap: () => onTribeComingSoon('Meru'),
         ),
         _TribeItem(
-          num: '06',
-          emoji: '🌿',
-          name: 'Embu',
+          num: '06', emoji: '🌿', name: 'Embu',
           location: 'Embu County',
           onTap: () => onTribeComingSoon('Embu'),
         ),
         _RegionHeader('Eastern & Coast'),
         _TribeItem(
-          num: '07',
-          emoji: '🪵',
-          name: 'Kamba',
+          num: '07', emoji: '🪵', name: 'Kamba',
           location: 'Machakos, Kitui, Makueni',
           onTap: () => onTribeComingSoon('Kamba'),
         ),
         _TribeItem(
-          num: '08',
-          emoji: '🌊',
-          name: 'Mijikenda',
+          num: '08', emoji: '🌊', name: 'Mijikenda',
           location: 'Mombasa, Kilifi, Kwale, Lamu',
           onTap: () => onTribeComingSoon('Mijikenda'),
         ),
         _TribeItem(
-          num: '09',
-          emoji: '⛵',
-          name: 'Swahili',
+          num: '09', emoji: '⛵', name: 'Swahili',
           location: 'Mombasa Old Town, Lamu',
           onTap: () => onTribeComingSoon('Swahili'),
         ),
         _RegionHeader('Rift Valley'),
         _TribeItem(
-          num: '10',
-          emoji: '🛡️',
-          name: 'Maasai',
+          num: '10', emoji: '🛡️', name: 'Maasai',
           location: 'Kajiado, Narok',
           onTap: () => onTribeComingSoon('Maasai'),
         ),
         _TribeItem(
-          num: '11',
-          emoji: '🏃',
-          name: 'Kalenjin',
+          num: '11', emoji: '🏃', name: 'Kalenjin',
           location: 'Uasin Gishu, Elgeyo, Nandi, Baringo',
           onTap: () => onTribeComingSoon('Kalenjin'),
         ),
         _TribeItem(
-          num: '12',
-          emoji: '🏜️',
-          name: 'Turkana',
+          num: '12', emoji: '🏜️', name: 'Turkana',
           location: 'Turkana County (largest county)',
           onTap: () => onTribeComingSoon('Turkana'),
         ),
         _RegionHeader('North-Eastern'),
         _TribeItem(
-          num: '13',
-          emoji: '🪘',
-          name: 'Somali',
+          num: '13', emoji: '🪘', name: 'Somali',
           location: 'Garissa, Wajir, Mandera',
           onTap: () => onTribeComingSoon('Somali'),
         ),
         _TribeItem(
-          num: '14',
-          emoji: '🌵',
-          name: 'Borana',
+          num: '14', emoji: '🌵', name: 'Borana',
           location: 'Marsabit, Isiolo',
           onTap: () => onTribeComingSoon('Borana'),
         ),
-        Padding(
+        Container(
           padding: const EdgeInsets.all(20),
-          child: Text(
+          color: Colors.white.withOpacity(0.88),
+          child: const Text(
             '+ 31 more ethnic groups · content being documented',
-            style: TextStyle(fontSize: 12, color: _textFaint),
+            style: TextStyle(fontSize: 12, color: Color(0x884A7060)),
             textAlign: TextAlign.center,
           ),
         ),
@@ -1078,17 +1013,15 @@ class _RegionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: _borderGold)),
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      color: Colors.white.withOpacity(0.82),
       child: Text(
         text.toUpperCase(),
         style: const TextStyle(
           fontSize: 10,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 1.0,
-          color: _gold,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.1,
+          color: Color(0xFF6B4F1A),
         ),
       ),
     );
@@ -1114,29 +1047,32 @@ class _TribeItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: _border)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.88),
+          border: const Border(
+            bottom: BorderSide(color: Color(0x18000000)),
+          ),
         ),
         child: Row(
           children: [
             SizedBox(
               width: 22,
               child: Text(num,
-                  style: const TextStyle(fontSize: 11, color: _textFaint)),
+                  style: const TextStyle(
+                      fontSize: 11, color: Color(0x88000000))),
             ),
             const SizedBox(width: 8),
             Container(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _surface2,
+                color: Colors.black.withOpacity(0.07),
                 shape: BoxShape.circle,
               ),
               child: Center(
-                child:
-                    Text(emoji, style: const TextStyle(fontSize: 16)),
-              ),
+                  child: Text(emoji,
+                      style: const TextStyle(fontSize: 16))),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1147,20 +1083,24 @@ class _TribeItem extends StatelessWidget {
                     name,
                     style: TextStyle(
                       fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: hasContent ? _lgGreen : _textColor,
+                      fontWeight: FontWeight.w600,
+                      color: hasContent
+                          ? const Color(0xFF1A5C35)
+                          : const Color(0xFF0D2A1A),
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(location,
-                      style:
-                          const TextStyle(fontSize: 12, color: _textDim)),
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xFF4A7060))),
                 ],
               ),
             ),
             Icon(
               Icons.chevron_right,
-              color: hasContent ? _gold : _textFaint,
+              color: hasContent
+                  ? const Color(0xFFC4A961)
+                  : const Color(0x44000000),
               size: 20,
             ),
           ],
@@ -1188,65 +1128,78 @@ class _FoodTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(0),
+      padding: EdgeInsets.zero,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-          child: Text(
+        Container(
+          color: Colors.white.withOpacity(0.88),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: const Text(
             'Kenyan food traditions vary by region — coast, highlands, '
             'and pastoral communities each have distinct food cultures '
             'shaped by land and history.',
-            style: const TextStyle(
-                fontSize: 13, color: _textDim, height: 1.6),
+            style: TextStyle(
+                fontSize: 13, color: Color(0xFF2D4A38), height: 1.6),
           ),
         ),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.4,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1.4,
+            ),
+            itemCount: _foods.length,
+            itemBuilder: (_, i) {
+              final (emoji, name, tribe) = _foods[i];
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.88),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 34)),
+                    const SizedBox(height: 5),
+                    Text(name,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF0D2A1A))),
+                    const SizedBox(height: 2),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Text(tribe,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 10, color: Color(0xFF4A7060))),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
-          itemCount: _foods.length,
-          itemBuilder: (_, i) {
-            final (emoji, name, tribe) = _foods[i];
-            return Container(
-              decoration: BoxDecoration(
-                color: _surface2,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _border),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(emoji, style: const TextStyle(fontSize: 36)),
-                  const SizedBox(height: 6),
-                  Text(name,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _textColor)),
-                  const SizedBox(height: 2),
-                  Text(tribe,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 10, color: _textFaint)),
-                ],
-              ),
-            );
-          },
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Center(
-          child: Text(
-            'Detailed recipes being documented · contributors welcome',
-            style: const TextStyle(fontSize: 11, color: _textFaint),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 24),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.70),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              'Detailed recipes being documented · contributors welcome',
+              style: TextStyle(fontSize: 11, color: Color(0xFF4A7060)),
+            ),
           ),
         ),
-        const SizedBox(height: 24),
       ],
     );
   }
@@ -1283,55 +1236,69 @@ class _HistoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: _events.length,
       itemBuilder: (_, i) {
         final (year, title, body) = _events[i];
         final isLast = i == _events.length - 1;
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left — year + line
-            Column(
-              children: [
-                Text(year,
-                    style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: _gold)),
-                if (!isLast)
-                  Container(
-                      width: 1,
-                      height: 80,
-                      color: _borderGold,
-                      margin:
-                          const EdgeInsets.symmetric(vertical: 6)),
-              ],
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.88),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 16),
-            // Right — content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Year column with timeline line
+                Column(
                   children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            color: _textColor)),
-                    const SizedBox(height: 5),
-                    Text(body,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            color: _textDim,
-                            height: 1.65)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFC4A961).withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(year,
+                          style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF6B4F1A))),
+                    ),
+                    if (!isLast)
+                      Container(
+                        width: 1,
+                        height: 20,
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        color: const Color(0x33C4A961),
+                      ),
                   ],
                 ),
-              ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0D2A1A))),
+                      const SizedBox(height: 5),
+                      Text(body,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF2D4A38),
+                              height: 1.60)),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -1339,7 +1306,7 @@ class _HistoryTab extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 3 — Luhya Tribe Detail
+// SCREEN 3 — Luhya Tribe Detail (redesigned with K_FOREST.png)
 // ─────────────────────────────────────────────────────────────────────────────
 class _LuhyaScreen extends StatelessWidget {
   final VoidCallback onBack;
@@ -1347,127 +1314,121 @@ class _LuhyaScreen extends StatelessWidget {
   const _LuhyaScreen({required this.onBack});
 
   static const _subGroups = [
-    ('Bukusu', 'Bungoma County'),
-    ('Maragoli', 'Vihiga County'),
-    ('Banyore', 'Vihiga County'),
-    ('Batsotso', 'Kakamega'),
-    ('Idakho', 'Kakamega'),
-    ('Isukha', 'Kakamega'),
-    ('Kabras', 'Kakamega'),
-    ('Tiriki', 'Vihiga'),
-    ('Wanga', 'Mumias, Kakamega'),
-    ('Marachi', 'Busia County'),
-    ('Samia', 'Busia County'),
-    ('Kisa', 'Kakamega'),
-    ('Marama', 'Kakamega'),
-    ('Tachoni', 'Bungoma'),
-    ('Nyala', 'Kakamega'),
-    ('Banyala', 'Kakamega'),
-    ('Khayo', 'Busia'),
-    ('Nyore', 'Vihiga'),
+    ('Bukusu', 'Bungoma County'), ('Maragoli', 'Vihiga County'),
+    ('Banyore', 'Vihiga County'), ('Batsotso', 'Kakamega'),
+    ('Idakho', 'Kakamega'), ('Isukha', 'Kakamega'),
+    ('Kabras', 'Kakamega'), ('Tiriki', 'Vihiga'),
+    ('Wanga', 'Mumias, Kakamega'), ('Marachi', 'Busia County'),
+    ('Samia', 'Busia County'), ('Kisa', 'Kakamega'),
+    ('Marama', 'Kakamega'), ('Tachoni', 'Bungoma'),
+    ('Nyala', 'Kakamega'), ('Banyala', 'Kakamega'),
+    ('Khayo', 'Busia'), ('Nyore', 'Vihiga'),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    final topInset = mq.padding.top;
+    final bottomInset = mq.padding.bottom;
+
     return Scaffold(
-      backgroundColor: _deep,
-      body: CustomScrollView(
-        slivers: [
-          // Hero
-          SliverAppBar(
-            expandedHeight: 250,
-            pinned: true,
-            backgroundColor: const Color(0xFF1A2E0D),
-            surfaceTintColor: Colors.transparent,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white70),
-              onPressed: onBack,
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white70),
+          onPressed: onBack,
+        ),
+      ),
+      body: Stack(
+        children: [
+          // ── Full-screen K_FOREST.png ──
+          Positioned.fill(
+            child: Image.asset(
+              'images/K_FOREST.png',
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
             ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1A2E0D), Color(0xFF3D7022)],
-                      ),
-                    ),
-                  ),
-                  const Positioned.fill(
-                    child: Align(
-                      alignment: Alignment(0, 0),
-                      child: Text('🌿',
-                          style: TextStyle(fontSize: 140)),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          const Color(0xFF1A2E0D).withOpacity(0.9),
-                          const Color(0xFF3D7022).withOpacity(0.6),
+          ),
+          // ── Gradient overlay — darkens progressively downward ──
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.18),
+                    Colors.black.withOpacity(0.35),
+                    Colors.black.withOpacity(0.72),
+                    Colors.black.withOpacity(0.92),
+                  ],
+                  stops: const [0.0, 0.25, 0.55, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // ── Scrollable content ──
+          CustomScrollView(
+            slivers: [
+              // Hero title section — floats over the image
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: topInset + 56 + 180,
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Luhya',
+                              style: TextStyle(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white)),
+                          const SizedBox(height: 4),
+                          Text('Western Kenya · Bantu · ~7 million people',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.5))),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              'Bantu origin',
+                              '18 sub-groups',
+                              'Oluhya language',
+                              'Kakamega heartland',
+                            ]
+                                .map((t) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(t,
+                                          style: const TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.white70)),
+                                    ))
+                                .toList(),
+                          ),
                         ],
                       ),
                     ),
                   ),
-                  Positioned(
-                    bottom: 24,
-                    left: 20,
-                    right: 20,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Luhya',
-                            style: TextStyle(
-                                fontSize: 34,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white)),
-                        const SizedBox(height: 4),
-                        Text('Western Kenya · Bantu · ~7 million people',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.white.withOpacity(0.5))),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            'Bantu origin',
-                            '18 sub-groups',
-                            'Oluhya language',
-                            'Kakamega heartland',
-                          ]
-                              .map((t) => Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.12),
-                                      borderRadius:
-                                          BorderRadius.circular(20),
-                                    ),
-                                    child: Text(t,
-                                        style: const TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.white70)),
-                                  ))
-                              .toList(),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
 
-          SliverList(
+              SliverList(
             delegate: SliverChildListDelegate([
-              // Who are the Luhya
               _ContentBlock(
                 title: 'Who are the Luhya?',
                 body:
@@ -1481,16 +1442,13 @@ class _LuhyaScreen extends StatelessWidget {
                     'each with distinct dialects and traditions, united by a shared Bantu '
                     'origin.',
               ),
-
-              // Sub-groups
               _ContentBlock(
                 title: 'The 18 sub-groups',
                 body: '',
                 child: GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
@@ -1500,8 +1458,7 @@ class _LuhyaScreen extends StatelessWidget {
                   itemBuilder: (_, i) {
                     final (name, county) = _subGroups[i];
                     return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
                         color: _surface2,
                         borderRadius: BorderRadius.circular(10),
@@ -1511,36 +1468,22 @@ class _LuhyaScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(name,
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: _textColor)),
-                          Text(county,
-                              style: const TextStyle(
-                                  fontSize: 11, color: _textDim)),
+                          Text(name, style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w500, color: _textColor)),
+                          Text(county, style: const TextStyle(
+                              fontSize: 11, color: _textDim)),
                         ],
                       ),
                     );
                   },
                 ),
               ),
-
-              // Origin stories section header
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                child: Text(
-                  'ORIGIN STORIES',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.0,
-                    color: _gold,
-                  ),
-                ),
+                child: Text('ORIGIN STORIES', style: const TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.w500,
+                    letterSpacing: 1.0, color: _gold)),
               ),
-
-              // Story card 1
               _StoryCard(
                 tag: 'Oral tradition · creation myth',
                 title: 'Mwambu and Sela — the first Luhya man and woman',
@@ -1558,8 +1501,6 @@ class _LuhyaScreen extends StatelessWidget {
                     'everyone.',
                 meta: 'Oral tradition · documented in Oluhya and English · Western Kenya',
               ),
-
-              // Story card 2
               _StoryCard(
                 tag: 'Historical story · The Bukusu',
                 title: 'Maina wa Mutsembi and the Bukusu circumcision rite',
@@ -1576,8 +1517,6 @@ class _LuhyaScreen extends StatelessWidget {
                     'it is the mark of having stood.',
                 meta: 'Documented by Luhya Cultural Council · Bungoma County',
               ),
-
-              // Language
               _ContentBlock(
                 title: 'Language',
                 body:
@@ -1591,35 +1530,17 @@ class _LuhyaScreen extends StatelessWidget {
                     '· Amina — Amen / so be it\n'
                     '· Mwana wange — my child',
               ),
-
-              // Music section header
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                child: Text(
-                  'MUSIC & CEREMONY',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.0,
-                    color: _gold,
-                  ),
-                ),
+                child: Text('MUSIC & CEREMONY', style: const TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.w500,
+                    letterSpacing: 1.0, color: _gold)),
               ),
-
-              // Music items
               ...[
-                ('Imbalu circumcision chant',
-                 'Pre-dawn ceremony song · Bukusu sub-group',
-                 'Lubukusu'),
-                ('Isukuti drum ensemble',
-                 'Traditional celebration drumming · weddings and harvest',
-                 'Oluhya'),
-                ('Omwana alilira',
-                 'Lullaby · sung by mothers during harvest season',
-                 'Luragoli'),
+                ('Imbalu circumcision chant', 'Pre-dawn ceremony song · Bukusu sub-group', 'Lubukusu'),
+                ('Isukuti drum ensemble', 'Traditional celebration drumming · weddings and harvest', 'Oluhya'),
+                ('Omwana alilira', 'Lullaby · sung by mothers during harvest season', 'Luragoli'),
               ].map((e) => _MusicItem(title: e.$1, subtitle: e.$2, lang: e.$3)),
-
-              // Food traditions
               _ContentBlock(
                 title: 'Food traditions',
                 body:
@@ -1634,8 +1555,6 @@ class _LuhyaScreen extends StatelessWidget {
                     'household that slaughters one for a guest demonstrates wealth '
                     'and honour.',
               ),
-
-              // Attribution
               Container(
                 padding: const EdgeInsets.all(16),
                 margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -1647,38 +1566,31 @@ class _LuhyaScreen extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      width: 32,
-                      height: 32,
-                      decoration: const BoxDecoration(
-                        color: _green,
-                        shape: BoxShape.circle,
-                      ),
+                      width: 32, height: 32,
+                      decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
                       child: const Center(
-                        child: Text('LC',
-                            style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white)),
+                        child: Text('LC', style: TextStyle(
+                            fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white)),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
+                    const Expanded(
                       child: Text(
                         'Documented by Luhya Cultural Council · Kakamega\n'
                         'Content verified by community elders · Open for additions',
-                        style: const TextStyle(
-                            fontSize: 11, color: _textFaint, height: 1.5),
+                        style: TextStyle(fontSize: 11, color: _textFaint, height: 1.5),
                       ),
                     ),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 32),
             ]),
           ),
+          SliverToBoxAdapter(child: SizedBox(height: 32 + bottomInset)),
         ],
       ),
+    ],
+  ),
     );
   }
 }
@@ -1700,16 +1612,11 @@ class _ContentBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: _textColor)),
+          Text(title, style: const TextStyle(
+              fontSize: 22, fontWeight: FontWeight.w600, color: _textColor)),
           if (body.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Text(body,
-                style: const TextStyle(
-                    fontSize: 14, color: _textDim, height: 1.75)),
+            Text(body, style: const TextStyle(fontSize: 14, color: _textDim, height: 1.75)),
           ],
           if (child != null) ...[
             const SizedBox(height: 12),
@@ -1725,11 +1632,8 @@ class _ContentBlock extends StatelessWidget {
 class _StoryCard extends StatelessWidget {
   final String tag, title, body, meta;
 
-  const _StoryCard(
-      {required this.tag,
-      required this.title,
-      required this.body,
-      required this.meta});
+  const _StoryCard({required this.tag, required this.title,
+      required this.body, required this.meta});
 
   @override
   Widget build(BuildContext context) {
@@ -1749,25 +1653,16 @@ class _StoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            tag.toUpperCase(),
-            style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: _gold,
-                letterSpacing: 0.8),
-          ),
+          Text(tag.toUpperCase(), style: const TextStyle(
+              fontSize: 9, fontWeight: FontWeight.w600,
+              color: _gold, letterSpacing: 0.8)),
           const SizedBox(height: 8),
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: _textColor,
-                  height: 1.3)),
+          Text(title, style: const TextStyle(
+              fontSize: 18, fontWeight: FontWeight.w600,
+              color: _textColor, height: 1.3)),
           const SizedBox(height: 10),
-          Text(body,
-              style: const TextStyle(
-                  fontSize: 13, color: _textDim, height: 1.65)),
+          Text(body, style: const TextStyle(
+              fontSize: 13, color: _textDim, height: 1.65)),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.only(top: 10),
@@ -1787,8 +1682,7 @@ class _StoryCard extends StatelessWidget {
 class _MusicItem extends StatelessWidget {
   final String title, subtitle, lang;
 
-  const _MusicItem(
-      {required this.title, required this.subtitle, required this.lang});
+  const _MusicItem({required this.title, required this.subtitle, required this.lang});
 
   @override
   Widget build(BuildContext context) {
@@ -1800,11 +1694,9 @@ class _MusicItem extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 40, height: 40,
             decoration: BoxDecoration(
-              color: _goldDim,
-              shape: BoxShape.circle,
+              color: _goldDim, shape: BoxShape.circle,
               border: Border.all(color: _borderGold),
             ),
             child: const Icon(Icons.play_arrow, color: _gold, size: 18),
@@ -1814,19 +1706,14 @@ class _MusicItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: _textColor)),
+                Text(title, style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w500, color: _textColor)),
                 const SizedBox(height: 2),
-                Text(subtitle,
-                    style: const TextStyle(fontSize: 11, color: _textDim)),
+                Text(subtitle, style: const TextStyle(fontSize: 11, color: _textDim)),
               ],
             ),
           ),
-          Text(lang,
-              style: const TextStyle(fontSize: 10, color: _textFaint)),
+          Text(lang, style: const TextStyle(fontSize: 10, color: _textFaint)),
         ],
       ),
     );
@@ -1866,51 +1753,29 @@ class _ComingSoonScreen extends StatelessWidget {
                 style: const TextStyle(fontSize: 64),
               ),
               const SizedBox(height: 16),
-              Text(
-                name,
-                style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: _lgGreen),
-              ),
+              Text(name, style: const TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w600, color: _lgGreen)),
               const SizedBox(height: 16),
-              const Text(
-                '📖',
-                style: TextStyle(fontSize: 56),
-              ),
+              const Text('📖', style: TextStyle(fontSize: 56)),
               const SizedBox(height: 16),
-              const Text(
-                'Coming soon',
-                style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w600,
-                    color: _textColor),
-              ),
+              const Text('Coming soon', style: TextStyle(
+                  fontSize: 26, fontWeight: FontWeight.w600, color: _textColor)),
               const SizedBox(height: 12),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 14, color: _textDim, height: 1.7),
-              ),
+              Text(subtitle, textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, color: _textDim, height: 1.7)),
               const SizedBox(height: 28),
               GestureDetector(
                 onTap: () {},
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 28, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
                   decoration: BoxDecoration(
                     color: _goldDim,
                     borderRadius: BorderRadius.circular(40),
                     border: Border.all(color: _borderGold),
                   ),
-                  child: const Text(
-                    'Notify me when ready',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: _gold),
-                  ),
+                  child: const Text('Notify me when ready',
+                      style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500, color: _gold)),
                 ),
               ),
             ],

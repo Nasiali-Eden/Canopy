@@ -106,6 +106,9 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - images/
+    - images/BG.png
+    - images/K_FOREST.png
+    - images/kenya.png
     - pngs/
     # Explicit asset files and nested paths
     - assets/organization_taxonomy.json

@@ -592,17 +592,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ..strokeWidth = hero ? 3.0 : 1.8,
     );
 
-    final tp = TextPainter(textDirection: TextDirection.ltr)
-      ..text = TextSpan(
-        text: String.fromCharCode(iconData.codePoint),
-        style: TextStyle(
-          fontSize: circleR * (hero ? 0.82 : 0.75),
-          fontFamily: iconData.fontFamily,
-          color: hero ? Colors.white : color.withOpacity(0.85),
-        ),
-      )
-      ..layout();
-    tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
+    final iconFontSize = circleR * (hero ? 0.82 : 0.75);
+    final iconColor = hero ? Colors.white : color.withOpacity(0.85);
+    _paintIcon(canvas, iconData, iconFontSize, iconColor, Offset(cx, cy));
 
     final img =
         await recorder.endRecording().toImage(size.toInt(), size.toInt());
@@ -641,22 +633,35 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         ..strokeWidth = 1.8,
     );
     // Icon
-    final tp = TextPainter(textDirection: TextDirection.ltr)
-      ..text = TextSpan(
-        text: String.fromCharCode(type.icon.codePoint),
-        style: TextStyle(
-          fontSize: (size / 2 - 9) * 0.72,
-          fontFamily: type.icon.fontFamily,
-          color: color.withOpacity(0.90),
-        ),
-      )
-      ..layout();
-    tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
+    _paintIcon(canvas, type.icon, (size / 2 - 9) * 0.72,
+        color.withOpacity(0.90), Offset(cx, cy));
 
     final img =
         await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+  }
+
+  // Uses ui.ParagraphBuilder for reliable icon-font rendering on canvas.
+  void _paintIcon(Canvas canvas, IconData icon, double fontSize, Color color,
+      Offset center) {
+    final pb = ui.ParagraphBuilder(
+      ui.ParagraphStyle(textDirection: ui.TextDirection.ltr),
+    )
+      ..pushStyle(ui.TextStyle(
+        color: color,
+        fontSize: fontSize,
+        fontFamily: icon.fontFamily,
+        fontFamilyFallback: const [],
+      ))
+      ..addText(String.fromCharCode(icon.codePoint));
+    final para = pb.build()
+      ..layout(ui.ParagraphConstraints(width: fontSize * 2));
+    canvas.drawParagraph(
+      para,
+      Offset(center.dx - para.longestLine / 2,
+          center.dy - para.height / 2),
+    );
   }
 
   // ── Filtering ────────────────────────────────────────────────────────────

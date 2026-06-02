@@ -19,7 +19,24 @@ import 'Profile/seller_profile.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 class SellerHomeScreen extends StatefulWidget {
-  const SellerHomeScreen({super.key});
+  /// Builders for context switching. Passed through to SellerProfilePage.
+  /// Defined here (not in SellerProfilePage) to avoid circular imports.
+  final WidgetBuilder? orgContextBuilder;
+  final WidgetBuilder? memberContextBuilder;
+  final WidgetBuilder? envOpsContextBuilder;
+  final WidgetBuilder? culturalContextBuilder;
+  final bool hasEnvOps;
+  final bool hasCultural;
+
+  const SellerHomeScreen({
+    super.key,
+    this.orgContextBuilder,
+    this.memberContextBuilder,
+    this.envOpsContextBuilder,
+    this.culturalContextBuilder,
+    this.hasEnvOps = false,
+    this.hasCultural = false,
+  });
 
   @override
   State<SellerHomeScreen> createState() => _SellerHomeScreenState();
@@ -53,7 +70,14 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
       const SellerFeedPage(),
       const SellerShopPage(),
       const LearnPage(),
-      const SellerProfilePage(),
+      SellerProfilePage(
+        orgContextBuilder: widget.orgContextBuilder,
+        memberContextBuilder: widget.memberContextBuilder,
+        envOpsContextBuilder: widget.envOpsContextBuilder,
+        culturalContextBuilder: widget.culturalContextBuilder,
+        hasEnvOps: widget.hasEnvOps,
+        hasCultural: widget.hasCultural,
+      ),
     ];
 
     return WillPopScope(
