@@ -32,6 +32,16 @@ class _OrgProfileState extends State<OrgProfile> {
     _orgDataFuture = _fetchOrgData();
   }
 
+  static String _normalizeStatus(dynamic raw) {
+    if (raw == null) return 'none';
+    final s = raw.toString().trim().toLowerCase();
+    if (s == 'approved' || s == 'active' || s == 'enabled' || s == 'yes') return 'approved';
+    if (s == 'pending' || s == 'under review' || s == 'review') return 'pending';
+    if (s == 'rejected' || s == 'denied' || s == 'declined') return 'rejected';
+    if (s.isEmpty || s == 'none' || s == 'null') return 'none';
+    return s;
+  }
+
   Future<Map<String, dynamic>?> _fetchOrgData() async {
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
@@ -54,6 +64,12 @@ class _OrgProfileState extends State<OrgProfile> {
       final data =
           Map<String, dynamic>.from(orgDoc.data() as Map<String, dynamic>);
       data['orgId'] = orgId;
+      // Normalise special-ops status fields so every consumer sees a canonical
+      // lowercase value regardless of how it was written to Firestore.
+      for (final key in ['marketplaceStatus', 'envOpsStatus', 'culturalStatus']) {
+        final raw = data[key];
+        if (raw != null) data[key] = _normalizeStatus(raw);
+      }
       return data;
     } catch (e) {
       debugPrint('Error fetching org data: $e');
@@ -371,6 +387,7 @@ class _OrgProfileState extends State<OrgProfile> {
       backgroundColor: Colors.transparent,
       builder: (_) => _SpecialOpsSheet(
         orgData: orgData,
+        orgHomeBuilder: widget.orgHomeBuilder,
         onChanged: () => setState(() {
           _orgDataFuture = _fetchOrgData();
         }),
@@ -631,8 +648,13 @@ class _StatusDot extends StatelessWidget {
 class _SpecialOpsSheet extends StatefulWidget {
   final Map<String, dynamic>? orgData;
   final VoidCallback onChanged;
+  final WidgetBuilder? orgHomeBuilder;
 
-  const _SpecialOpsSheet({required this.orgData, required this.onChanged});
+  const _SpecialOpsSheet({
+    required this.orgData,
+    required this.onChanged,
+    this.orgHomeBuilder,
+  });
 
   @override
   State<_SpecialOpsSheet> createState() => _SpecialOpsSheetState();
@@ -645,6 +667,7 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
   late String _marketplaceStatus;
   late String _envOpsStatus;
   late String _culturalStatus;
+  bool _refreshing = false;
 
   // Marketplace
   String? _sellerRole;
@@ -676,12 +699,73 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
   void initState() {
     super.initState();
     final d = widget.orgData;
-    _marketplaceStatus = d?['marketplaceStatus'] as String? ?? 'none';
-    _envOpsStatus = d?['envOpsStatus'] as String? ?? 'none';
-    _culturalStatus = d?['culturalStatus'] as String? ?? 'none';
+    _marketplaceStatus = _normalize(d?['marketplaceStatus']);
+    _envOpsStatus     = _normalize(d?['envOpsStatus']);
+    _culturalStatus   = _normalize(d?['culturalStatus']);
+    debugPrint('[SpecialOps] initState — '
+        'marketplace=$_marketplaceStatus  '
+        'envOps=$_envOpsStatus  '
+        'cultural=$_culturalStatus');
   }
 
   String? get _orgId => widget.orgData?['orgId'] as String?;
+
+  // Same normalisation logic as _OrgProfileState._normalizeStatus.
+  static String _normalize(dynamic raw) {
+    if (raw == null) return 'none';
+    final s = raw.toString().trim().toLowerCase();
+    if (s == 'approved' || s == 'active' || s == 'enabled' || s == 'yes') return 'approved';
+    if (s == 'pending' || s == 'under review' || s == 'review') return 'pending';
+    if (s == 'rejected' || s == 'denied' || s == 'declined') return 'rejected';
+    if (s.isEmpty || s == 'none' || s == 'null') return 'none';
+    return s;
+  }
+
+  // ── Refresh ──────────────────────────────────────────────────────────────────
+
+  Future<void> _refreshStatuses() async {
+    final id = _orgId;
+    if (id == null) {
+      debugPrint('[SpecialOps] refresh — orgId is null, skipping');
+      return;
+    }
+    setState(() => _refreshing = true);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(id)
+          .get();
+      if (!mounted || !doc.exists) {
+        debugPrint('[SpecialOps] refresh — doc not found for id=$id');
+        return;
+      }
+      final d = doc.data()!;
+
+      // Print raw Firestore values so mismatches are immediately visible
+      debugPrint('[SpecialOps] refresh raw values from Firestore:');
+      debugPrint('  marketplaceStatus = ${d['marketplaceStatus']}');
+      debugPrint('  envOpsStatus      = ${d['envOpsStatus']}');
+      debugPrint('  culturalStatus    = ${d['culturalStatus']}');
+
+      final mkt = _normalize(d['marketplaceStatus']);
+      final env = _normalize(d['envOpsStatus']);
+      final cul = _normalize(d['culturalStatus']);
+
+      debugPrint('[SpecialOps] after normalisation:');
+      debugPrint('  marketplace=$mkt  envOps=$env  cultural=$cul');
+
+      setState(() {
+        _marketplaceStatus = mkt;
+        _envOpsStatus = env;
+        _culturalStatus = cul;
+      });
+      widget.onChanged();
+    } catch (e) {
+      debugPrint('[SpecialOps] refresh error: $e');
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   // ── Apply methods ────────────────────────────────────────────────────────────
 
@@ -805,7 +889,7 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
               ),
               // Header
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                padding: const EdgeInsets.fromLTRB(20, 8, 8, 4),
                 child: Row(
                   children: [
                     Text(
@@ -817,6 +901,19 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
                       ),
                     ),
                     const Spacer(),
+                    _refreshing
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : IconButton(
+                            icon: Icon(Icons.refresh,
+                                color: AppTheme.darkGreen.withOpacity(0.5)),
+                            iconSize: 20,
+                            tooltip: 'Refresh status',
+                            onPressed: _refreshStatuses,
+                          ),
                     IconButton(
                       icon: const Icon(Icons.close),
                       onPressed: () => Navigator.pop(context),
@@ -864,13 +961,47 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
       description: 'List materials, processed goods, or artisan products. Your verified org identity backs every listing.',
       status: _marketplaceStatus,
       onOpenTap: _marketplaceStatus == 'approved'
-          ? () => Navigator.pushAndRemoveUntil(
+          ? () {
+              final hasEnvOps = _envOpsStatus == 'approved';
+              final hasCultural = _culturalStatus == 'approved';
+              final orgId = _orgId ?? '';
+              Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (_) => const SellerHomeScreen()),
+                MaterialPageRoute(
+                  builder: (_) => SellerHomeScreen(
+                    hasEnvOps: hasEnvOps,
+                    hasCultural: hasCultural,
+                    orgContextBuilder: widget.orgHomeBuilder,
+                    memberContextBuilder: (_) => const CommunityHomeScreen(),
+                    envOpsContextBuilder: hasEnvOps
+                        ? (_) => EnvOpsShell(
+                              hasMarketplace: true,
+                              hasCultural: hasCultural,
+                              orgContextBuilder: widget.orgHomeBuilder,
+                              memberContextBuilder: (_) =>
+                                  const CommunityHomeScreen(),
+                              marketplaceContextBuilder: (_) => SellerHomeScreen(
+                                hasEnvOps: true,
+                                hasCultural: hasCultural,
+                                orgContextBuilder: widget.orgHomeBuilder,
+                                memberContextBuilder: (_) =>
+                                    const CommunityHomeScreen(),
+                              ),
+                              culturalContextBuilder: hasCultural
+                                  ? (_) => CultureHomeScreen(orgId: orgId)
+                                  : null,
+                            )
+                        : null,
+                    culturalContextBuilder: hasCultural
+                        ? (_) => CultureHomeScreen(orgId: orgId)
+                        : null,
+                  ),
+                ),
                 (r) => false,
-              )
+              );
+            }
           : null,
-      form: _marketplaceStatus == 'none' || _marketplaceStatus == 'rejected'
+      form: _marketplaceStatus != 'approved' && _marketplaceStatus != 'pending'
           ? _buildMarketplaceForm()
           : null,
     );
@@ -920,13 +1051,47 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
       description: 'Track material collection, territory, tree planting, collector fleet, and impact credits.',
       status: _envOpsStatus,
       onOpenTap: _envOpsStatus == 'approved'
-          ? () => Navigator.pushAndRemoveUntil(
+          ? () {
+              final hasMarketplace = _marketplaceStatus == 'approved';
+              final hasCultural = _culturalStatus == 'approved';
+              final orgId = _orgId ?? '';
+              Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (_) => const EnvOpsShell()),
+                MaterialPageRoute(
+                  builder: (_) => EnvOpsShell(
+                    hasMarketplace: hasMarketplace,
+                    hasCultural: hasCultural,
+                    orgContextBuilder: widget.orgHomeBuilder,
+                    memberContextBuilder: (_) => const CommunityHomeScreen(),
+                    marketplaceContextBuilder: hasMarketplace
+                        ? (_) => SellerHomeScreen(
+                              hasEnvOps: true,
+                              hasCultural: hasCultural,
+                              orgContextBuilder: widget.orgHomeBuilder,
+                              memberContextBuilder: (_) =>
+                                  const CommunityHomeScreen(),
+                              envOpsContextBuilder: (_) => EnvOpsShell(
+                                hasMarketplace: true,
+                                hasCultural: hasCultural,
+                                orgContextBuilder: widget.orgHomeBuilder,
+                                memberContextBuilder: (_) =>
+                                    const CommunityHomeScreen(),
+                              ),
+                              culturalContextBuilder: hasCultural
+                                  ? (_) => CultureHomeScreen(orgId: orgId)
+                                  : null,
+                            )
+                        : null,
+                    culturalContextBuilder: hasCultural
+                        ? (_) => CultureHomeScreen(orgId: orgId)
+                        : null,
+                  ),
+                ),
                 (r) => false,
-              )
+              );
+            }
           : null,
-      form: _envOpsStatus == 'none' || _envOpsStatus == 'rejected'
+      form: _envOpsStatus != 'approved' && _envOpsStatus != 'pending'
           ? _buildEnvOpsForm()
           : null,
     );
@@ -1014,7 +1179,7 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
                 (r) => false,
               )
           : null,
-      form: _culturalStatus == 'none' || _culturalStatus == 'rejected'
+      form: _culturalStatus != 'approved' && _culturalStatus != 'pending'
           ? _buildCulturalForm()
           : null,
     );

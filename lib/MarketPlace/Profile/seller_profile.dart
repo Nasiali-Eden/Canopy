@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../Services/Authentication/auth.dart';
-import '../../Shared/Pages/login.dart';
 import '../../Shared/theme/app_theme.dart';
 import '../../Shared/widgets/role_context_switcher.dart';
 
@@ -45,7 +43,6 @@ class SellerProfilePage extends StatefulWidget {
 }
 
 class _SellerProfilePageState extends State<SellerProfilePage> {
-  final AuthService _authService = AuthService();
   final uid = FirebaseAuth.instance.currentUser?.uid;
 
   @override
@@ -242,11 +239,6 @@ class _SellerProfilePageState extends State<SellerProfilePage> {
 
                 // Settings
                 _buildSettingsSection(context),
-
-                const SizedBox(height: 16),
-
-                // Sign Out
-                _buildSignOutButton(context),
 
                 const SizedBox(height: 100),
               ],
@@ -702,125 +694,16 @@ class _SellerProfilePageState extends State<SellerProfilePage> {
               _SettingsItem(
                 icon: Icons.storefront_outlined,
                 title: 'Edit Shop Details',
-                onTap: () {
-                  // TODO: Navigate to edit shop
-                },
+                onTap: () {},
               ),
               _SettingsItem(
                 icon: Icons.category,
                 title: 'Edit Specialisations',
-                onTap: () {
-                  // TODO: Navigate to edit specialisations
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.lock,
-                title: 'Change Password',
-                onTap: () {
-                  // TODO: Navigate to change password
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.notifications,
-                title: 'Notifications',
-                onTap: () {
-                  // TODO: Navigate to notifications
-                },
+                onTap: () {},
               ),
             ],
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSignOutButton(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.red.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () async {
-              final shouldSignOut = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  backgroundColor: Colors.white,
-                  title: Text(
-                    'Sign Out',
-                    style: TextStyle(
-                      color: AppTheme.darkGreen,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  content: const Text('Are you sure you want to sign out?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.red,
-                      ),
-                      child: const Text('Sign Out'),
-                    ),
-                  ],
-                ),
-              );
-
-              if (shouldSignOut == true) {
-                await _authService.signOut();
-                if (!mounted) return;
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                  (route) => false,
-                );
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.logout, color: Colors.red, size: 20),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Sign Out',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.red,
-                          ),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, color: Colors.red),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

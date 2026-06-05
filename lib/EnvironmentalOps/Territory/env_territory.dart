@@ -153,6 +153,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   }
 
   void _onZoneClosed(ZoneDrawingResult result) async {
+    if (result.vertices.length < 3) return; // cancelled / insufficient
     setState(() => _isDrawingMode = false);
     final name = await _showNameDialog(result);
     if (name != null && name.isNotEmpty) {
@@ -247,6 +248,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
             ZoneDrawingController(
               config: ZoneDrawingConfig.collectionDefault,
               onZoneClosed: _onZoneClosed,
+              onCancel: () => setState(() => _isDrawingMode = false),
               initialPosition: _initialCamera,
               mapStyle: _mapStyle,
             )

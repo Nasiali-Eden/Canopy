@@ -15,6 +15,10 @@ const _kHeaderGradientStart = Color(0xFF102A1B);
 const _kHeaderGradientEnd = Color(0xFF1F5539);
 const _kPageBg = Color(0xFFF0F3EE);
 
+/// Height the floating nav bar occupies above the system safe area.
+/// SafeArea min-bottom(16) + vertical padding(20) + icon+label(≈41) ≈ 77
+const _kNavBarAboveSafeArea = 80.0;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Data models
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +41,7 @@ class _AttentionItem {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Router
+// OrgDashboard – nested Navigator for in-tab routing
 // ─────────────────────────────────────────────────────────────────────────────
 
 class OrgDashboard extends StatefulWidget {
@@ -57,17 +61,15 @@ class OrgDashboardState extends State<OrgDashboard> {
     return Navigator(
       key: _navigatorKey,
       initialRoute: '/',
-      onGenerateRoute: (RouteSettings settings) {
+      onGenerateRoute: (settings) {
         WidgetBuilder builder;
         switch (settings.name) {
-        // ── Existing routes ──────────────────────────────────────────────
           case '/createActivity':
             builder = (_) => const CreateActivityScreen();
             break;
           case '/createPost':
             builder = (_) => const CreateArticleScreen();
             break;
-        // ── Stub routes ──────────────────────────────────────────────────
           case '/activityDetails':
             builder = (_) => const _PlaceholderScreen(
                 title: 'Activity details', icon: Icons.event_note_outlined);
@@ -97,10 +99,6 @@ class OrgDashboardState extends State<OrgDashboard> {
             builder = (_) => const _PlaceholderScreen(
                 title: 'Notifications', icon: Icons.notifications_outlined);
             break;
-          case '/programmes':
-            builder = (_) => const _PlaceholderScreen(
-                title: 'Programmes', icon: Icons.workspaces_outlined);
-            break;
           case '/memberRecruitment':
             builder = (_) => const _PlaceholderScreen(
                 title: 'Member recruitment', icon: Icons.group_add_outlined);
@@ -126,61 +124,19 @@ class OrgDashboardState extends State<OrgDashboard> {
 class _DashboardContent extends StatefulWidget {
   final FirebaseFirestore firestore;
   const _DashboardContent({required this.firestore});
+
   @override
   State<_DashboardContent> createState() => _DashboardContentState();
 }
 
 class _DashboardContentState extends State<_DashboardContent>
     with SingleTickerProviderStateMixin {
-  late Future<Map<String, dynamic>?> _orgDataFuture;
+  Map<String, dynamic>? _orgData;
+  String? _orgId;
+  bool _loading = true;
+
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
-  String? _orgId;
-
-  @override
-  void initState() {
-    super.initState();
-    _orgDataFuture = _fetchOrgData();
-    _fadeCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
-    _fadeCtrl.forward();
-  }
-
-  @override
-  void dispose() {
-    _fadeCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<Map<String, dynamic>?> _fetchOrgData() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return null;
-      final userDoc =
-      await widget.firestore.collection('Users').doc(user.uid).get();
-      if (!userDoc.exists) return null;
-      final orgId =
-      (userDoc.data() as Map<String, dynamic>)['orgId'] as String?;
-      if (orgId == null) return null;
-      if (mounted) setState(() => _orgId = orgId);
-      final orgDoc =
-      await widget.firestore.collection('organizations').doc(orgId).get();
-      if (!orgDoc.exists) return null;
-      return orgDoc.data() as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('Error: $e');
-      return null;
-    }
-  }
-
-  static String _initials(String? name) {
-    if (name == null || name.trim().isEmpty) return '?';
-    final w = name.trim().split(' ');
-    return w.length == 1
-        ? w[0][0].toUpperCase()
-        : (w[0][0] + w[w.length - 1][0]).toUpperCase();
-  }
 
   static const List<_AttentionItem> _attentionItems = [
     _AttentionItem(
@@ -213,65 +169,139 @@ class _DashboardContentState extends State<_DashboardContent>
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _fadeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    _fadeCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final userDoc = await widget.firestore
+          .collection('Users')
+          .doc(user.uid)
+          .get();
+      if (!mounted || !userDoc.exists) return;
+
+      final orgId =
+          (userDoc.data() as Map<String, dynamic>)['orgId'] as String?;
+      if (orgId == null) return;
+
+      final orgDoc = await widget.firestore
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      if (!mounted || !orgDoc.exists) return;
+
+      setState(() {
+        _orgId = orgId;
+        _orgData = orgDoc.data() as Map<String, dynamic>;
+        _loading = false;
+      });
+      _fadeCtrl.forward();
+    } catch (e) {
+      debugPrint('Dashboard load error: $e');
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  static String _initials(String? name) {
+    if (name == null || name.trim().isEmpty) return '?';
+    final w = name.trim().split(' ');
+    return w.length == 1
+        ? w[0][0].toUpperCase()
+        : (w[0][0] + w[w.length - 1][0]).toUpperCase();
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _orgDataFuture,
-      builder: (context, snapshot) {
-        final orgData = snapshot.data;
-        return Scaffold(
-          backgroundColor: Colors.white,
-          extendBodyBehindAppBar: true,
-          body: Stack(
-            children: [
-              FadeTransition(
-                opacity: _fadeAnim,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildRichHeader(context, orgData),
 
-                      _buildAttentionStrip(context),
-                      const SizedBox(height: 20),
-                      _buildMetricsSection(context),
-                      const SizedBox(height: 20),
-                      _buildActivitiesSection(context),
-                      SizedBox(
-                          height: MediaQuery.of(context).padding.bottom + 16),
-                    ],
-                  ),
+    final systemBottom = MediaQuery.of(context).padding.bottom;
+    // Total space the floating nav bar occupies from screen bottom:
+    final navBottom = systemBottom + _kNavBarAboveSafeArea;
+
+    return Scaffold(
+      backgroundColor: _kPageBg,
+      body: Stack(
+        children: [
+          // ── Main scroll content ──────────────────────────────────────────
+          if (_loading)
+            const Center(
+              child: CircularProgressIndicator(
+                  color: AppTheme.primary, strokeWidth: 2),
+            )
+          else
+            FadeTransition(
+              opacity: _fadeAnim,
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildRichHeader(context),
+                    _buildAttentionStrip(context),
+                    const SizedBox(height: 20),
+                    _buildMetricsSection(context),
+                    const SizedBox(height: 20),
+                    _buildActivitiesSection(context),
+                    // Bottom clearance: accounts for floating nav bar + FAB
+                    SizedBox(height: navBottom + 80),
+                  ],
                 ),
               ),
-              // Floating notification button
-              Positioned(
-                top: MediaQuery.of(context).padding.top + 12,
-                right: 16,
-                child: _FloatingNotificationButton(
-                  onTap: () =>
-                      Navigator.of(context).pushNamed('/notifications'),
-                ),
-              ),
-            ],
+            ),
+
+          // ── Floating notification button ──────────────────────────────────
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            right: 16,
+            child: _FloatingNotificationButton(
+              onTap: () => Navigator.of(context).pushNamed('/notifications'),
+            ),
           ),
-          floatingActionButton: _buildFAB(context),
-        );
-      },
+
+          // ── FAB — positioned above the floating nav bar ───────────────────
+          if (!_loading)
+            Positioned(
+              right: 20,
+              bottom: navBottom + 8,
+              child: FloatingActionButton(
+                heroTag: 'org_dashboard_fab',
+                onPressed: () => _showCreateSheet(context),
+                backgroundColor: AppTheme.primary,
+                elevation: 6,
+                child: const Icon(Icons.add, color: Colors.white, size: 26),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   // ── Rich header ────────────────────────────────────────────────────────────
 
-  Widget _buildRichHeader(BuildContext context, Map<String, dynamic>? orgData) {
-    final orgName = orgData?['org_name'] as String? ?? 'Organisation';
-    final designation = orgData?['orgDesignation'] as String?;
-    final city = orgData?['city'] as String? ?? 'Kenya';
-    final isVerified = orgData?['verified'] as bool? ?? false;
-    final logoUrl = orgData?['logoUrl'] as String?;
-    final memberCount = orgData?['memberCount'] as int?;
+  Widget _buildRichHeader(BuildContext context) {
+    final orgName = _orgData?['org_name'] as String? ?? 'Organisation';
+    final designation = _orgData?['orgDesignation'] as String?;
+    final city = _orgData?['city'] as String? ?? 'Kenya';
+    final isVerified = _orgData?['verified'] as bool? ?? false;
+    final logoUrl = _orgData?['logoUrl'] as String?;
+    final memberCount = _orgData?['memberCount'] as int?;
 
     return Container(
       decoration: const BoxDecoration(
@@ -297,7 +327,9 @@ class _DashboardContentState extends State<_DashboardContent>
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           _OrgAvatar(
-                              initials: _initials(orgName), logoUrl: logoUrl),
+                            initials: _initials(orgName),
+                            logoUrl: logoUrl,
+                          ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(
@@ -309,13 +341,13 @@ class _DashboardContentState extends State<_DashboardContent>
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 9, vertical: 3),
                                     decoration: BoxDecoration(
-                                      color:
-                                      AppTheme.tertiary.withOpacity(0.18),
+                                      color: AppTheme.tertiary.withOpacity(0.18),
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                          color: AppTheme.tertiary
-                                              .withOpacity(0.3),
-                                          width: 0.5),
+                                        color:
+                                            AppTheme.tertiary.withOpacity(0.3),
+                                        width: 0.5,
+                                      ),
                                     ),
                                     child: Text(
                                       designation.toUpperCase(),
@@ -361,7 +393,7 @@ class _DashboardContentState extends State<_DashboardContent>
                                         style: TextStyle(
                                             fontSize: 11,
                                             color:
-                                            Colors.white.withOpacity(0.55),
+                                                Colors.white.withOpacity(0.55),
                                             fontWeight: FontWeight.w500)),
                                   ],
                                 ),
@@ -381,7 +413,8 @@ class _DashboardContentState extends State<_DashboardContent>
                           color: Colors.white.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                              color: Colors.white.withOpacity(0.1), width: 0.5),
+                              color: Colors.white.withOpacity(0.1),
+                              width: 0.5),
                         ),
                         child: Row(
                           children: [
@@ -392,13 +425,13 @@ class _DashboardContentState extends State<_DashboardContent>
                             ),
                             _headerDivider(),
                             const _HeaderStat(
-                              value: '—', // TODO: partners count
+                              value: '—',
                               label: 'Partners',
                               icon: Icons.handshake_outlined,
                             ),
                             _headerDivider(),
                             const _HeaderStat(
-                              value: '—', // TODO: active since date
+                              value: '—',
                               label: 'Active since',
                               icon: Icons.eco_outlined,
                             ),
@@ -409,12 +442,15 @@ class _DashboardContentState extends State<_DashboardContent>
                   ),
                 ),
               ),
+
+              // Curved transition into page background
               const SizedBox(height: 12),
               Container(
-                height: 20,
+                height: 24,
                 decoration: const BoxDecoration(
                   color: _kPageBg,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(24)),
                 ),
               ),
             ],
@@ -425,17 +461,18 @@ class _DashboardContentState extends State<_DashboardContent>
   }
 
   Widget _headerDivider() => Container(
-    width: 1,
-    height: 30,
-    color: Colors.white.withOpacity(0.12),
-    margin: const EdgeInsets.symmetric(horizontal: 4),
-  );
+        width: 1,
+        height: 30,
+        color: Colors.white.withOpacity(0.12),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+      );
 
   // ── Attention strip ────────────────────────────────────────────────────────
 
   Widget _buildAttentionStrip(BuildContext context) {
-    final actionCount =
-        _attentionItems.where((i) => i.type == _AttentionType.action).length;
+    final actionCount = _attentionItems
+        .where((i) => i.type == _AttentionType.action)
+        .length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -443,25 +480,30 @@ class _DashboardContentState extends State<_DashboardContent>
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             children: [
-              Text('Needs attention',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.darkGreen.withOpacity(0.6),
-                    letterSpacing: 0.2,
-                  )),
+              Text(
+                'Needs attention',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.darkGreen.withOpacity(0.6),
+                  letterSpacing: 0.2,
+                ),
+              ),
               const SizedBox(width: 7),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppTheme.tertiary,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text('$actionCount',
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white)),
+                child: Text(
+                  '$actionCount',
+                  style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -475,8 +517,8 @@ class _DashboardContentState extends State<_DashboardContent>
             itemCount: _attentionItems.length,
             itemBuilder: (context, i) => _AttentionCard(
               item: _attentionItems[i],
-              onTap: () =>
-                  Navigator.of(context).pushNamed(_attentionItems[i].route),
+              onTap: () => Navigator.of(context)
+                  .pushNamed(_attentionItems[i].route),
             ),
           ),
         ),
@@ -495,75 +537,68 @@ class _DashboardContentState extends State<_DashboardContent>
           child: _SectionHeader(
             title: 'This month',
             actionLabel: 'Full report →',
-            onAction: () => Navigator.of(context).pushNamed('/impactReport'),
+            onAction: () =>
+                Navigator.of(context).pushNamed('/impactReport'),
           ),
         ),
         const SizedBox(height: 14),
-        if (_orgId == null)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-                child: CircularProgressIndicator(
-                    color: AppTheme.primary, strokeWidth: 2)),
-          )
-        else
-          StreamBuilder<QuerySnapshot>(
-            stream: widget.firestore
-                .collection('Activities')
-                .where('orgId', isEqualTo: _orgId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final docs = snapshot.data?.docs ?? [];
-              final totalEvents = docs.length;
-              final verified = docs
-                  .where((d) =>
-              (d.data() as Map<String, dynamic>)['impactStatus'] ==
-                  'confirmed')
-                  .length;
+        StreamBuilder<QuerySnapshot>(
+          stream: widget.firestore
+              .collection('Activities')
+              .where('orgId', isEqualTo: _orgId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            final docs = snapshot.data?.docs ?? [];
+            final totalEvents = docs.length;
+            final verified = docs
+                .where((d) =>
+                    (d.data() as Map<String, dynamic>)['impactStatus'] ==
+                    'confirmed')
+                .length;
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.85,
-                  children: [
-                    _MetricCard(
-                      value: '—',
-                      label: 'Kg diverted',
-                      icon: Icons.recycling,
-                      color: AppTheme.primary,
-                      bgSeed: 42,
-                    ),
-                    _MetricCard(
-                      value: '—',
-                      label: 'Volunteer hours',
-                      icon: Icons.volunteer_activism,
-                      color: AppTheme.accent,
-                      bgSeed: 17,
-                    ),
-                    _MetricCard(
-                      value: snapshot.hasData ? '$totalEvents' : '—',
-                      label: 'Events run',
-                      icon: Icons.event_available,
-                      color: AppTheme.darkGreen,
-                      bgSeed: 88,
-                    ),
-                    _MetricCard(
-                      value: snapshot.hasData ? '$verified' : '—',
-                      label: 'Verified on-chain',
-                      icon: Icons.verified,
-                      color: AppTheme.tertiary,
-                      bgSeed: 55,
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.85,
+                children: [
+                  _MetricCard(
+                    value: '—',
+                    label: 'Kg diverted',
+                    icon: Icons.recycling,
+                    color: AppTheme.primary,
+                    bgSeed: 42,
+                  ),
+                  _MetricCard(
+                    value: '—',
+                    label: 'Volunteer hours',
+                    icon: Icons.volunteer_activism,
+                    color: AppTheme.accent,
+                    bgSeed: 17,
+                  ),
+                  _MetricCard(
+                    value: snapshot.hasData ? '$totalEvents' : '—',
+                    label: 'Events run',
+                    icon: Icons.event_available,
+                    color: AppTheme.darkGreen,
+                    bgSeed: 88,
+                  ),
+                  _MetricCard(
+                    value: snapshot.hasData ? '$verified' : '—',
+                    label: 'Verified on-chain',
+                    icon: Icons.verified,
+                    color: AppTheme.tertiary,
+                    bgSeed: 55,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ],
     );
   }
@@ -579,55 +614,49 @@ class _DashboardContentState extends State<_DashboardContent>
           child: _SectionHeader(
             title: 'Upcoming & active',
             actionLabel: 'View all →',
-            onAction: () => Navigator.of(context).pushNamed('/allActivities'),
+            onAction: () =>
+                Navigator.of(context).pushNamed('/allActivities'),
           ),
         ),
         const SizedBox(height: 14),
-        if (_orgId == null)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-                child: CircularProgressIndicator(
-                    color: AppTheme.primary, strokeWidth: 2)),
-          )
-        else
-          StreamBuilder<QuerySnapshot>(
-            stream: widget.firestore
-                .collection('Activities')
-                .where('orgId', isEqualTo: _orgId)
-                .where('status', whereIn: ['upcoming', 'ongoing'])
-                .orderBy('date', descending: false)
-                .limit(8)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting &&
-                  !snapshot.hasData) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                      child: CircularProgressIndicator(
-                          color: AppTheme.primary, strokeWidth: 2)),
-                );
-              }
-              final docs = snapshot.data?.docs ?? [];
-              if (docs.isEmpty) return _buildEmptyActivities(context);
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                itemCount: docs.length,
-                itemBuilder: (context, i) {
-                  final data = docs[i].data() as Map<String, dynamic>;
-                  return _ActivityTile(
-                    activity: data,
-                    imageSeed: i,
-                    onTap: () => Navigator.of(context)
-                        .pushNamed('/activityDetails', arguments: data),
-                  );
-                },
+        StreamBuilder<QuerySnapshot>(
+          stream: widget.firestore
+              .collection('Activities')
+              .where('orgId', isEqualTo: _orgId)
+              .where('status', whereIn: ['upcoming', 'ongoing'])
+              .orderBy('date', descending: false)
+              .limit(8)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(
+                  child: CircularProgressIndicator(
+                      color: AppTheme.primary, strokeWidth: 2),
+                ),
               );
-            },
-          ),
+            }
+            final docs = snapshot.data?.docs ?? [];
+            if (docs.isEmpty) return _buildEmptyActivities(context);
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: docs.length,
+              itemBuilder: (context, i) {
+                final data = docs[i].data() as Map<String, dynamic>;
+                return _ActivityTile(
+                  activity: data,
+                  imageSeed: i,
+                  onTap: () => Navigator.of(context)
+                      .pushNamed('/activityDetails', arguments: data),
+                );
+              },
+            );
+          },
+        ),
       ],
     );
   }
@@ -636,7 +665,7 @@ class _DashboardContentState extends State<_DashboardContent>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -647,60 +676,62 @@ class _DashboardContentState extends State<_DashboardContent>
                 offset: const Offset(0, 4))
           ],
         ),
-        child: Column(
+        child: Row(
           children: [
             Container(
-              width: 60,
-              height: 60,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
                 color: AppTheme.lightGreen.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(Icons.event_note_outlined,
-                  size: 30, color: AppTheme.lightGreen),
+                  size: 26, color: AppTheme.lightGreen),
             ),
-            const SizedBox(height: 14),
-            Text('No upcoming activities',
-                style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.darkGreen.withOpacity(0.6))),
-            const SizedBox(height: 5),
-            Text('Tap + to create your first event',
-                style: TextStyle(
-                    fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.35))),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No upcoming activities',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.darkGreen.withOpacity(0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Tap + to create your first event',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.darkGreen.withOpacity(0.38),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // ── FAB ────────────────────────────────────────────────────────────────────
-
-  Widget _buildFAB(BuildContext context) {
-    return FloatingActionButton(
-      heroTag: 'org_dashboard_fab',
-      onPressed: () => _showCreateSheet(context),
-      backgroundColor: AppTheme.primary,
-      elevation: 4,
-      child: const Icon(Icons.add, color: Colors.white, size: 26),
-    );
-  }
+  // ── Create sheet ───────────────────────────────────────────────────────────
 
   void _showCreateSheet(BuildContext outerContext) {
     showModalBottomSheet<void>(
       context: outerContext,
       backgroundColor: Colors.transparent,
-      // isScrollControlled omitted (defaults to false) — the sheet sizes itself
-      // to content height via the Wrap + Column(mainAxisSize.min) pattern below,
-      // which prevents the white-screen expansion that occurred previously.
-      builder: (BuildContext sheetContext) => Wrap(
+      builder: (sheetContext) => Wrap(
         children: [
           Container(
             width: double.infinity,
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: SafeArea(
               top: false,
@@ -734,7 +765,8 @@ class _DashboardContentState extends State<_DashboardContent>
                     color: AppTheme.primary,
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      Navigator.of(outerContext).pushNamed('/createActivity');
+                      Navigator.of(outerContext)
+                          .pushNamed('/createActivity');
                     },
                   ),
                   _CreateSheetOption(
@@ -755,7 +787,8 @@ class _DashboardContentState extends State<_DashboardContent>
                     color: AppTheme.accent,
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      Navigator.of(outerContext).pushNamed('/sponsorBounties');
+                      Navigator.of(outerContext)
+                          .pushNamed('/sponsorBounties');
                     },
                   ),
                   _CreateSheetOption(
@@ -812,9 +845,11 @@ class _HeaderDecorPainter extends CustomPainter {
       ..strokeWidth = 1
       ..maskFilter = null;
     ring.color = Colors.white.withOpacity(0.06);
-    canvas.drawCircle(Offset(size.width * 0.82, size.height * 0.6), 80, ring);
+    canvas.drawCircle(
+        Offset(size.width * 0.82, size.height * 0.6), 80, ring);
     ring.color = Colors.white.withOpacity(0.03);
-    canvas.drawCircle(Offset(size.width * 0.82, size.height * 0.6), 130, ring);
+    canvas.drawCircle(
+        Offset(size.width * 0.82, size.height * 0.6), 130, ring);
   }
 
   @override
@@ -837,7 +872,8 @@ class _OrgAvatar extends StatelessWidget {
       height: 64,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.tertiary.withOpacity(0.5), width: 2),
+        border:
+            Border.all(color: AppTheme.tertiary.withOpacity(0.5), width: 2),
         boxShadow: [
           BoxShadow(
               color: AppTheme.tertiary.withOpacity(0.2),
@@ -849,28 +885,29 @@ class _OrgAvatar extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: logoUrl != null && logoUrl!.isNotEmpty
             ? Image.network(logoUrl!,
-            fit: BoxFit.cover, errorBuilder: (_, __, ___) => _fallback())
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _fallback())
             : _fallback(),
       ),
     );
   }
 
   Widget _fallback() => Container(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0xFF2D7A4F), Color(0xFF3B8A7A)],
-      ),
-    ),
-    alignment: Alignment.center,
-    child: Text(initials,
-        style: const TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5)),
-  );
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF2D7A4F), Color(0xFF3B8A7A)],
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(initials,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5)),
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -891,7 +928,8 @@ class _FloatingNotificationButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.12),
           borderRadius: BorderRadius.circular(13),
-          border: Border.all(color: Colors.white.withOpacity(0.18), width: 0.5),
+          border: Border.all(
+              color: Colors.white.withOpacity(0.18), width: 0.5),
         ),
         child: Stack(
           alignment: Alignment.center,
@@ -957,7 +995,9 @@ class _SectionHeader extends StatelessWidget {
   final String actionLabel;
   final VoidCallback onAction;
   const _SectionHeader(
-      {required this.title, required this.actionLabel, required this.onAction});
+      {required this.title,
+      required this.actionLabel,
+      required this.onAction});
 
   @override
   Widget build(BuildContext context) {
@@ -1014,7 +1054,6 @@ class _AttentionCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -1102,7 +1141,6 @@ class _MetricCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Stack(
           children: [
-            // Nature-themed background image
             Positioned(
               right: -10,
               bottom: -10,
@@ -1117,7 +1155,6 @@ class _MetricCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Decorative circles
             Positioned(
               right: -18,
               bottom: -18,
@@ -1125,7 +1162,8 @@ class _MetricCard extends StatelessWidget {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                    shape: BoxShape.circle, color: color.withOpacity(0.07)),
+                    shape: BoxShape.circle,
+                    color: color.withOpacity(0.07)),
               ),
             ),
             Positioned(
@@ -1135,10 +1173,10 @@ class _MetricCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                    shape: BoxShape.circle, color: color.withOpacity(0.1)),
+                    shape: BoxShape.circle,
+                    color: color.withOpacity(0.1)),
               ),
             ),
-            // Content
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
               child: Column(
@@ -1186,32 +1224,25 @@ class _ActivityTile extends StatelessWidget {
   final int imageSeed;
   final VoidCallback onTap;
   const _ActivityTile(
-      {required this.activity, required this.imageSeed, required this.onTap});
+      {required this.activity,
+      required this.imageSeed,
+      required this.onTap});
 
   static _DateParts _parseDate(dynamic raw) {
     if (raw == null) return const _DateParts('—', '');
     if (raw is Timestamp) {
       final dt = raw.toDate();
       const m = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec'
+        'Jan','Feb','Mar','Apr','May','Jun',
+        'Jul','Aug','Sep','Oct','Nov','Dec'
       ];
       return _DateParts('${dt.day}', m[dt.month - 1]);
     }
     if (raw is String && raw.isNotEmpty) {
       final p = raw.trim().split(RegExp(r'[\s/\-]+'));
-      final mon =
-      p.length > 1 ? (p[1].length > 3 ? p[1].substring(0, 3) : p[1]) : '';
+      final mon = p.length > 1
+          ? (p[1].length > 3 ? p[1].substring(0, 3) : p[1])
+          : '';
       return _DateParts(p.isNotEmpty ? p[0] : '—', mon);
     }
     return const _DateParts('—', '');
@@ -1243,6 +1274,7 @@ class _ActivityTile extends StatelessWidget {
         opColor = AppTheme.secondary;
         opLabel = 'Upcoming';
     }
+
     late Color impactColor;
     late String impactLabel;
     switch (impactStatus) {
@@ -1294,9 +1326,9 @@ class _ActivityTile extends StatelessWidget {
                     loadingBuilder: (_, child, prog) => prog == null
                         ? child
                         : Container(
-                        width: 80,
-                        height: 88,
-                        color: AppTheme.lightGreen.withOpacity(0.15)),
+                            width: 80,
+                            height: 88,
+                            color: AppTheme.lightGreen.withOpacity(0.15)),
                     errorBuilder: (_, __, ___) => Container(
                       width: 80,
                       height: 88,
@@ -1352,7 +1384,6 @@ class _ActivityTile extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(13, 10, 8, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     Text(name,
                         style: const TextStyle(
@@ -1374,7 +1405,8 @@ class _ActivityTile extends StatelessWidget {
                             child: Text(location,
                                 style: TextStyle(
                                     fontSize: 11,
-                                    color: AppTheme.darkGreen.withOpacity(0.4)),
+                                    color:
+                                        AppTheme.darkGreen.withOpacity(0.4)),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis),
                           ),
@@ -1385,7 +1417,9 @@ class _ActivityTile extends StatelessWidget {
                     Row(
                       children: [
                         _StatusPill(
-                            label: opLabel, color: opColor, filled: isOngoing),
+                            label: opLabel,
+                            color: opColor,
+                            filled: isOngoing),
                         const SizedBox(width: 5),
                         _StatusPill(
                             label: impactLabel,
@@ -1418,7 +1452,8 @@ class _ActivityTile extends StatelessWidget {
                           fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),
                   Icon(Icons.arrow_forward_ios,
-                      size: 11, color: AppTheme.lightGreen.withOpacity(0.5)),
+                      size: 11,
+                      color: AppTheme.lightGreen.withOpacity(0.5)),
                 ],
               ),
             ),
@@ -1490,7 +1525,10 @@ class _CreateSheetOption extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [color.withOpacity(0.15), color.withOpacity(0.07)],
+                  colors: [
+                    color.withOpacity(0.15),
+                    color.withOpacity(0.07)
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(13),
               ),
@@ -1545,8 +1583,8 @@ class _PlaceholderScreen extends StatelessWidget {
         foregroundColor: AppTheme.darkGreen,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child:
-          Divider(height: 1, color: AppTheme.lightGreen.withOpacity(0.2)),
+          child: Divider(
+              height: 1, color: AppTheme.lightGreen.withOpacity(0.2)),
         ),
       ),
       body: Center(
@@ -1579,7 +1617,8 @@ class _PlaceholderScreen extends StatelessWidget {
             const SizedBox(height: 5),
             Text('Coming soon',
                 style: TextStyle(
-                    fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.38))),
+                    fontSize: 13,
+                    color: AppTheme.darkGreen.withOpacity(0.38))),
           ],
         ),
       ),

@@ -195,11 +195,11 @@ class _EnvOpsProfileTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Org icon + label
+          // Identity header
           Center(
             child: Column(
               children: [
@@ -247,17 +247,9 @@ class _EnvOpsProfileTab extends StatelessWidget {
 
           const SizedBox(height: 28),
 
-          // Context switcher
+          // ── Switch context ────────────────────────────────────────────────
           if (orgContextBuilder != null || memberContextBuilder != null) ...[
-            Text(
-              'SWITCH CONTEXT',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: AppTheme.darkGreen.withOpacity(0.45),
-              ),
-            ),
+            _sectionLabel('SWITCH CONTEXT'),
             const SizedBox(height: 10),
             RoleContextSwitcher(
               activeContext: 'envOps',
@@ -277,41 +269,120 @@ class _EnvOpsProfileTab extends StatelessWidget {
             const SizedBox(height: 28),
           ],
 
-          // Quick stats
-          _buildStatGrid(context),
+          // ── Ops activity summary ──────────────────────────────────────────
+          _sectionLabel('THIS MONTH'),
+          const SizedBox(height: 10),
+          _buildStatGrid(),
+          const SizedBox(height: 28),
+
+          // ── Return to org dashboard ───────────────────────────────────────
+          if (orgContextBuilder != null) ...[
+            _sectionLabel('ORGANISATION'),
+            const SizedBox(height: 10),
+            _buildReturnToOrgCard(context),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildStatGrid(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'THIS MONTH',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-            color: AppTheme.darkGreen.withOpacity(0.45),
-          ),
-        ),
-        const SizedBox(height: 10),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.8,
-          children: const [
-            _StatCard(label: 'Collection Zones', value: '2', icon: Icons.map_outlined),
-            _StatCard(label: 'Trees Planted', value: '50', icon: Icons.park_outlined),
-            _StatCard(label: 'Fleet Active', value: '3', icon: Icons.local_shipping_outlined),
-            _StatCard(label: 'Credits Earned', value: '0', icon: Icons.verified_outlined),
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+        color: AppTheme.darkGreen.withOpacity(0.45),
+      ),
+    );
+  }
+
+  Widget _buildReturnToOrgCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _switchTo(context, orgContextBuilder),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primary.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
           ],
         ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: AppTheme.lightGreen.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.business_outlined,
+                  color: AppTheme.primary, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Organisation Dashboard',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: AppTheme.darkGreen,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'People, operations, programmes & settings',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.darkGreen.withOpacity(0.55),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: AppTheme.primary.withOpacity(0.6), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatGrid() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.8,
+      children: const [
+        _StatCard(
+            label: 'Collection Zones',
+            value: '—',
+            icon: Icons.map_outlined),
+        _StatCard(
+            label: 'Trees Planted',
+            value: '—',
+            icon: Icons.park_outlined),
+        _StatCard(
+            label: 'Fleet Active',
+            value: '—',
+            icon: Icons.local_shipping_outlined),
+        _StatCard(
+            label: 'Credits Earned',
+            value: '—',
+            icon: Icons.verified_outlined),
       ],
     );
   }
