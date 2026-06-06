@@ -4,10 +4,10 @@ import '../../Models/user.dart';
 import '../../Services/Community/community_service.dart';
 import '../theme/app_theme.dart';
 import 'activities_list.dart';
+import 'activity_filter_sheet.dart';
 import 'create_activity.dart';
 
 class ActivityHomeLogic {
-  // Builds the floating action button for creating activities (only for organizers)
   static Widget? buildFloatingActionButton(BuildContext context, F_User? user) {
     if (user == null) return null;
 
@@ -34,8 +34,10 @@ class ActivityHomeLogic {
     );
   }
 
-  // The activity tab widget
-  static Widget buildActivityTab() {
-    return const ActivitiesListScreen(embedded: true);
+  static Widget buildActivityTab({ActivityFilter? filter}) {
+    return ActivitiesListScreen(
+      embedded: true,
+      filter: filter ?? const ActivityFilter(),
+    );
   }
 }

@@ -189,22 +189,19 @@ class _NavItem extends StatelessWidget {
 
             const SizedBox(height: 3),
 
-            // Label
-            AnimatedOpacity(
-              opacity: isSelected ? 1.0 : 0.65,
-              duration: const Duration(milliseconds: 200),
-              child: Text(
+            // Label — only visible on selected item
+            if (isSelected)
+              Text(
                 label,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 10.5,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected
-                      ? AppTheme.darkGreen
-                      : AppTheme.darkGreen.withOpacity(0.7),
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.darkGreen,
                   letterSpacing: -0.1,
                 ),
-              ),
-            ),
+              )
+            else
+              const SizedBox(height: 14),
           ],
         ),
       ),

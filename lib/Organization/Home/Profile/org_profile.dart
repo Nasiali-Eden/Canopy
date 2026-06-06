@@ -115,19 +115,26 @@ class _OrgProfileState extends State<OrgProfile> {
               orgData != null &&
               orgData['org_rep_uid'] == currentUser.uid;
 
+          final orgId = orgData?['orgId'] as String?;
+
           return SingleChildScrollView(
             child: Column(
               children: [
                 const SizedBox(height: 20),
                 _buildHeader(context, orgData),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                if (orgId != null) ...[
+                  _buildStatsRow(context, orgId),
+                  const SizedBox(height: 24),
+                ] else
+                  const SizedBox(height: 8),
                 if (isOrgRep) ...[
                   _buildRoleContextSwitcher(context, orgData),
                   const SizedBox(height: 20),
                   _buildSpecialOpsButton(context, orgData),
                   const SizedBox(height: 24),
                 ],
-                _buildOrganizationInfo(context),
+                _buildOrganizationInfo(context, orgData),
                 const SizedBox(height: 24),
                 _buildAccountSection(context),
                 const SizedBox(height: 16),
@@ -148,64 +155,215 @@ class _OrgProfileState extends State<OrgProfile> {
   // ── Header ──────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context, Map<String, dynamic>? orgData) {
-    final orgName = orgData?['org_name'] as String? ?? 'Organization';
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppTheme.primary, AppTheme.secondary],
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primary.withOpacity(0.3),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.business, size: 50, color: Colors.white),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            orgName,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppTheme.darkGreen,
-                  fontWeight: FontWeight.w700,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.verified, color: AppTheme.primary, size: 16),
-                const SizedBox(width: 6),
-                Text(
-                  'Active Organization',
-                  style: TextStyle(
-                    color: AppTheme.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
+    final orgName = orgData?['org_name'] as String? ?? 'Organisation';
+    final designation = orgData?['designation'] as String? ?? '';
+    final logoUrl = orgData?['logoUrl'] as String?;
+    final city = orgData?['city'] as String? ?? '';
+    final area = orgData?['area'] as String? ?? '';
+    final description =
+        orgData?['description'] as String? ?? orgData?['bio'] as String? ?? '';
+    final locationText =
+        [area, city].where((s) => s.isNotEmpty).join(', ');
+
+    final parts = orgName.trim().split(RegExp(r'\s+'));
+    final initials = parts.length >= 2
+        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
+        : orgName.isNotEmpty
+            ? orgName[0].toUpperCase()
+            : 'O';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppTheme.darkGreen, AppTheme.primary],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withOpacity(0.3),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Logo / initials
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withOpacity(0.2)),
+                ),
+                child: logoUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          logoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text(initials,
+                                style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white)),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Text(initials,
+                            style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white)),
+                      ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      orgName,
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white),
+                    ),
+                    if (designation.isNotEmpty) ...[
+                      const SizedBox(height: 7),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.apartment_outlined,
+                                size: 12, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(designation,
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (locationText.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.location_on,
+                    size: 14, color: Colors.white.withOpacity(0.75)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(locationText,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.85))),
+                ),
+              ],
+            ),
+          ],
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              description,
+              style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.8),
+                  height: 1.4),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Stats row ────────────────────────────────────────────────────────────────
+
+  Widget _buildStatsRow(BuildContext context, String orgId) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('OrgMembers')
+            .where('orgId', isEqualTo: orgId)
+            .snapshots(),
+        builder: (context, membSnap) {
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('activities')
+                .where('orgId', isEqualTo: orgId)
+                .snapshots(),
+            builder: (context, actSnap) {
+              final members = membSnap.data?.docs.length ?? 0;
+              final events = actSnap.data?.docs.length ?? 0;
+              final verified = actSnap.data?.docs
+                      .where((d) =>
+                          (d.data() as Map)['impactStatus'] == 'confirmed')
+                      .length ??
+                  0;
+
+              return Row(
+                children: [
+                  Expanded(
+                    child: _OrgStatTile(
+                      label: 'Members',
+                      value: membSnap.hasData ? '$members' : '—',
+                      icon: Icons.people_outline,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _OrgStatTile(
+                      label: 'Events',
+                      value: actSnap.hasData ? '$events' : '—',
+                      icon: Icons.event_outlined,
+                      color: AppTheme.accent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _OrgStatTile(
+                      label: 'Verified',
+                      value: actSnap.hasData ? '$verified' : '—',
+                      icon: Icons.verified_outlined,
+                      color: AppTheme.tertiary,
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -397,7 +555,26 @@ class _OrgProfileState extends State<OrgProfile> {
 
   // ── Organization info ────────────────────────────────────────────────────────
 
-  Widget _buildOrganizationInfo(BuildContext context) {
+  Widget _buildOrganizationInfo(
+      BuildContext context, Map<String, dynamic>? orgData) {
+    final type = orgData?['designation'] as String? ??
+        orgData?['type'] as String? ??
+        '—';
+    final city = orgData?['city'] as String? ?? '';
+    final area = orgData?['area'] as String? ?? '';
+    final locationText =
+        [area, city].where((s) => s.isNotEmpty).join(', ');
+    final createdAt = orgData?['createdAt'];
+    String establishedStr = '—';
+    if (createdAt is Timestamp) {
+      final dt = createdAt.toDate();
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      establishedStr = '${months[dt.month - 1]} ${dt.year}';
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -421,7 +598,7 @@ class _OrgProfileState extends State<OrgProfile> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Organization Details',
+                  'Organisation Details',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: AppTheme.darkGreen,
                         fontWeight: FontWeight.w700,
@@ -434,13 +611,17 @@ class _OrgProfileState extends State<OrgProfile> {
               ],
             ),
             const SizedBox(height: 16),
-            _InfoRow(icon: Icons.category, label: 'Type', value: 'Environmental NGO'),
+            _InfoRow(icon: Icons.category, label: 'Type', value: type),
             const SizedBox(height: 12),
-            _InfoRow(icon: Icons.location_on, label: 'Operating Area', value: 'Nairobi, Kenya'),
+            _InfoRow(
+                icon: Icons.location_on,
+                label: 'Operating Area',
+                value: locationText.isEmpty ? '—' : locationText),
             const SizedBox(height: 12),
-            _InfoRow(icon: Icons.calendar_today, label: 'Established', value: 'January 2020'),
-            const SizedBox(height: 12),
-            _InfoRow(icon: Icons.people, label: 'Team Size', value: '24 Members'),
+            _InfoRow(
+                icon: Icons.calendar_today,
+                label: 'Established',
+                value: establishedStr),
           ],
         ),
       ),
@@ -1603,4 +1784,63 @@ class _SettingsItem {
   final VoidCallback onTap;
 
   _SettingsItem({required this.icon, required this.title, required this.onTap});
+}
+
+// ─── Org stat tile ────────────────────────────────────────────────────────────
+
+class _OrgStatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _OrgStatTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.12)),
+        boxShadow: [
+          BoxShadow(
+              color: color.withOpacity(0.07),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(height: 8),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: color,
+                  height: 1)),
+          const SizedBox(height: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.darkGreen.withOpacity(0.55))),
+        ],
+      ),
+    );
+  }
 }

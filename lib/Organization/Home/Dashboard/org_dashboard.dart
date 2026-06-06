@@ -267,13 +267,13 @@ class _DashboardContentState extends State<_DashboardContent>
           onNotifications: () =>
               Navigator.of(context).pushNamed('/notifications'),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 16),
         if (_orgId != null && _org != null) ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: DashAttentionStrip(orgId: _orgId!, org: _org!),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 16),
         ],
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -327,13 +327,13 @@ class _DashboardContentState extends State<_DashboardContent>
             ],
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 20),
         DashMetrics(
           orgId: _orgId,
           firestore: widget.firestore,
           onViewReport: () => Navigator.of(context).pushNamed('/impactReport'),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 20),
         DashActivities(
           orgId: _orgId,
           firestore: widget.firestore,
@@ -341,9 +341,9 @@ class _DashboardContentState extends State<_DashboardContent>
           onActivityTap: (data) => Navigator.of(context)
               .pushNamed('/activityDetails', arguments: data),
         ),
-        const SizedBox(height: 6),
-        DashContributions(userId: _userId),
         const SizedBox(height: 20),
+        DashContributions(userId: _userId),
+        const SizedBox(height: 32),
       ],
     );
   }

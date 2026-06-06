@@ -36,7 +36,7 @@ class DashActivities extends StatelessWidget {
             onAction: onViewAll,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         StreamBuilder<QuerySnapshot>(
           // No orderBy — avoids composite index. Filter + sort client-side.
           stream: firestore
@@ -84,19 +84,20 @@ class DashActivities extends StatelessWidget {
                 ),
               );
             }
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+            return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: visible.length,
-              itemBuilder: (context, i) {
-                final data = visible[i].data() as Map<String, dynamic>;
-                return _ActivityTile(
-                  activity: data,
-                  imageSeed: i,
-                  onTap: () => onActivityTap(data),
-                );
-              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: visible.indexed.map((entry) {
+                  final i    = entry.$1;
+                  final data = entry.$2.data() as Map<String, dynamic>;
+                  return _ActivityTile(
+                    activity: data,
+                    imageSeed: i,
+                    onTap: () => onActivityTap(data),
+                  );
+                }).toList(),
+              ),
             );
           },
         ),

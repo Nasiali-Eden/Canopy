@@ -27,14 +27,14 @@ class DashMetrics extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 15, 16, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: DashSectionHeader(
             title: 'Overview',
             actionLabel: 'Full report →',
             onAction: onViewReport,
           ),
         ),
-      
+        const SizedBox(height: 14),
         StreamBuilder<QuerySnapshot>(
           stream: firestore
               .collection('activities')
@@ -71,37 +71,57 @@ class DashMetrics extends StatelessWidget {
                     // Show loading skeleton if any stream is loading and has no data
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 2.1,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          _MetricCard(
-                            value: actSnap.hasData ? '$totalEvents' : '—',
-                            label: 'Events run',
-                            icon: Icons.event_available,
-                            color: AppTheme.darkGreen,
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  child: _MetricCard(
+                                    value: actSnap.hasData ? '$totalEvents' : '—',
+                                    label: 'Events run',
+                                    icon: Icons.event_available,
+                                    color: AppTheme.darkGreen,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _MetricCard(
+                                    value: progSnap.hasData ? '$activeProgrammes' : '—',
+                                    label: 'Programmes',
+                                    icon: Icons.layers_outlined,
+                                    color: AppTheme.accent,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          _MetricCard(
-                            value: progSnap.hasData ? '$activeProgrammes' : '—',
-                            label: 'Programmes',
-                            icon: Icons.layers_outlined,
-                            color: AppTheme.accent,
-                          ),
-                          _MetricCard(
-                            value: membSnap.hasData ? '$volunteers' : '—',
-                            label: 'Volunteers',
-                            icon: Icons.volunteer_activism,
-                            color: AppTheme.primary,
-                          ),
-                          _MetricCard(
-                            value: actSnap.hasData ? '$verified' : '—',
-                            label: 'Verified',
-                            icon: Icons.verified,
-                            color: AppTheme.tertiary,
+                          const SizedBox(height: 10),
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  child: _MetricCard(
+                                    value: membSnap.hasData ? '$volunteers' : '—',
+                                    label: 'Volunteers',
+                                    icon: Icons.volunteer_activism,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: _MetricCard(
+                                    value: actSnap.hasData ? '$verified' : '—',
+                                    label: 'Verified',
+                                    icon: Icons.verified,
+                                    color: AppTheme.tertiary,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -172,7 +192,7 @@ class _MetricCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              padding: const EdgeInsets.fromLTRB(12, 16, 10, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

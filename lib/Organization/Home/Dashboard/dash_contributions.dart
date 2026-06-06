@@ -30,7 +30,7 @@ class DashContributions extends StatelessWidget {
             onAction: () {},
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: StreamBuilder<QuerySnapshot>(

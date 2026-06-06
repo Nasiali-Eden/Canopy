@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../Shared/theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,8 +115,8 @@ class _OrgPeopleScreenState extends State<OrgPeopleScreen>
     with SingleTickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // TODO: Replace with actual org ID from auth/session
-  final String _orgId = 'currentOrgId';
+  String? _orgId;
+  bool _orgIdLoaded = false;
 
   late final TabController _tabController;
 
@@ -123,6 +124,32 @@ class _OrgPeopleScreenState extends State<OrgPeopleScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadOrgId();
+  }
+
+  Future<void> _loadOrgId() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) setState(() => _orgIdLoaded = true);
+        return;
+      }
+      final doc = await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(user.uid)
+          .get();
+      if (!mounted) return;
+      final orgId = doc.exists
+          ? (doc.data() as Map<String, dynamic>)['orgId'] as String?
+          : null;
+      setState(() {
+        _orgId = orgId;
+        _orgIdLoaded = true;
+      });
+    } catch (e) {
+      debugPrint('OrgPeople._loadOrgId error: $e');
+      if (mounted) setState(() => _orgIdLoaded = true);
+    }
   }
 
   @override
@@ -133,6 +160,20 @@ class _OrgPeopleScreenState extends State<OrgPeopleScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!_orgIdLoaded) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_orgId == null) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: Text('No organisation linked to this account.')),
+      );
+    }
+    final orgId = _orgId!;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -162,40 +203,43 @@ class _OrgPeopleScreenState extends State<OrgPeopleScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildPageHeader(context),
-          _buildCapacityCard(context),
+          _buildCapacityCard(context, orgId),
           const SizedBox(height: 16),
           _buildTabBar(context),
           Expanded(
             child: TabBarView(
               controller: _tabController,
               children: [
-                _TeamsTab(orgId: _orgId, firestore: _firestore),
-                _MembersTab(orgId: _orgId, firestore: _firestore),
+                _TeamsTab(orgId: orgId, firestore: _firestore),
+                _MembersTab(orgId: orgId, firestore: _firestore),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: AnimatedBuilder(
-        animation: _tabController,
-        builder: (context, _) {
-          final isTeamsTab = _tabController.index == 0;
-          return FloatingActionButton.extended(
-            onPressed: isTeamsTab
-                ? () => _showCreateTeamSheet(context)
-                : () => _showInviteMemberSheet(context),
-            backgroundColor: AppTheme.primary,
-            icon: Icon(
-              isTeamsTab ? Icons.add : Icons.person_add_outlined,
-              color: Colors.white,
-            ),
-            label: Text(
-              isTeamsTab ? 'New Team' : 'Invite',
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w600),
-            ),
-          );
-        },
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 90),
+        child: AnimatedBuilder(
+          animation: _tabController,
+          builder: (context, _) {
+            final isTeamsTab = _tabController.index == 0;
+            return FloatingActionButton.extended(
+              onPressed: isTeamsTab
+                  ? () => _showCreateTeamSheet(context)
+                  : () => _showInviteMemberSheet(context),
+              backgroundColor: AppTheme.primary,
+              icon: Icon(
+                isTeamsTab ? Icons.add : Icons.person_add_outlined,
+                color: Colors.white,
+              ),
+              label: Text(
+                isTeamsTab ? 'New Team' : 'Invite',
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -230,9 +274,9 @@ class _OrgPeopleScreenState extends State<OrgPeopleScreen>
 
   // ── Capacity card ────────────────────────────
 
-  Widget _buildCapacityCard(BuildContext context) {
+  Widget _buildCapacityCard(BuildContext context, String orgId) {
     return StreamBuilder<DocumentSnapshot>(
-      stream: _firestore.collection('Organizations').doc(_orgId).snapshots(),
+      stream: _firestore.collection('organizations').doc(orgId).snapshots(),
       builder: (context, snapshot) {
         final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
         final total = data['totalMembers'] as int? ?? 0;
@@ -440,7 +484,7 @@ class _OrgPeopleScreenState extends State<OrgPeopleScreen>
                 onPressed: () {
                   if (nameController.text.trim().isNotEmpty) {
                     _firestore.collection('Teams').add({
-                      'orgId': _orgId,
+                      'orgId': _orgId ?? '',
                       'name': nameController.text.trim(),
                       'description': descController.text.trim(),
                       'memberCount': 0,
@@ -632,7 +676,7 @@ class _OrgPeopleScreenState extends State<OrgPeopleScreen>
             onPressed: () {
               final total = int.tryParse(totalController.text) ?? 0;
               final active = int.tryParse(activeController.text) ?? 0;
-              _firestore.collection('Organizations').doc(_orgId).set(
+              _firestore.collection('organizations').doc(_orgId ?? '').set(
                   {'totalMembers': total, 'activeMembers': active},
                   SetOptions(merge: true));
               Navigator.pop(ctx);

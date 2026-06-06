@@ -1,264 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../../Shared/theme/app_theme.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MODELS
-// ─────────────────────────────────────────────────────────────────────────────
-
-enum EventStage { draft, active, executing, verifying, onChain }
-
-enum EventType { cleanup, treePlanting, training, awareness, waterway }
-
-enum PartnerStatus { active, pending, invited }
-
-enum AnnouncementReach { followers, nearby, both }
-
-class OrgEvent {
-  final String id;
-  final String title;
-  final EventType type;
-  final EventStage stage;
-  final DateTime dateTime;
-  final String area;
-  final int volunteersNeeded;
-  final int volunteersConfirmed;
-  final bool bountyAttached;
-  final double? bountyAmount;
-  final String? txHash;
-
-  const OrgEvent({
-    required this.id,
-    required this.title,
-    required this.type,
-    required this.stage,
-    required this.dateTime,
-    required this.area,
-    required this.volunteersNeeded,
-    required this.volunteersConfirmed,
-    this.bountyAttached = false,
-    this.bountyAmount,
-    this.txHash,
-  });
-}
-
-class OrgPartner {
-  final String id;
-  final String name;
-  final String sector;
-  final PartnerStatus status;
-  final int sharedEvents;
-  final String? logoInitials;
-
-  const OrgPartner({
-    required this.id,
-    required this.name,
-    required this.sector,
-    required this.status,
-    required this.sharedEvents,
-    this.logoInitials,
-  });
-}
-
-class OrgAnnouncement {
-  final String id;
-  final String title;
-  final String preview;
-  final DateTime sentAt;
-  final AnnouncementReach reach;
-  final int recipientCount;
-
-  const OrgAnnouncement({
-    required this.id,
-    required this.title,
-    required this.preview,
-    required this.sentAt,
-    required this.reach,
-    required this.recipientCount,
-  });
-}
-
-class VerifiedImpactRecord {
-  final String id;
-  final String title;
-  final String type;
-  final DateTime confirmedAt;
-  final String area;
-  final String txHash;
-  final Map<String, String> metrics;
-
-  const VerifiedImpactRecord({
-    required this.id,
-    required this.title,
-    required this.type,
-    required this.confirmedAt,
-    required this.area,
-    required this.txHash,
-    required this.metrics,
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PLACEHOLDER DATA
-// ─────────────────────────────────────────────────────────────────────────────
-
-final _kEvents = [
-  OrgEvent(
-    id: 'e1',
-    title: 'Soweto West River Cleanup',
-    type: EventType.cleanup,
-    stage: EventStage.executing,
-    dateTime: DateTime(2026, 5, 24, 7, 0),
-    area: 'Soweto West',
-    volunteersNeeded: 30,
-    volunteersConfirmed: 24,
-    bountyAttached: true,
-    bountyAmount: 15000,
-  ),
-  OrgEvent(
-    id: 'e2',
-    title: 'Karura Reforestation Drive',
-    type: EventType.treePlanting,
-    stage: EventStage.active,
-    dateTime: DateTime(2026, 6, 1, 8, 0),
-    area: 'Gigiri',
-    volunteersNeeded: 50,
-    volunteersConfirmed: 31,
-    bountyAttached: true,
-    bountyAmount: 22000,
-  ),
-  OrgEvent(
-    id: 'e3',
-    title: 'Waste Sorting Training',
-    type: EventType.training,
-    stage: EventStage.draft,
-    dateTime: DateTime(2026, 6, 7, 9, 0),
-    area: 'Laini Saba',
-    volunteersNeeded: 20,
-    volunteersConfirmed: 0,
-    bountyAttached: false,
-  ),
-  OrgEvent(
-    id: 'e4',
-    title: 'Makina Waterway Clearance',
-    type: EventType.waterway,
-    stage: EventStage.verifying,
-    dateTime: DateTime(2026, 5, 15, 6, 30),
-    area: 'Makina',
-    volunteersNeeded: 40,
-    volunteersConfirmed: 40,
-    bountyAttached: true,
-    bountyAmount: 18000,
-  ),
-  OrgEvent(
-    id: 'e5',
-    title: 'Gatwekera Dumpsite Cleanup',
-    type: EventType.cleanup,
-    stage: EventStage.onChain,
-    dateTime: DateTime(2026, 4, 20, 7, 0),
-    area: 'Gatwekera',
-    volunteersNeeded: 35,
-    volunteersConfirmed: 35,
-    bountyAttached: true,
-    bountyAmount: 12000,
-    txHash: '0x7f3a...c91b',
-  ),
-];
-
-const _kPartners = [
-  OrgPartner(
-    id: 'p1',
-    name: 'Mtaa Safi Initiative',
-    sector: 'Environmental',
-    status: PartnerStatus.active,
-    sharedEvents: 8,
-    logoInitials: 'MS',
-  ),
-  OrgPartner(
-    id: 'p2',
-    name: 'Kibera Digital Village',
-    sector: 'Technology',
-    status: PartnerStatus.active,
-    sharedEvents: 3,
-    logoInitials: 'KD',
-  ),
-  OrgPartner(
-    id: 'p3',
-    name: 'Green Youth Collective',
-    sector: 'Youth',
-    status: PartnerStatus.pending,
-    sharedEvents: 0,
-    logoInitials: 'GY',
-  ),
-  OrgPartner(
-    id: 'p4',
-    name: 'Nairobi Urban Farms',
-    sector: 'Agriculture',
-    status: PartnerStatus.invited,
-    sharedEvents: 0,
-    logoInitials: 'NF',
-  ),
-];
-
-final _kAnnouncements = [
-  OrgAnnouncement(
-    id: 'a1',
-    title: 'Cleanup this Saturday — Join Us!',
-    preview:
-    'We are heading to Soweto West river on Saturday at 7am. Bring gloves...',
-    sentAt: DateTime(2026, 5, 20, 10, 30),
-    reach: AnnouncementReach.both,
-    recipientCount: 312,
-  ),
-  OrgAnnouncement(
-    id: 'a2',
-    title: 'New tree planting slots open',
-    preview:
-    'Karura reforestation drive has new volunteer slots available for June 1st...',
-    sentAt: DateTime(2026, 5, 18, 14, 0),
-    reach: AnnouncementReach.followers,
-    recipientCount: 148,
-  ),
-  OrgAnnouncement(
-    id: 'a3',
-    title: 'Makina waterway — verified complete',
-    preview:
-    'The Makina waterway clearance has passed verification. Thank you to all...',
-    sentAt: DateTime(2026, 5, 16, 9, 0),
-    reach: AnnouncementReach.both,
-    recipientCount: 290,
-  ),
-];
-
-final _kImpactRecords = [
-  VerifiedImpactRecord(
-    id: 'ir1',
-    title: 'Gatwekera Dumpsite Transformation',
-    type: 'Dumpsite Clearance',
-    confirmedAt: DateTime(2026, 5, 19),
-    area: 'Gatwekera',
-    txHash: '0x7f3a...c91b',
-    metrics: {
-      'Plastic Diverted': '4.2 tonnes',
-      'Site Area': '1,200 m²',
-      'Verifiers': '6',
-      'Days Monitored': '30',
-    },
-  ),
-  VerifiedImpactRecord(
-    id: 'ir2',
-    title: 'Laini Saba Tree Planting',
-    type: 'Urban Greening',
-    confirmedAt: DateTime(2026, 4, 10),
-    area: 'Laini Saba',
-    txHash: '0x2c8d...f04e',
-    metrics: {
-      'Trees Planted': '120',
-      'Survival Rate': '94%',
-      'Volunteers': '38',
-      'Days Monitored': '90',
-    },
-  ),
-];
+import '../../../Shared/Activities/create_activity.dart';
+import 'send_partnership_request.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN SCREEN
@@ -274,18 +20,70 @@ class OrgOperations extends StatefulWidget {
 class _OrgOperationsState extends State<OrgOperations>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  String? _orgId;
+  bool _orgLoaded = false;
+  int _refreshKey = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    _loadOrgId();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadOrgId() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) setState(() => _orgLoaded = true);
+        return;
+      }
+      final doc = await FirebaseFirestore.instance
+          .collection('Users')
+          .doc(user.uid)
+          .get();
+      if (!mounted) return;
+      final orgId = doc.exists
+          ? (doc.data() as Map<String, dynamic>)['orgId'] as String?
+          : null;
+      setState(() {
+        _orgId = orgId;
+        _orgLoaded = true;
+      });
+    } catch (e) {
+      debugPrint('OrgOperations._loadOrgId error: $e');
+      if (mounted) setState(() => _orgLoaded = true);
+    }
+  }
+
+  void _refresh() => setState(() => _refreshKey++);
+
+  void _onAdd() {
+    switch (_tabController.index) {
+      case 0:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CreateActivityScreen()),
+        );
+        break;
+      case 1:
+        if (_orgId != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => SendPartnershipRequestScreen(orgId: _orgId!),
+            ),
+          );
+        }
+        break;
+      default:
+        break;
+    }
   }
 
   @override
@@ -302,36 +100,26 @@ class _OrgOperationsState extends State<OrgOperations>
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Operations',
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.darkGreen,
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${_kEvents.where((e) => e.stage != EventStage.onChain).length} active · '
-                              '${_kPartners.where((p) => p.status == PartnerStatus.active).length} partners · '
-                              '${_kImpactRecords.length} on-chain records',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.darkGreen.withOpacity(0.5),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                  const Expanded(
+                    child: Text(
+                      'Operations',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.darkGreen,
+                        height: 1.1,
+                      ),
                     ),
                   ),
-                  _GradientIconButton(
+                  _IconBtn(
+                    icon: Icons.refresh_rounded,
+                    onTap: _refresh,
+                  ),
+                  const SizedBox(width: 8),
+                  _IconBtn(
                     icon: Icons.add_rounded,
-                    onTap: () {},
+                    gradient: true,
+                    onTap: _onAdd,
                   ),
                 ],
               ),
@@ -339,7 +127,7 @@ class _OrgOperationsState extends State<OrgOperations>
 
             const SizedBox(height: 16),
 
-            // ── Tabs ─────────────────────────────────────────────────
+            // ── Tab bar ──────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Container(
@@ -357,8 +145,7 @@ class _OrgOperationsState extends State<OrgOperations>
                   indicatorSize: TabBarIndicatorSize.tab,
                   dividerColor: Colors.transparent,
                   labelColor: Colors.white,
-                  unselectedLabelColor:
-                  AppTheme.darkGreen.withOpacity(0.55),
+                  unselectedLabelColor: AppTheme.darkGreen.withOpacity(0.55),
                   labelStyle: const TextStyle(
                       fontSize: 11, fontWeight: FontWeight.w700),
                   unselectedLabelStyle: const TextStyle(
@@ -377,23 +164,39 @@ class _OrgOperationsState extends State<OrgOperations>
 
             // ── Tab views ────────────────────────────────────────────
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: const [
-                  _EventsTab(),
-                  _PartnersTab(),
-                  _BroadcastTab(),
-                  _ImpactTab(),
-                ],
-              ),
+              child: !_orgLoaded
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                          color: AppTheme.primary, strokeWidth: 2))
+                  : _orgId == null
+                      ? Center(
+                          child: Text(
+                            'No organisation linked to this account',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.darkGreen.withOpacity(0.45)),
+                          ),
+                        )
+                      : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _EventsTab(
+                                orgId: _orgId!,
+                                key: ValueKey('ev-$_refreshKey')),
+                            _PartnersTab(
+                                orgId: _orgId!,
+                                key: ValueKey('pa-$_refreshKey')),
+                            _BroadcastTab(
+                                orgId: _orgId!,
+                                key: ValueKey('bc-$_refreshKey')),
+                            _ImpactTab(
+                                orgId: _orgId!,
+                                key: ValueKey('im-$_refreshKey')),
+                          ],
+                        ),
             ),
           ],
         ),
-      ),
-
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 88),
-        child: _ContextFab(tabIndex: _tabController.index),
       ),
     );
   }
@@ -404,87 +207,127 @@ class _OrgOperationsState extends State<OrgOperations>
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _EventsTab extends StatelessWidget {
-  const _EventsTab();
+  final String orgId;
+  const _EventsTab({super.key, required this.orgId});
+
+  static String _stage(Map<String, dynamic> d) {
+    final status = d['status'] as String? ?? '';
+    final impact = d['impactStatus'] as String? ?? '';
+    if (impact == 'confirmed') return 'onChain';
+    if (status == 'completed' && impact == 'pending') return 'verifying';
+    if (status == 'ongoing') return 'executing';
+    if (status == 'upcoming') return 'active';
+    return 'draft';
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Group by stage
-    final draft =
-    _kEvents.where((e) => e.stage == EventStage.draft).toList();
-    final active =
-    _kEvents.where((e) => e.stage == EventStage.active).toList();
-    final executing =
-    _kEvents.where((e) => e.stage == EventStage.executing).toList();
-    final verifying =
-    _kEvents.where((e) => e.stage == EventStage.verifying).toList();
-    final onChain =
-    _kEvents.where((e) => e.stage == EventStage.onChain).toList();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('activities')
+          .where('orgId', isEqualTo: orgId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+              child: CircularProgressIndicator(
+                  color: AppTheme.primary, strokeWidth: 2));
+        }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-      children: [
-        // Pipeline overview
-        _EventPipelineStrip(events: _kEvents),
-        const SizedBox(height: 16),
+        final docs = snapshot.data?.docs ?? [];
 
-        if (executing.isNotEmpty) ...[
-          _SectionHeader(
-              icon: Icons.play_circle_outline,
-              label: 'Executing Now',
-              color: AppTheme.accent),
-          ...executing.map((e) => _EventCard(event: e)),
-          const SizedBox(height: 4),
-        ],
-        if (verifying.isNotEmpty) ...[
-          _SectionHeader(
-              icon: Icons.fact_check_outlined,
-              label: 'In Verification',
-              color: AppTheme.tertiary),
-          ...verifying.map((e) => _EventCard(event: e)),
-          const SizedBox(height: 4),
-        ],
-        if (active.isNotEmpty) ...[
-          _SectionHeader(
-              icon: Icons.event_available_outlined,
-              label: 'Upcoming',
-              color: AppTheme.primary),
-          ...active.map((e) => _EventCard(event: e)),
-          const SizedBox(height: 4),
-        ],
-        if (draft.isNotEmpty) ...[
-          _SectionHeader(
-              icon: Icons.edit_outlined,
-              label: 'Drafts',
-              color: AppTheme.lightGreen),
-          ...draft.map((e) => _EventCard(event: e)),
-          const SizedBox(height: 4),
-        ],
-        if (onChain.isNotEmpty) ...[
-          _SectionHeader(
-              icon: Icons.verified_outlined,
-              label: 'On-Chain',
-              color: Colors.teal.shade600,
-              subtitle: 'Permanently recorded'),
-          ...onChain.map((e) => _EventCard(event: e)),
-        ],
-      ],
+        if (docs.isEmpty) {
+          return _EmptyState(
+            icon: Icons.event_note_outlined,
+            title: 'No events yet',
+            subtitle: 'Create your first event to mobilise volunteers',
+            actionLabel: 'Create Event',
+            onAction: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CreateActivityScreen()),
+            ),
+          );
+        }
+
+        final grouped = <String, List<Map<String, dynamic>>>{};
+        for (final doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final s = _stage(data);
+          grouped.putIfAbsent(s, () => []).add(data);
+        }
+
+        final counts = {
+          'draft': grouped['draft']?.length ?? 0,
+          'active': grouped['active']?.length ?? 0,
+          'executing': grouped['executing']?.length ?? 0,
+          'verifying': grouped['verifying']?.length ?? 0,
+          'onChain': grouped['onChain']?.length ?? 0,
+        };
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          children: [
+            _EventPipelineStrip(counts: counts),
+            const SizedBox(height: 16),
+            if ((grouped['executing'] ?? []).isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.play_circle_outline,
+                  label: 'Executing Now',
+                  color: AppTheme.accent),
+              ...grouped['executing']!
+                  .map((d) => _EventCard(data: d, stage: 'executing')),
+              const SizedBox(height: 4),
+            ],
+            if ((grouped['verifying'] ?? []).isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.fact_check_outlined,
+                  label: 'In Verification',
+                  color: AppTheme.tertiary),
+              ...grouped['verifying']!
+                  .map((d) => _EventCard(data: d, stage: 'verifying')),
+              const SizedBox(height: 4),
+            ],
+            if ((grouped['active'] ?? []).isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.event_available_outlined,
+                  label: 'Upcoming',
+                  color: AppTheme.primary),
+              ...grouped['active']!
+                  .map((d) => _EventCard(data: d, stage: 'active')),
+              const SizedBox(height: 4),
+            ],
+            if ((grouped['draft'] ?? []).isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.edit_outlined,
+                  label: 'Drafts',
+                  color: AppTheme.lightGreen),
+              ...grouped['draft']!
+                  .map((d) => _EventCard(data: d, stage: 'draft')),
+              const SizedBox(height: 4),
+            ],
+            if ((grouped['onChain'] ?? []).isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.verified_outlined,
+                  label: 'On-Chain',
+                  color: Colors.teal.shade600,
+                  subtitle: 'Permanently recorded'),
+              ...grouped['onChain']!
+                  .map((d) => _EventCard(data: d, stage: 'onChain')),
+            ],
+          ],
+        );
+      },
     );
   }
 }
 
 class _EventPipelineStrip extends StatelessWidget {
-  final List<OrgEvent> events;
-  const _EventPipelineStrip({required this.events});
+  final Map<String, int> counts;
+  const _EventPipelineStrip({required this.counts});
 
   @override
   Widget build(BuildContext context) {
-    final stages = [
-      EventStage.draft,
-      EventStage.active,
-      EventStage.executing,
-      EventStage.verifying,
-      EventStage.onChain,
-    ];
+    final stages = ['draft', 'active', 'executing', 'verifying', 'onChain'];
     final labels = ['Draft', 'Active', 'Running', 'Verify', 'Done'];
     final colors = [
       AppTheme.lightGreen,
@@ -521,8 +364,7 @@ class _EventPipelineStrip extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: List.generate(stages.length, (i) {
-              final count =
-                  events.where((e) => e.stage == stages[i]).length;
+              final count = counts[stages[i]] ?? 0;
               final isLast = i == stages.length - 1;
               return Expanded(
                 child: Row(
@@ -573,10 +415,9 @@ class _EventPipelineStrip extends StatelessWidget {
                     ),
                     if (!isLast)
                       Container(
-                        width: 16,
-                        height: 1,
-                        color: AppTheme.lightGreen.withOpacity(0.3),
-                      ),
+                          width: 16,
+                          height: 1,
+                          color: AppTheme.lightGreen.withOpacity(0.3)),
                   ],
                 ),
               );
@@ -589,55 +430,45 @@ class _EventPipelineStrip extends StatelessWidget {
 }
 
 class _EventCard extends StatelessWidget {
-  final OrgEvent event;
-  const _EventCard({required this.event});
+  final Map<String, dynamic> data;
+  final String stage;
+  const _EventCard({required this.data, required this.stage});
 
   Color get _stageColor {
-    switch (event.stage) {
-      case EventStage.draft:
+    switch (stage) {
+      case 'draft':
         return AppTheme.lightGreen;
-      case EventStage.active:
+      case 'active':
         return AppTheme.primary;
-      case EventStage.executing:
+      case 'executing':
         return AppTheme.accent;
-      case EventStage.verifying:
+      case 'verifying':
         return AppTheme.tertiary;
-      case EventStage.onChain:
+      default:
         return Colors.teal.shade600;
     }
   }
 
   String get _stageLabel {
-    switch (event.stage) {
-      case EventStage.draft:
+    switch (stage) {
+      case 'draft':
         return 'Draft';
-      case EventStage.active:
+      case 'active':
         return 'Upcoming';
-      case EventStage.executing:
+      case 'executing':
         return 'Running';
-      case EventStage.verifying:
+      case 'verifying':
         return 'Verifying';
-      case EventStage.onChain:
+      default:
         return 'On-Chain';
     }
   }
 
-  IconData get _typeIcon {
-    switch (event.type) {
-      case EventType.cleanup:
-        return Icons.cleaning_services_outlined;
-      case EventType.treePlanting:
-        return Icons.park_outlined;
-      case EventType.training:
-        return Icons.school_outlined;
-      case EventType.awareness:
-        return Icons.campaign_outlined;
-      case EventType.waterway:
-        return Icons.water_outlined;
-    }
-  }
-
-  String _formatDate(DateTime dt) {
+  String _formatDate(dynamic raw) {
+    if (raw == null) return '—';
+    DateTime? dt;
+    if (raw is Timestamp) dt = raw.toDate();
+    if (dt == null) return '—';
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -649,9 +480,14 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pct = event.volunteersNeeded > 0
-        ? (event.volunteersConfirmed / event.volunteersNeeded)
-        .clamp(0.0, 1.0)
+    final name = data['name'] as String? ?? 'Untitled';
+    final location = data['location'] as String? ?? '';
+    final participants = data['participants'] as int? ?? 0;
+    final maxParticipants = data['maxParticipants'] as int? ?? 0;
+    final bountyAmount = (data['bountyAmount'] as num?)?.toDouble();
+    final txHash = data['txHash'] as String?;
+    final pct = maxParticipants > 0
+        ? (participants / maxParticipants).clamp(0.0, 1.0)
         : 0.0;
 
     return Container(
@@ -661,7 +497,7 @@ class _EventCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: event.stage == EventStage.onChain
+          color: stage == 'onChain'
               ? Colors.teal.withOpacity(0.2)
               : AppTheme.lightGreen.withOpacity(0.2),
         ),
@@ -676,18 +512,16 @@ class _EventCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Type icon
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: _stageColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(_typeIcon, size: 16, color: _stageColor),
+                child: Icon(Icons.eco_outlined, size: 16, color: _stageColor),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -695,7 +529,7 @@ class _EventCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      event.title,
+                      name,
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -706,24 +540,30 @@ class _EventCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        Icon(Icons.location_on_outlined,
-                            size: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.4)),
-                        const SizedBox(width: 3),
-                        Text(
-                          event.area,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.5),
+                        if (location.isNotEmpty) ...[
+                          Icon(Icons.location_on_outlined,
+                              size: 11,
+                              color: AppTheme.darkGreen.withOpacity(0.4)),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(
+                              location,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.darkGreen.withOpacity(0.5),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
+                          const SizedBox(width: 8),
+                        ],
                         Icon(Icons.calendar_today_outlined,
                             size: 11,
                             color: AppTheme.darkGreen.withOpacity(0.4)),
                         const SizedBox(width: 3),
                         Text(
-                          _formatDate(event.dateTime),
+                          _formatDate(data['date']),
                           style: TextStyle(
                             fontSize: 11,
                             color: AppTheme.darkGreen.withOpacity(0.5),
@@ -735,15 +575,13 @@ class _EventCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // Stage badge
               Container(
                 padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: _stageColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border:
-                  Border.all(color: _stageColor.withOpacity(0.3)),
+                  border: Border.all(color: _stageColor.withOpacity(0.3)),
                 ),
                 child: Text(
                   _stageLabel,
@@ -756,14 +594,11 @@ class _EventCard extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
-          // Volunteer progress
           Row(
             children: [
               Text(
-                '${event.volunteersConfirmed}/${event.volunteersNeeded} volunteers',
+                '$participants/$maxParticipants volunteers',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -771,14 +606,14 @@ class _EventCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (event.bountyAttached && event.bountyAmount != null)
+              if (bountyAmount != null && bountyAmount > 0)
                 Row(
                   children: [
                     Icon(Icons.account_balance_wallet_outlined,
                         size: 11, color: AppTheme.tertiary),
                     const SizedBox(width: 3),
                     Text(
-                      'KES ${event.bountyAmount!.toStringAsFixed(0)}',
+                      'KES ${bountyAmount.toStringAsFixed(0)}',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -799,9 +634,7 @@ class _EventCard extends StatelessWidget {
               valueColor: AlwaysStoppedAnimation<Color>(_stageColor),
             ),
           ),
-
-          // On-chain tx hash
-          if (event.txHash != null) ...[
+          if (txHash != null) ...[
             const SizedBox(height: 8),
             Row(
               children: [
@@ -809,12 +642,11 @@ class _EventCard extends StatelessWidget {
                     size: 11, color: Colors.teal.shade600),
                 const SizedBox(width: 4),
                 Text(
-                  'TX: ${event.txHash}',
+                  'TX: $txHash',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: Colors.teal.shade600,
-                    fontFamily: 'monospace',
                   ),
                 ),
                 const Spacer(),
@@ -840,86 +672,155 @@ class _EventCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PartnersTab extends StatelessWidget {
-  const _PartnersTab();
+  final String orgId;
+  const _PartnersTab({super.key, required this.orgId});
 
   @override
   Widget build(BuildContext context) {
-    final active =
-    _kPartners.where((p) => p.status == PartnerStatus.active).toList();
-    final pending = _kPartners
-        .where((p) => p.status == PartnerStatus.pending)
-        .toList();
-    final invited = _kPartners
-        .where((p) => p.status == PartnerStatus.invited)
-        .toList();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('orgPartners')
+          .where('orgId', isEqualTo: orgId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+              child: CircularProgressIndicator(
+                  color: AppTheme.primary, strokeWidth: 2));
+        }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-      children: [
-        // Stats
-        _MiniStatsRow(items: [
-          _MiniStat(
-              label: 'Active',
-              value: '${active.length}',
-              color: AppTheme.primary),
-          _MiniStat(
-              label: 'Pending',
-              value: '${pending.length}',
-              color: AppTheme.tertiary),
-          _MiniStat(
-              label: 'Invited',
-              value: '${invited.length}',
-              color: AppTheme.lightGreen),
-          _MiniStat(
-              label: 'Shared Events',
-              value:
-              '${_kPartners.fold(0, (s, p) => s + p.sharedEvents)}',
-              color: AppTheme.accent),
-        ]),
-        const SizedBox(height: 8),
+        final docs = snapshot.data?.docs ?? [];
 
-        if (active.isNotEmpty) ...[
-          _SectionHeader(
-              icon: Icons.handshake_outlined,
-              label: 'Active Partners',
-              color: AppTheme.primary),
-          ...active.map((p) => _PartnerCard(partner: p)),
-          const SizedBox(height: 4),
-        ],
-        if (pending.isNotEmpty) ...[
-          _SectionHeader(
-              icon: Icons.hourglass_top_outlined,
-              label: 'Pending Approval',
-              color: AppTheme.tertiary),
-          ...pending.map((p) => _PartnerCard(partner: p)),
-          const SizedBox(height: 4),
-        ],
-        if (invited.isNotEmpty) ...[
-          _SectionHeader(
-              icon: Icons.mail_outline_rounded,
-              label: 'Invited',
-              color: AppTheme.lightGreen),
-          ...invited.map((p) => _PartnerCard(partner: p)),
-        ],
-      ],
+        if (docs.isEmpty) {
+          return _EmptyState(
+            icon: Icons.handshake_outlined,
+            title: 'No partners yet',
+            subtitle:
+                'Invite another organisation to collaborate on events and programmes',
+            actionLabel: 'Send Partnership Request',
+            onAction: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SendPartnershipRequestScreen(orgId: orgId),
+              ),
+            ),
+          );
+        }
+
+        final active = docs
+            .where((d) =>
+                (d.data() as Map<String, dynamic>)['status'] == 'active')
+            .toList();
+        final pending = docs
+            .where((d) =>
+                (d.data() as Map<String, dynamic>)['status'] == 'pending')
+            .toList();
+        final invited = docs
+            .where((d) =>
+                (d.data() as Map<String, dynamic>)['status'] == 'invited')
+            .toList();
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          children: [
+            // Stats row
+            _MiniStatsRow(items: [
+              _MiniStat(
+                  label: 'Active',
+                  value: '${active.length}',
+                  color: AppTheme.primary),
+              _MiniStat(
+                  label: 'Pending',
+                  value: '${pending.length}',
+                  color: AppTheme.tertiary),
+              _MiniStat(
+                  label: 'Invited',
+                  value: '${invited.length}',
+                  color: AppTheme.lightGreen),
+            ]),
+            const SizedBox(height: 8),
+
+            if (pending.isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.hourglass_top_outlined,
+                  label: 'Awaiting Your Response',
+                  color: AppTheme.tertiary),
+              ...pending.map((d) => _PartnerCard(
+                    docId: d.id,
+                    data: d.data() as Map<String, dynamic>,
+                  )),
+              const SizedBox(height: 4),
+            ],
+            if (active.isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.handshake_outlined,
+                  label: 'Active Partners',
+                  color: AppTheme.primary),
+              ...active.map((d) => _PartnerCard(
+                    docId: d.id,
+                    data: d.data() as Map<String, dynamic>,
+                  )),
+              const SizedBox(height: 4),
+            ],
+            if (invited.isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.mail_outline_rounded,
+                  label: 'Invitations Sent',
+                  color: AppTheme.lightGreen),
+              ...invited.map((d) => _PartnerCard(
+                    docId: d.id,
+                    data: d.data() as Map<String, dynamic>,
+                  )),
+            ],
+            const SizedBox(height: 16),
+            _OutlineButton(
+              label: 'Send Partnership Request',
+              icon: Icons.add_rounded,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SendPartnershipRequestScreen(orgId: orgId),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _PartnerCard extends StatelessWidget {
-  final OrgPartner partner;
-  const _PartnerCard({required this.partner});
+  final String docId;
+  final Map<String, dynamic> data;
+  const _PartnerCard({required this.docId, required this.data});
+
+  String get _status => data['status'] as String? ?? 'invited';
+  String get _name => data['partnerName'] as String? ?? 'Unknown';
+  String get _sector => data['partnerSector'] as String? ?? '';
+  int get _shared => data['sharedEvents'] as int? ?? 0;
+
+  String get _initials {
+    final parts = _name.trim().split(' ');
+    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    return _name.isNotEmpty ? _name[0].toUpperCase() : '?';
+  }
 
   Color get _statusColor {
-    switch (partner.status) {
-      case PartnerStatus.active:
+    switch (_status) {
+      case 'active':
         return AppTheme.primary;
-      case PartnerStatus.pending:
+      case 'pending':
         return AppTheme.tertiary;
-      case PartnerStatus.invited:
+      default:
         return AppTheme.lightGreen;
     }
   }
+
+  Future<void> _updateStatus(String newStatus) =>
+      FirebaseFirestore.instance
+          .collection('orgPartners')
+          .doc(docId)
+          .update({'status': newStatus});
 
   @override
   Widget build(BuildContext context) {
@@ -937,87 +838,202 @@ class _PartnerCard extends StatelessWidget {
               offset: const Offset(0, 3))
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Logo initials circle
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: _statusColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: _statusColor.withOpacity(0.3), width: 1.5),
-            ),
-            child: Center(
-              child: Text(
-                partner.logoInitials ?? '??',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: _statusColor,
+          Row(
+            children: [
+              // Initials circle
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _statusColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                  border:
+                      Border.all(color: _statusColor.withOpacity(0.3), width: 1.5),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  partner.name,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.darkGreen,
+                child: Center(
+                  child: Text(
+                    _initials,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: _statusColor,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 3),
-                Row(
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      partner.sector,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.darkGreen.withOpacity(0.5),
+                      _name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.darkGreen,
                       ),
                     ),
-                    if (partner.sharedEvents > 0) ...[
-                      const SizedBox(width: 10),
-                      Icon(Icons.event_outlined,
-                          size: 11,
-                          color: AppTheme.darkGreen.withOpacity(0.4)),
-                      const SizedBox(width: 3),
-                      Text(
-                        '${partner.sharedEvents} shared events',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.darkGreen.withOpacity(0.5),
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        if (_sector.isNotEmpty)
+                          Text(
+                            _sector,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.darkGreen.withOpacity(0.5)),
+                          ),
+                        if (_shared > 0) ...[
+                          const SizedBox(width: 10),
+                          Icon(Icons.event_outlined,
+                              size: 11,
+                              color: AppTheme.darkGreen.withOpacity(0.4)),
+                          const SizedBox(width: 3),
+                          Text(
+                            '$_shared shared events',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.darkGreen.withOpacity(0.5)),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
+                ),
+              ),
+            ],
+          ),
+
+          // Action buttons per status
+          if (_status == 'pending') ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _SmallActionButton(
+                    label: 'Accept',
+                    color: AppTheme.primary,
+                    onTap: () => _updateStatus('active'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _SmallActionButton(
+                    label: 'Review',
+                    color: AppTheme.tertiary,
+                    onTap: () => _showMessageDialog(context),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _SmallActionButton(
+                    label: 'Decline',
+                    color: Colors.redAccent,
+                    onTap: () => _confirmDecline(context),
+                  ),
                 ),
               ],
             ),
+          ] else if (_status == 'active') ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _SmallActionButton(
+                    label: 'Contact',
+                    color: AppTheme.primary,
+                    onTap: () => _showMessageDialog(context),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _SmallActionButton(
+                    label: 'Cancel Invite',
+                    color: AppTheme.darkGreen.withOpacity(0.5),
+                    onTap: () => _confirmDecline(context),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showMessageDialog(BuildContext context) {
+    final msg = data['message'] as String? ?? '';
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(_name,
+            style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.darkGreen)),
+        content: msg.isNotEmpty
+            ? Text(msg,
+                style: TextStyle(
+                    fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.7)))
+            : Text('No message provided.',
+                style: TextStyle(
+                    fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.4))),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close',
+                style: TextStyle(
+                    color: AppTheme.primary, fontWeight: FontWeight.w700)),
           ),
-          // Action button
-          if (partner.status == PartnerStatus.active)
-            _SmallActionButton(
-                label: 'View',
-                color: AppTheme.primary,
-                onTap: () {})
-          else if (partner.status == PartnerStatus.pending)
-            _SmallActionButton(
-                label: 'Approve',
-                color: AppTheme.tertiary,
-                onTap: () {})
-          else
-            _SmallActionButton(
-                label: 'Resend',
-                color: AppTheme.lightGreen,
-                onTap: () {}),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDecline(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Confirm',
+            style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.darkGreen)),
+        content: Text(
+            _status == 'pending'
+                ? 'Decline partnership request from $_name?'
+                : 'Cancel invitation to $_name?',
+            style: TextStyle(
+                fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.7))),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: AppTheme.primary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              FirebaseFirestore.instance
+                  .collection('orgPartners')
+                  .doc(docId)
+                  .delete();
+            },
+            child: const Text('Confirm',
+                style: TextStyle(
+                    color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
         ],
       ),
     );
@@ -1028,8 +1044,51 @@ class _PartnerCard extends StatelessWidget {
 // BROADCAST TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _BroadcastTab extends StatelessWidget {
-  const _BroadcastTab();
+class _BroadcastTab extends StatefulWidget {
+  final String orgId;
+  const _BroadcastTab({super.key, required this.orgId});
+
+  @override
+  State<_BroadcastTab> createState() => _BroadcastTabState();
+}
+
+class _BroadcastTabState extends State<_BroadcastTab> {
+  final _bodyController = TextEditingController();
+  String _reach = 'followers';
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _bodyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _bodyController.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _sending = true);
+    try {
+      await FirebaseFirestore.instance.collection('announcements').add({
+        'orgId': widget.orgId,
+        'body': text,
+        'reach': _reach,
+        'sentAt': FieldValue.serverTimestamp(),
+        'recipientCount': 0,
+      });
+      _bodyController.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Announcement sent'),
+              backgroundColor: AppTheme.primary),
+        );
+      }
+    } catch (e) {
+      debugPrint('Broadcast error: $e');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1037,109 +1096,164 @@ class _BroadcastTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
       children: [
         // Compose card
-        _ComposeCard(),
-        const SizedBox(height: 16),
-        _SectionHeader(
-            icon: Icons.history_outlined,
-            label: 'Sent Announcements',
-            color: AppTheme.primary),
-        ..._kAnnouncements
-            .map((a) => _AnnouncementCard(announcement: a)),
-      ],
-    );
-  }
-}
-
-class _ComposeCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppTheme.darkGreen,
-            AppTheme.primary,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.darkGreen.withOpacity(0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.campaign_outlined,
-                  color: Colors.white.withOpacity(0.9), size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                'New Announcement',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppTheme.darkGreen, AppTheme.primary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.darkGreen.withOpacity(0.3),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Container(
-            height: 44,
-            padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: Colors.white.withOpacity(0.2)),
-            ),
-            child: Text(
-              'Write your announcement...',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
-                fontSize: 13,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ReachChip(label: 'Followers', active: true),
-              const SizedBox(width: 6),
-              _ReachChip(label: 'Nearby', active: false),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {},
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Send',
+              Row(
+                children: [
+                  Icon(Icons.campaign_outlined,
+                      color: Colors.white.withOpacity(0.9), size: 20),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'New Announcement',
                     style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.darkGreen,
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _bodyController,
+                maxLines: 3,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Write your announcement...',
+                  hintStyle:
+                      TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.12),
+                  contentPadding: const EdgeInsets.all(12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        BorderSide(color: Colors.white.withOpacity(0.5)),
+                  ),
                 ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _ReachChip(
+                    label: 'Followers',
+                    active: _reach == 'followers',
+                    onTap: () => setState(() => _reach = 'followers'),
+                  ),
+                  const SizedBox(width: 6),
+                  _ReachChip(
+                    label: 'Nearby',
+                    active: _reach == 'nearby',
+                    onTap: () => setState(() => _reach = 'nearby'),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: _sending ? null : _send,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: _sending
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppTheme.darkGreen),
+                            )
+                          : const Text(
+                              'Send',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.darkGreen,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // History
+        StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('announcements')
+                .where('orgId', isEqualTo: widget.orgId)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final docs = snapshot.data?.docs ?? [];
+              // sort client-side — avoid composite index
+              final sorted = List.of(docs)
+                ..sort((a, b) {
+                  final at = (a.data() as Map)['sentAt'];
+                  final bt = (b.data() as Map)['sentAt'];
+                  if (at is Timestamp && bt is Timestamp) {
+                    return bt.compareTo(at);
+                  }
+                  return 0;
+                });
+
+              if (sorted.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: _EmptyState(
+                    icon: Icons.history_outlined,
+                    title: 'No announcements yet',
+                    subtitle: 'Your sent announcements will appear here',
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionHeader(
+                      icon: Icons.history_outlined,
+                      label: 'Sent Announcements',
+                      color: AppTheme.primary),
+                  ...sorted.map((d) => _AnnouncementCard(
+                      data: d.data() as Map<String, dynamic>)),
+                ],
+              );
+            },
+          ),
+      ],
     );
   }
 }
@@ -1147,31 +1261,34 @@ class _ComposeCard extends StatelessWidget {
 class _ReachChip extends StatelessWidget {
   final String label;
   final bool active;
-  const _ReachChip({required this.label, required this.active});
+  final VoidCallback onTap;
+  const _ReachChip(
+      {required this.label, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: active
-            ? Colors.white.withOpacity(0.2)
-            : Colors.white.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
           color: active
-              ? Colors.white.withOpacity(0.5)
-              : Colors.white.withOpacity(0.15),
+              ? Colors.white.withOpacity(0.2)
+              : Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active
+                ? Colors.white.withOpacity(0.5)
+                : Colors.white.withOpacity(0.15),
+          ),
         ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: active
-              ? Colors.white
-              : Colors.white.withOpacity(0.5),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: active ? Colors.white : Colors.white.withOpacity(0.5),
+          ),
         ),
       ),
     );
@@ -1179,10 +1296,14 @@ class _ReachChip extends StatelessWidget {
 }
 
 class _AnnouncementCard extends StatelessWidget {
-  final OrgAnnouncement announcement;
-  const _AnnouncementCard({required this.announcement});
+  final Map<String, dynamic> data;
+  const _AnnouncementCard({required this.data});
 
-  String _timeAgo(DateTime dt) {
+  String _timeAgo(dynamic raw) {
+    if (raw == null) return '';
+    DateTime? dt;
+    if (raw is Timestamp) dt = raw.toDate();
+    if (dt == null) return '';
     final diff = DateTime.now().difference(dt);
     if (diff.inDays == 0) return 'Today';
     if (diff.inDays == 1) return 'Yesterday';
@@ -1190,19 +1311,12 @@ class _AnnouncementCard extends StatelessWidget {
     return '${(diff.inDays / 7).floor()}w ago';
   }
 
-  String get _reachLabel {
-    switch (announcement.reach) {
-      case AnnouncementReach.followers:
-        return 'Followers';
-      case AnnouncementReach.nearby:
-        return 'Nearby';
-      case AnnouncementReach.both:
-        return 'All';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final body = data['body'] as String? ?? '';
+    final reach = data['reach'] as String? ?? 'followers';
+    final recipients = data['recipientCount'] as int? ?? 0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -1224,59 +1338,47 @@ class _AnnouncementCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  announcement.title,
+                  body,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.darkGreen,
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
-                _timeAgo(announcement.sentAt),
+                _timeAgo(data['sentAt']),
                 style: TextStyle(
-                  fontSize: 10,
-                  color: AppTheme.darkGreen.withOpacity(0.4),
-                ),
+                    fontSize: 10, color: AppTheme.darkGreen.withOpacity(0.4)),
               ),
             ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            announcement.preview,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppTheme.darkGreen.withOpacity(0.55),
-              height: 1.4,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               Icon(Icons.people_outline,
-                  size: 12,
-                  color: AppTheme.darkGreen.withOpacity(0.4)),
+                  size: 12, color: AppTheme.darkGreen.withOpacity(0.4)),
               const SizedBox(width: 4),
               Text(
-                '${announcement.recipientCount} reached',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primary,
-                ),
+                '$recipients reached',
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primary),
               ),
               const SizedBox(width: 10),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 7, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
                   color: AppTheme.lightGreen.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  _reachLabel,
+                  reach[0].toUpperCase() + reach.substring(1),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
@@ -1293,33 +1395,70 @@ class _AnnouncementCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// IMPACT RECORDS TAB
+// IMPACT TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ImpactTab extends StatelessWidget {
-  const _ImpactTab();
+  final String orgId;
+  const _ImpactTab({super.key, required this.orgId});
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-      children: [
-        // On-chain summary
-        _OnChainSummaryCard(),
-        const SizedBox(height: 16),
-        _SectionHeader(
-          icon: Icons.verified_outlined,
-          label: 'Verified Records',
-          color: Colors.teal.shade600,
-          subtitle: 'Permanently anchored on Cardano',
-        ),
-        ..._kImpactRecords.map((r) => _ImpactRecordCard(record: r)),
-      ],
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('activities')
+          .where('orgId', isEqualTo: orgId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(
+              child: CircularProgressIndicator(
+                  color: AppTheme.primary, strokeWidth: 2));
+        }
+
+        final all = snapshot.data?.docs ?? [];
+        final verified = all
+            .where((d) =>
+                (d.data() as Map<String, dynamic>)['impactStatus'] ==
+                'confirmed')
+            .toList();
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          children: [
+            // On-chain summary
+            _OnChainSummaryCard(totalRecords: verified.length),
+            const SizedBox(height: 16),
+
+            if (verified.isEmpty)
+              _EmptyState(
+                icon: Icons.verified_outlined,
+                title: 'No verified records yet',
+                subtitle:
+                    'Impact records appear here once an event passes verification',
+              )
+            else ...[
+              _SectionHeader(
+                icon: Icons.verified_outlined,
+                label: 'Verified Records',
+                color: Colors.teal.shade600,
+                subtitle: 'Permanently anchored',
+              ),
+              ...verified.map((d) => _ImpactRecordCard(
+                  data: d.data() as Map<String, dynamic>)),
+            ],
+          ],
+        );
+      },
     );
   }
 }
 
 class _OnChainSummaryCard extends StatelessWidget {
+  final int totalRecords;
+  const _OnChainSummaryCard({required this.totalRecords});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1346,15 +1485,14 @@ class _OnChainSummaryCard extends StatelessWidget {
               const Text(
                 'On-Chain Summary',
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700),
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -1362,10 +1500,9 @@ class _OnChainSummaryCard extends StatelessWidget {
                 child: Text(
                   'Cardano',
                   style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white.withOpacity(0.9),
-                  ),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white.withOpacity(0.9)),
                 ),
               ),
             ],
@@ -1373,15 +1510,11 @@ class _OnChainSummaryCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              _OnChainStat(
-                  value: '${_kImpactRecords.length}',
-                  label: 'Records'),
-              _VerticalDivider(),
-              const _OnChainStat(value: '4.2t', label: 'Plastic'),
-              _VerticalDivider(),
-              const _OnChainStat(value: '120', label: 'Trees'),
-              _VerticalDivider(),
-              const _OnChainStat(value: '2', label: 'Sites'),
+              _OnChainStat(value: '$totalRecords', label: 'Records'),
+              _VertDivider(),
+              const _OnChainStat(value: '—', label: 'Plastic'),
+              _VertDivider(),
+              const _OnChainStat(value: '—', label: 'Trees'),
             ],
           ),
         ],
@@ -1400,45 +1533,39 @@ class _OnChainStat extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
-          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white)),
           const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.white.withOpacity(0.6),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.white.withOpacity(0.6),
+                  fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 }
 
-class _VerticalDivider extends StatelessWidget {
+class _VertDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 32,
-      color: Colors.white.withOpacity(0.15),
-    );
+    return Container(width: 1, height: 32, color: Colors.white.withOpacity(0.15));
   }
 }
 
 class _ImpactRecordCard extends StatelessWidget {
-  final VerifiedImpactRecord record;
-  const _ImpactRecordCard({required this.record});
+  final Map<String, dynamic> data;
+  const _ImpactRecordCard({required this.data});
 
-  String _formatDate(DateTime dt) {
+  String _formatDate(dynamic raw) {
+    if (raw == null) return '—';
+    DateTime? dt;
+    if (raw is Timestamp) dt = raw.toDate();
+    if (dt == null) return '—';
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -1448,6 +1575,12 @@ class _ImpactRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final name = data['name'] as String? ?? 'Untitled';
+    final type = data['type'] as String? ?? '';
+    final location = data['location'] as String? ?? '';
+    final txHash = data['txHash'] as String? ?? '';
+    final metrics = (data['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -1465,7 +1598,6 @@ class _ImpactRecordCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title row
           Row(
             children: [
               Container(
@@ -1482,117 +1614,98 @@ class _ImpactRecordCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      record.title,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen,
-                      ),
-                    ),
+                    Text(name,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.darkGreen)),
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        Text(
-                          record.type,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.teal.shade600,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '· ${record.area}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.45),
-                          ),
-                        ),
+                        if (type.isNotEmpty)
+                          Text(type,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.teal.shade600,
+                                  fontWeight: FontWeight.w600)),
+                        if (location.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Text('· $location',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color:
+                                      AppTheme.darkGreen.withOpacity(0.45))),
+                        ],
                       ],
                     ),
                   ],
                 ),
               ),
-              Text(
-                _formatDate(record.confirmedAt),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: AppTheme.darkGreen.withOpacity(0.4),
-                ),
-              ),
+              Text(_formatDate(data['date']),
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: AppTheme.darkGreen.withOpacity(0.4))),
             ],
           ),
-
-          const SizedBox(height: 12),
-
-          // Metrics grid
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: record.metrics.entries.map((e) {
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: AppTheme.lightGreen.withOpacity(0.2)),
-                ),
-                child: RichText(
-                  text: TextSpan(
-                    children: [
-                      TextSpan(
-                        text: '${e.value} ',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.darkGreen,
-                        ),
-                      ),
-                      TextSpan(
-                        text: e.key,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.darkGreen.withOpacity(0.5),
-                        ),
-                      ),
-                    ],
+          if (metrics.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: metrics.entries.map((e) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppTheme.lightGreen.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: AppTheme.lightGreen.withOpacity(0.2)),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 10),
-
-          // TX hash row
-          Row(
-            children: [
-              Icon(Icons.link_rounded,
-                  size: 12, color: Colors.teal.shade600),
-              const SizedBox(width: 5),
-              Text(
-                record.txHash,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.teal.shade600,
-                  fontFamily: 'monospace',
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'View on Cardano →',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.teal.shade600,
-                ),
-              ),
-            ],
-          ),
+                  child: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${e.value} ',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.darkGreen),
+                        ),
+                        TextSpan(
+                          text: e.key,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.darkGreen.withOpacity(0.5)),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+          if (txHash.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(Icons.link_rounded,
+                    size: 12, color: Colors.teal.shade600),
+                const SizedBox(width: 5),
+                Text(txHash,
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.teal.shade600)),
+                const Spacer(),
+                Text('View on Cardano →',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.teal.shade600)),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1602,6 +1715,105 @@ class _ImpactRecordCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // SHARED WIDGETS
 // ─────────────────────────────────────────────────────────────────────────────
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.lightGreen.withOpacity(0.18),
+                    AppTheme.accent.withOpacity(0.1),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Icon(icon,
+                  size: 34, color: AppTheme.lightGreen.withOpacity(0.7)),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.darkGreen,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.darkGreen.withOpacity(0.45),
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: onAction,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 13),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.darkGreen, AppTheme.primary],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.primary.withOpacity(0.3),
+                        blurRadius: 14,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    actionLabel!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _SectionHeader extends StatelessWidget {
   final IconData icon;
@@ -1633,23 +1845,17 @@ class _SectionHeader extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                ),
-              ),
-              if (subtitle != null)
-                Text(
-                  subtitle!,
+              Text(label,
                   style: TextStyle(
-                    fontSize: 10,
-                    color: AppTheme.darkGreen.withOpacity(0.4),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: color)),
+              if (subtitle != null)
+                Text(subtitle!,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: AppTheme.darkGreen.withOpacity(0.4),
+                        fontWeight: FontWeight.w500)),
             ],
           ),
           const SizedBox(width: 10),
@@ -1673,8 +1879,7 @@ class _MiniStatsRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border:
-        Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
+        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
               color: AppTheme.primary.withOpacity(0.04),
@@ -1687,23 +1892,17 @@ class _MiniStatsRow extends StatelessWidget {
           return Expanded(
             child: Column(
               children: [
-                Text(
-                  item.value,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: item.color,
-                  ),
-                ),
+                Text(item.value,
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: item.color)),
                 const SizedBox(height: 2),
-                Text(
-                  item.label,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.darkGreen.withOpacity(0.45),
-                  ),
-                ),
+                Text(item.label,
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.darkGreen.withOpacity(0.45))),
               ],
             ),
           );
@@ -1717,8 +1916,7 @@ class _MiniStat {
   final String label;
   final String value;
   final Color color;
-  const _MiniStat(
-      {required this.label, required this.value, required this.color});
+  const _MiniStat({required this.label, required this.value, required this.color});
 }
 
 class _SmallActionButton extends StatelessWidget {
@@ -1733,19 +1931,17 @@ class _SmallActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: color.withOpacity(0.3)),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: color,
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w700, color: color),
           ),
         ),
       ),
@@ -1753,11 +1949,46 @@ class _SmallActionButton extends StatelessWidget {
   }
 }
 
-class _GradientIconButton extends StatelessWidget {
+class _OutlineButton extends StatelessWidget {
+  final String label;
   final IconData icon;
   final VoidCallback onTap;
-  const _GradientIconButton(
-      {required this.icon, required this.onTap});
+  const _OutlineButton(
+      {required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.primary.withOpacity(0.35)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: AppTheme.primary),
+            const SizedBox(width: 8),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool gradient;
+  const _IconBtn({required this.icon, required this.onTap, this.gradient = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1767,104 +1998,30 @@ class _GradientIconButton extends StatelessWidget {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppTheme.darkGreen, AppTheme.primary],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          gradient: gradient
+              ? const LinearGradient(
+                  colors: [AppTheme.darkGreen, AppTheme.primary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          color: gradient ? null : AppTheme.lightGreen.withOpacity(0.12),
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primary.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Icon(icon, size: 18, color: Colors.white),
-      ),
-    );
-  }
-}
-
-class _ContextFab extends StatelessWidget {
-  final int tabIndex;
-  const _ContextFab({required this.tabIndex});
-
-  String get _label {
-    switch (tabIndex) {
-      case 0:
-        return 'New Event';
-      case 1:
-        return 'Link Partner';
-      case 2:
-        return 'New Announcement';
-      case 3:
-        return 'Export Report';
-      default:
-        return 'Create';
-    }
-  }
-
-  IconData get _icon {
-    switch (tabIndex) {
-      case 0:
-        return Icons.add_circle_outline;
-      case 1:
-        return Icons.handshake_outlined;
-      case 2:
-        return Icons.campaign_outlined;
-      case 3:
-        return Icons.download_outlined;
-      default:
-        return Icons.add;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.darkGreen, AppTheme.primary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.35),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: () {},
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 20, vertical: 14),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(_icon, color: Colors.white, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  _label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
+          boxShadow: gradient
+              ? [
+                  BoxShadow(
+                    color: AppTheme.primary.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                ),
-              ],
-            ),
-          ),
+                ]
+              : null,
         ),
+        child: Icon(icon,
+            size: 18,
+            color: gradient
+                ? Colors.white
+                : AppTheme.darkGreen.withOpacity(0.7)),
       ),
     );
   }
