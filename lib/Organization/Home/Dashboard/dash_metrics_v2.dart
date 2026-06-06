@@ -4,10 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../Shared/theme/app_theme.dart';
 import 'dash_widgets.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DashMetrics — Overview grid: events, programmes, volunteers, verified count
-// ─────────────────────────────────────────────────────────────────────────────
-
 class DashMetrics extends StatelessWidget {
   final String? orgId;
   final FirebaseFirestore firestore;
@@ -20,6 +16,48 @@ class DashMetrics extends StatelessWidget {
     required this.onViewReport,
   });
 
+  Future<Map<String, int>> _fetchMetrics() async {
+    if (orgId == null) {
+      return {'events': 0, 'programmes': 0, 'volunteers': 0, 'verified': 0};
+    }
+
+    try {
+      final activitiesSnap = await firestore
+          .collection('activities')
+          .where('orgId', isEqualTo: orgId)
+          .get();
+
+      final programmesSnap = await firestore
+          .collection('programmes')
+          .where('orgId', isEqualTo: orgId)
+          .get();
+
+      final membersSnap = await firestore
+          .collection('OrgMembers')
+          .where('orgId', isEqualTo: orgId)
+          .get();
+
+      final verified = activitiesSnap.docs
+          .where((d) => (d.data() as Map)['impactStatus'] == 'confirmed')
+          .length;
+
+      final activeProgrammes = programmesSnap.docs.where((d) {
+        final s = (d.data() as Map)['status'] as String? ?? '';
+        return s == 'active' || s == 'upcoming';
+      }).length;
+
+      return {
+        'events': activitiesSnap.docs.length,
+        'programmes': activeProgrammes,
+        'volunteers': membersSnap.docs.length,
+        'verified': verified,
+      };
+    } catch (e) {
+      debugPrint('[DashMetrics] Error: $e');
+      return {'events': 0, 'programmes': 0, 'volunteers': 0, 'verified': 0};
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -27,88 +65,58 @@ class DashMetrics extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 15, 16, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: DashSectionHeader(
             title: 'Overview',
             actionLabel: 'Full report →',
             onAction: onViewReport,
           ),
         ),
-      
-        StreamBuilder<QuerySnapshot>(
-          stream: firestore
-              .collection('activities')
-              .where('orgId', isEqualTo: orgId)
-              .snapshots(),
-          builder: (context, actSnap) {
-            final actDocs = actSnap.data?.docs ?? [];
-            final totalEvents = actDocs.length;
-            final verified = actDocs
-                .where((d) =>
-                    (d.data() as Map<String, dynamic>)['impactStatus'] ==
-                    'confirmed')
-                .length;
+        const SizedBox(height: 12),
+        FutureBuilder<Map<String, int>>(
+          future: _fetchMetrics(),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const SizedBox.shrink();
+            }
 
-            return StreamBuilder<QuerySnapshot>(
-              stream: firestore
-                  .collection('programmes')
-                  .where('orgId', isEqualTo: orgId)
-                  .snapshots(),
-              builder: (context, progSnap) {
-                final activeProgrammes = (progSnap.data?.docs ?? []).where((d) {
-                  final s = (d.data() as Map)['status'] as String? ?? '';
-                  return s == 'active' || s == 'upcoming';
-                }).length;
-
-                return StreamBuilder<QuerySnapshot>(
-                  stream: firestore
-                      .collection('OrgMembers')
-                      .where('orgId', isEqualTo: orgId)
-                      .snapshots(),
-                  builder: (context, membSnap) {
-                    final volunteers = membSnap.data?.docs.length ?? 0;
-
-                    // Show loading skeleton if any stream is loading and has no data
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 2.1,
-                        children: [
-                          _MetricCard(
-                            value: actSnap.hasData ? '$totalEvents' : '—',
-                            label: 'Events run',
-                            icon: Icons.event_available,
-                            color: AppTheme.darkGreen,
-                          ),
-                          _MetricCard(
-                            value: progSnap.hasData ? '$activeProgrammes' : '—',
-                            label: 'Programmes',
-                            icon: Icons.layers_outlined,
-                            color: AppTheme.accent,
-                          ),
-                          _MetricCard(
-                            value: membSnap.hasData ? '$volunteers' : '—',
-                            label: 'Volunteers',
-                            icon: Icons.volunteer_activism,
-                            color: AppTheme.primary,
-                          ),
-                          _MetricCard(
-                            value: actSnap.hasData ? '$verified' : '—',
-                            label: 'Verified',
-                            icon: Icons.verified,
-                            color: AppTheme.tertiary,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
+            final data = snapshot.data!;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 2.1,
+                children: [
+                  _MetricCard(
+                    value: '${data['events']}',
+                    label: 'Events run',
+                    icon: Icons.event_available,
+                    color: AppTheme.darkGreen,
+                  ),
+                  _MetricCard(
+                    value: '${data['programmes']}',
+                    label: 'Programmes',
+                    icon: Icons.layers_outlined,
+                    color: AppTheme.accent,
+                  ),
+                  _MetricCard(
+                    value: '${data['volunteers']}',
+                    label: 'Volunteers',
+                    icon: Icons.volunteer_activism,
+                    color: AppTheme.primary,
+                  ),
+                  _MetricCard(
+                    value: '${data['verified']}',
+                    label: 'Verified',
+                    icon: Icons.verified,
+                    color: AppTheme.tertiary,
+                  ),
+                ],
+              ),
             );
           },
         ),

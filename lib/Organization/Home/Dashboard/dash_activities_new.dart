@@ -5,7 +5,7 @@ import '../../../Shared/theme/app_theme.dart';
 import 'dash_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DashActivities — upcoming & ongoing events for this org
+// DashActivities — upcoming & ongoing events (simplified FutureBuilder version)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class DashActivities extends StatelessWidget {
@@ -22,6 +22,42 @@ class DashActivities extends StatelessWidget {
     required this.onActivityTap,
   });
 
+  Future<List<Map<String, dynamic>>> _fetchActivities() async {
+    if (orgId == null) return [];
+    try {
+      final snap = await firestore
+          .collection('activities')
+          .where('orgId', isEqualTo: orgId)
+          .get();
+
+      // Filter to upcoming/ongoing, sort by date
+      final filtered = snap.docs.where((d) {
+        final s = (d.data() as Map)['status'] as String? ?? '';
+        return s == 'upcoming' || s == 'ongoing';
+      }).toList()
+        ..sort((a, b) {
+          final da = (a.data() as Map)['date'];
+          final db = (b.data() as Map)['date'];
+          DateTime? ta, tb;
+          if (da is Timestamp) ta = da.toDate();
+          if (db is Timestamp) tb = db.toDate();
+          if (ta == null && tb == null) return 0;
+          if (ta == null) return 1;
+          if (tb == null) return -1;
+          return ta.compareTo(tb);
+        });
+
+      // Convert to list of maps with id
+      return filtered
+          .take(8)
+          .map((d) => {...(d.data() as Map<String, dynamic>), 'id': d.id})
+          .toList();
+    } catch (e) {
+      debugPrint('[DashActivities] Error: $e');
+      return [];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -37,43 +73,14 @@ class DashActivities extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        StreamBuilder<QuerySnapshot>(
-          // No orderBy — avoids composite index. Filter + sort client-side.
-          stream: firestore
-              .collection('activities')
-              .where('orgId', isEqualTo: orgId)
-              .snapshots(),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchActivities(),
           builder: (context, snapshot) {
-            debugPrint('[DashActivities] state=${snapshot.connectionState} '
-                'docs=${snapshot.data?.docs.length} '
-                'error=${snapshot.error} orgId=$orgId');
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const SizedBox.shrink();
-            }
-            if (snapshot.hasError) {
-              debugPrint('[DashActivities] ERROR: ${snapshot.error}');
-            }
-            final all = snapshot.data?.docs ?? [];
-            final docs = all.where((d) {
-              final s =
-                  (d.data() as Map<String, dynamic>)['status'] as String? ?? '';
-              return s == 'upcoming' || s == 'ongoing';
-            }).toList()
-              ..sort((a, b) {
-                dynamic da = (a.data() as Map)['date'];
-                dynamic db = (b.data() as Map)['date'];
-                DateTime? ta, tb;
-                if (da is Timestamp) ta = da.toDate();
-                if (db is Timestamp) tb = db.toDate();
-                if (ta == null && tb == null) return 0;
-                if (ta == null) return 1;
-                if (tb == null) return -1;
-                return ta.compareTo(tb);
-              });
+            if (!snapshot.hasData) return const SizedBox.shrink();
 
-            final visible = docs.take(8).toList();
-            if (visible.isEmpty) {
+            final activities = snapshot.data ?? [];
+
+            if (activities.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: DashEmptyCard(
@@ -84,13 +91,14 @@ class DashActivities extends StatelessWidget {
                 ),
               );
             }
+
             return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: visible.length,
+              itemCount: activities.length,
               itemBuilder: (context, i) {
-                final data = visible[i].data() as Map<String, dynamic>;
+                final data = activities[i];
                 return _ActivityTile(
                   activity: data,
                   imageSeed: i,
@@ -113,8 +121,12 @@ class _ActivityTile extends StatelessWidget {
   final Map<String, dynamic> activity;
   final int imageSeed;
   final VoidCallback onTap;
-  const _ActivityTile(
-      {required this.activity, required this.imageSeed, required this.onTap});
+
+  const _ActivityTile({
+    required this.activity,
+    required this.imageSeed,
+    required this.onTap,
+  });
 
   static _DateParts _parseDate(dynamic raw) {
     if (raw == null) return const _DateParts('—', '');
@@ -151,25 +163,23 @@ class _ActivityTile extends StatelessWidget {
     final impactStatus = activity['impactStatus'] as String? ?? 'unverified';
     final name = activity['name'] as String? ?? 'Untitled activity';
     final location = activity['location'] as String? ?? '';
-    final participants = activity['participants'] as int? ?? 0;
-    final maxParticipants = activity['maxParticipants'] as int? ?? 0;
     final date = _parseDate(activity['date']);
     final isOngoing = status == 'ongoing';
 
-    late Color opColor;
-    late String opLabel;
+    late Color statusColor;
+    late String statusLabel;
     switch (status) {
       case 'ongoing':
-        opColor = AppTheme.tertiary;
-        opLabel = 'Ongoing';
+        statusColor = AppTheme.tertiary;
+        statusLabel = 'Ongoing';
         break;
       case 'completed':
-        opColor = AppTheme.accent;
-        opLabel = 'Completed';
+        statusColor = AppTheme.accent;
+        statusLabel = 'Completed';
         break;
       default:
-        opColor = AppTheme.secondary;
-        opLabel = 'Upcoming';
+        statusColor = AppTheme.secondary;
+        statusLabel = 'Upcoming';
     }
 
     late Color impactColor;
@@ -200,9 +210,10 @@ class _ActivityTile extends StatelessWidget {
               : null,
           boxShadow: [
             BoxShadow(
-                color: AppTheme.primary.withOpacity(0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 3))
+              color: AppTheme.primary.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            )
           ],
         ),
         child: Row(
@@ -224,14 +235,17 @@ class _ActivityTile extends StatelessWidget {
                         : Container(
                             width: 76,
                             height: 82,
-                            color: AppTheme.lightGreen.withOpacity(0.15)),
+                            color: AppTheme.lightGreen.withOpacity(0.15),
+                          ),
                     errorBuilder: (_, __, ___) => Container(
                       width: 76,
                       height: 82,
                       color: AppTheme.lightGreen.withOpacity(0.12),
-                      child: Icon(Icons.eco_outlined,
-                          color: AppTheme.lightGreen.withOpacity(0.5),
-                          size: 26),
+                      child: Icon(
+                        Icons.eco_outlined,
+                        color: AppTheme.lightGreen.withOpacity(0.5),
+                        size: 26,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -246,26 +260,32 @@ class _ActivityTile extends StatelessWidget {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.6)
+                            Colors.black.withOpacity(0.6),
                           ],
                         ),
                       ),
                       child: Column(
                         children: [
-                          Text(date.day,
-                              style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                  height: 1),
-                              textAlign: TextAlign.center),
+                          Text(
+                            date.day,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              height: 1,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                           if (date.month.isNotEmpty)
-                            Text(date.month,
-                                style: TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white.withOpacity(0.8)),
-                                textAlign: TextAlign.center),
+                            Text(
+                              date.month,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                         ],
                       ),
                     ),
@@ -279,70 +299,81 @@ class _ActivityTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.darkGreen,
-                            height: 1.2),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.darkGreen,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     if (location.isNotEmpty) ...[
                       const SizedBox(height: 3),
                       Row(
                         children: [
-                          Icon(Icons.location_on_outlined,
-                              size: 10,
-                              color: AppTheme.darkGreen.withOpacity(0.38)),
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 10,
+                            color: AppTheme.darkGreen.withOpacity(0.38),
+                          ),
                           const SizedBox(width: 2),
                           Expanded(
-                            child: Text(location,
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    color: AppTheme.darkGreen.withOpacity(0.4)),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
+                            child: Text(
+                              location,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppTheme.darkGreen.withOpacity(0.55),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ],
                       ),
                     ],
-                    const SizedBox(height: 7),
-                    Row(
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 4,
                       children: [
-                        _StatusPill(
-                            label: opLabel, color: opColor, filled: isOngoing),
-                        const SizedBox(width: 5),
-                        _StatusPill(
-                            label: impactLabel,
-                            color: impactColor,
-                            filled: impactStatus == 'confirmed'),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            statusLabel,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: impactColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            impactLabel,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: impactColor,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('$participants',
-                      style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w900,
-                          color: AppTheme.primary,
-                          height: 1)),
-                  Text('/ $maxParticipants',
-                      style: TextStyle(
-                          fontSize: 9,
-                          color: AppTheme.darkGreen.withOpacity(0.35),
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 5),
-                  Icon(Icons.arrow_forward_ios,
-                      size: 10, color: AppTheme.lightGreen.withOpacity(0.5)),
-                ],
               ),
             ),
           ],
@@ -356,29 +387,4 @@ class _DateParts {
   final String day;
   final String month;
   const _DateParts(this.day, this.month);
-}
-
-class _StatusPill extends StatelessWidget {
-  final String label;
-  final Color color;
-  final bool filled;
-  const _StatusPill(
-      {required this.label, required this.color, this.filled = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: filled ? color.withOpacity(0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: filled ? Colors.transparent : color.withOpacity(0.3),
-            width: 1),
-      ),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: 9, fontWeight: FontWeight.w700, color: color)),
-    );
-  }
 }
