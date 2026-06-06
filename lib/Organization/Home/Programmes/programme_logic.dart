@@ -19,14 +19,21 @@ class ProgrammeLogic {
   // ── Programmes ─────────────────────────────────────────────────────────────
 
   /// All programmes for [orgId], ordered newest-first.
-  /// Screens filter by status client-side (keeps index count minimal).
+  /// Sorted client-side to avoid requiring a composite Firestore index.
   static Stream<List<Programme>> streamProgrammes(String orgId) {
     return _db
         .collection('programmes')
         .where('orgId', isEqualTo: orgId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((s) => s.docs.map(Programme.fromFirestore).toList());
+        .map((s) {
+      final list = s.docs.map(Programme.fromFirestore).toList();
+      list.sort((a, b) {
+        final at = a.createdAt ?? DateTime(0);
+        final bt = b.createdAt ?? DateTime(0);
+        return bt.compareTo(at);
+      });
+      return list;
+    });
   }
 
   /// Creates a new programme doc and returns its generated id.
@@ -48,13 +55,21 @@ class ProgrammeLogic {
   // ── Enquiries ──────────────────────────────────────────────────────────────
 
   /// All enquiries for [orgId], newest-first.
+  /// Sorted client-side to avoid requiring a composite Firestore index.
   static Stream<List<ProgrammeEnquiry>> streamEnquiries(String orgId) {
     return _db
         .collection('programme_enquiries')
         .where('orgId', isEqualTo: orgId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((s) => s.docs.map(ProgrammeEnquiry.fromFirestore).toList());
+        .map((s) {
+      final list = s.docs.map(ProgrammeEnquiry.fromFirestore).toList();
+      list.sort((a, b) {
+        final at = a.createdAt ?? DateTime(0);
+        final bt = b.createdAt ?? DateTime(0);
+        return bt.compareTo(at);
+      });
+      return list;
+    });
   }
 
   /// Dual-write: create the enquiry + signal the org's inbox atomically.

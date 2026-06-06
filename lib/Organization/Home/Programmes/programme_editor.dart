@@ -32,29 +32,39 @@ class ProgrammeEditor extends StatefulWidget {
 }
 
 class _ProgrammeEditorState extends State<ProgrammeEditor> {
-  final _formKey = GlobalKey<FormState>();
-  final _picker = ImagePicker();
+  final _formKey   = GlobalKey<FormState>();
+  final _picker    = ImagePicker();
+  final _scrollCtrl = ScrollController();
 
-  // ── Form state ──────────────────────────────────────────────────────────────
+  // ── Section completion flags ───────────────────────────────────────────────
+  // S1 (Type) is always done — ProgrammeType has a valid default from the start.
+  bool _s1Done = true;
+  bool _s2Done = false; // Basic Info
+  bool _s3Done = false; // Schedule
+  bool _s4Done = false; // Location (only relevant when !_isOnline)
+  bool _s5Done = false; // Engagement & Contact
+
+  final List<GlobalKey> _sectionKeys = List.generate(6, (_) => GlobalKey());
+
+  // ── Form state ─────────────────────────────────────────────────────────────
   late ProgrammeType _type;
   late ProgrammeStatus _status;
   late EngagementModel _engagement;
   late ProgrammeContactMode _contactMode;
   late RecurrencePattern _recurrence;
 
-  final _titleCtrl   = TextEditingController();
-  final _summaryCtrl = TextEditingController();
-  final _descCtrl    = TextEditingController();
-  final _priceCtrl   = TextEditingController();
+  final _titleCtrl    = TextEditingController();
+  final _summaryCtrl  = TextEditingController();
+  final _descCtrl     = TextEditingController();
+  final _priceCtrl    = TextEditingController();
   final _durationCtrl = TextEditingController();
-  final _eligCtrl    = TextEditingController();
-  final _linkCtrl    = TextEditingController();
-  final _venueCtrl   = TextEditingController();
+  final _eligCtrl     = TextEditingController();
+  final _linkCtrl     = TextEditingController();
+  final _venueCtrl    = TextEditingController();
 
-  bool _isOnline = false;
-  bool _certificate = false;
+  bool _isOnline       = false;
+  bool _certificate    = false;
   bool _enquiryEnabled = true;
-  int? _capacity;
   DateTime? _startDate;
   DateTime? _endDate;
 
@@ -65,8 +75,8 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
   Map<String, List<Map<String, dynamic>>> _kenyaCities = {};
 
   // Images — slot 0 = cover, slots 1-5 = supporting (hard cap)
-  final List<XFile?> _imageSlots = List.filled(6, null);
-  final List<String?> _existingUrls = List.filled(6, null);
+  final List<XFile?>   _imageSlots   = List.filled(6, null);
+  final List<String?>  _existingUrls = List.filled(6, null);
 
   bool _saving = false;
 
@@ -76,16 +86,16 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
   void initState() {
     super.initState();
     final e = widget.existing;
-    _type        = e?.type              ?? ProgrammeType.workshop;
-    _status      = e?.status            ?? ProgrammeStatus.draft;
-    _engagement  = e?.details.engagementModel ?? EngagementModel.free;
-    _contactMode = e?.contact.mode      ?? ProgrammeContactMode.enquiry;
-    _recurrence  = e?.schedule.recurrence ?? RecurrencePattern.oneTime;
-    _isOnline    = e?.schedule.isOnline ?? false;
-    _certificate = e?.details.certificateOffered ?? false;
-    _enquiryEnabled = e?.contact.enquiryEnabled ?? true;
-    _startDate   = e?.schedule.startDate;
-    _endDate     = e?.schedule.endDate;
+    _type           = e?.type                     ?? ProgrammeType.workshop;
+    _status         = e?.status                   ?? ProgrammeStatus.draft;
+    _engagement     = e?.details.engagementModel  ?? EngagementModel.free;
+    _contactMode    = e?.contact.mode             ?? ProgrammeContactMode.enquiry;
+    _recurrence     = e?.schedule.recurrence      ?? RecurrencePattern.oneTime;
+    _isOnline       = e?.schedule.isOnline        ?? false;
+    _certificate    = e?.details.certificateOffered ?? false;
+    _enquiryEnabled = e?.contact.enquiryEnabled   ?? true;
+    _startDate      = e?.schedule.startDate;
+    _endDate        = e?.schedule.endDate;
 
     if (e != null) {
       _titleCtrl.text    = e.title;
@@ -102,15 +112,18 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
       for (int i = 0; i < e.supportingImageUrls.length && i < 5; i++) {
         _existingUrls[i + 1] = e.supportingImageUrls[i];
       }
+      // Edit mode: all sections pre-complete so all cards expand immediately.
+      _s2Done = _s3Done = _s4Done = _s5Done = true;
     }
     _loadCities();
   }
 
   @override
   void dispose() {
+    _scrollCtrl.dispose();
     for (final c in [
       _titleCtrl, _summaryCtrl, _descCtrl, _priceCtrl, _durationCtrl,
-      _eligCtrl, _linkCtrl, _venueCtrl
+      _eligCtrl, _linkCtrl, _venueCtrl,
     ]) c.dispose();
     super.dispose();
   }
@@ -151,7 +164,7 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
     });
   }
 
-  // ── Image picking ────────────────────────────────────────────────────────────
+  // ── Image picking ──────────────────────────────────────────────────────────
 
   Future<void> _pickImage(int slot) async {
     final file = await _picker.pickImage(
@@ -163,7 +176,7 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
   void _removeImage(int slot) =>
       setState(() { _imageSlots[slot] = null; _existingUrls[slot] = null; });
 
-  // ── Date pickers ─────────────────────────────────────────────────────────────
+  // ── Date pickers ───────────────────────────────────────────────────────────
 
   Future<void> _pickDate(bool isStart) async {
     final picked = await showDatePicker(
@@ -173,9 +186,7 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: Theme.of(ctx)
-              .colorScheme
-              .copyWith(primary: AppTheme.primary),
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: AppTheme.primary),
         ),
         child: child!,
       ),
@@ -188,7 +199,7 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
     }
   }
 
-  // ── Save ─────────────────────────────────────────────────────────────────────
+  // ── Save ───────────────────────────────────────────────────────────────────
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
@@ -213,27 +224,22 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
       final programmeId = widget.existing?.id ??
           FirebaseFirestore.instance.collection('programmes').doc().id;
 
-      // Upload new images
-      final storagePath =
-          'programmes/${widget.orgId}/$programmeId';
-      Future<String?> _upload(int slot, String name) async {
+      final storagePath = 'programmes/${widget.orgId}/$programmeId';
+      Future<String?> upload(int slot, String name) async {
         final file = _imageSlots[slot];
         if (file == null) return _existingUrls[slot];
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('$storagePath/$name.jpg');
+        final ref = FirebaseStorage.instance.ref().child('$storagePath/$name.jpg');
         await ref.putFile(File(file.path));
         return await ref.getDownloadURL();
       }
 
-      final coverUrl     = await _upload(0, 'cover');
-      final supporting   = <String>[];
+      final coverUrl   = await upload(0, 'cover');
+      final supporting = <String>[];
       for (int i = 1; i <= 5; i++) {
-        final url = await _upload(i, 'support_$i');
+        final url = await upload(i, 'support_$i');
         if (url != null) supporting.add(url);
       }
 
-      // Build location
       ActivityLocation? location;
       if (!_isOnline && _selectedCity != null) {
         location = ActivityLocation(
@@ -245,7 +251,6 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
         );
       }
 
-      // Build programme
       final publishedAt = _status != ProgrammeStatus.draft
           ? (widget.existing?.publishedAt ?? DateTime.now())
           : null;
@@ -278,9 +283,7 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
         ),
         contact: ProgrammeContact(
           mode: _contactMode,
-          externalLink: _linkCtrl.text.trim().isEmpty
-              ? null
-              : _linkCtrl.text.trim(),
+          externalLink: _linkCtrl.text.trim().isEmpty ? null : _linkCtrl.text.trim(),
           enquiryEnabled: _enquiryEnabled,
         ),
         createdBy:   uid,
@@ -304,158 +307,476 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(msg),
-          backgroundColor: AppTheme.darkGreen,
-          behavior: SnackBarBehavior.floating),
+        content: Text(msg),
+        backgroundColor: AppTheme.darkGreen,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────────
+  // ── Section scroll helper ──────────────────────────────────────────────────
+
+  void _scrollToSection(int index) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _sectionKeys[index].currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+            alignment: 0.0);
+      }
+    });
+  }
+
+  // ── Section validation ─────────────────────────────────────────────────────
+
+  bool _validateS2() {
+    if (_titleCtrl.text.trim().isEmpty) {
+      _snack('Programme title is required.');
+      return false;
+    }
+    return true;
+  }
+
+  bool _validateS4() {
+    if (!_isOnline && _selectedCity == null) {
+      _snack('Select a city for in-person programmes.');
+      return false;
+    }
+    return true;
+  }
+
+  bool _validateS5() {
+    if (_engagement == EngagementModel.paid &&
+        double.tryParse(_priceCtrl.text.trim()) == null) {
+      _snack('Enter a valid price for paid programmes.');
+      return false;
+    }
+    if (_type == ProgrammeType.onlineCourse && _linkCtrl.text.trim().isEmpty) {
+      _snack('Online courses require an external link.');
+      return false;
+    }
+    return true;
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final bool locationRelevant = !_isOnline;
+    final bool s5Unlocked = locationRelevant ? _s4Done : _s3Done;
+
     return Scaffold(
       backgroundColor: _kBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _kBg,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
         foregroundColor: AppTheme.darkGreen,
+        leading: IconButton(
+          icon: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppTheme.lightGreen.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.arrow_back_ios_new,
+                size: 15, color: AppTheme.darkGreen),
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
         title: Text(
           _isEdit ? 'Edit Programme' : 'New Programme',
           style: const TextStyle(
-              fontWeight: FontWeight.w700, color: AppTheme.darkGreen),
+              fontWeight: FontWeight.w800,
+              color: AppTheme.darkGreen,
+              fontSize: 18),
         ),
-        actions: [
-          if (_saving)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(right: 16),
-                child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        color: AppTheme.primary, strokeWidth: 2)),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _save,
-              child: const Text('Save',
-                  style: TextStyle(
-                      color: AppTheme.primary, fontWeight: FontWeight.w700)),
-            ),
-        ],
       ),
       body: Form(
         key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 80),
-          children: [
-            _section('Type'),
-            _typeSelector(),
-            const SizedBox(height: 24),
-
-            _section('Basic info'),
-            _field(_titleCtrl,   'Title',   'e.g. Waste Sorting Masterclass', required: true),
-            const SizedBox(height: 12),
-            _field(_summaryCtrl, 'Summary (shown on cards)', 'One sentence overview', maxLines: 2),
-            const SizedBox(height: 12),
-            _field(_descCtrl,    'Full description', 'What participants will learn or do',
-                maxLines: 5),
-            const SizedBox(height: 24),
-
-            _section('Schedule'),
-            _scheduleSection(),
-            const SizedBox(height: 24),
-
-            if (!_isOnline) ...[
-              _section('Location'),
-              _locationSection(),
-              const SizedBox(height: 24),
-            ],
-
-            _section('Engagement'),
-            _engagementSection(),
-            const SizedBox(height: 24),
-
-            _section('Contact & reach'),
-            _contactSection(),
-            const SizedBox(height: 24),
-
-            _section('Status'),
-            _statusSelector(),
-            const SizedBox(height: 24),
-
-            _section('Images (cover + up to 5 supporting)'),
-            _imageGrid(),
-            const SizedBox(height: 32),
-
-            FilledButton(
-              onPressed: _saving ? null : _save,
-              style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14))),
-              child: Text(
-                _isEdit ? 'Save changes' : 'Publish programme',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        child: SingleChildScrollView(
+          controller: _scrollCtrl,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Progress bar
+              _EditorProgressBar(
+                completedSections: [
+                  _s1Done, _s2Done, _s3Done,
+                  if (locationRelevant) _s4Done,
+                  _s5Done,
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+
+              // ── S1: Programme Type ────────────────────────────────────────
+              _SectionWrapper(
+                key: _sectionKeys[0],
+                index: 1,
+                title: 'Programme Type',
+                subtitle: 'What kind of programme are you creating?',
+                icon: Icons.category_outlined,
+                isLocked: false,
+                isDone: _s1Done,
+                showCompleteButton: false,
+                child: _typeSelector(),
+              ),
+              const SizedBox(height: 16),
+
+              // ── S2: Basic Info ────────────────────────────────────────────
+              _SectionWrapper(
+                key: _sectionKeys[1],
+                index: 2,
+                title: 'Basic Info',
+                subtitle: 'Name, summary, and full description',
+                icon: Icons.description_outlined,
+                isLocked: !_s1Done,
+                isDone: _s2Done,
+                onComplete: _s2Done
+                    ? null
+                    : () {
+                        if (_validateS2()) {
+                          setState(() => _s2Done = true);
+                          _scrollToSection(2);
+                        }
+                      },
+                child: _basicInfoSection(),
+              ),
+              const SizedBox(height: 16),
+
+              // ── S3: Schedule ──────────────────────────────────────────────
+              _SectionWrapper(
+                key: _sectionKeys[2],
+                index: 3,
+                title: 'Schedule',
+                subtitle: 'Dates, recurrence, and delivery format',
+                icon: Icons.calendar_month_outlined,
+                isLocked: !_s2Done,
+                isDone: _s3Done,
+                onComplete: _s3Done
+                    ? null
+                    : () {
+                        setState(() => _s3Done = true);
+                        _scrollToSection(locationRelevant ? 3 : 4);
+                      },
+                child: _scheduleSection(),
+              ),
+              const SizedBox(height: 16),
+
+              // ── S4: Location (in-person only) ─────────────────────────────
+              if (locationRelevant) ...[
+                _SectionWrapper(
+                  key: _sectionKeys[3],
+                  index: 4,
+                  title: 'Location',
+                  subtitle: 'Where the programme takes place',
+                  icon: Icons.location_on_outlined,
+                  isLocked: !_s3Done,
+                  isDone: _s4Done,
+                  onComplete: _s4Done
+                      ? null
+                      : () {
+                          if (_validateS4()) {
+                            setState(() => _s4Done = true);
+                            _scrollToSection(4);
+                          }
+                        },
+                  child: _locationSection(),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // ── S5: Engagement & Contact ──────────────────────────────────
+              _SectionWrapper(
+                key: _sectionKeys[4],
+                index: locationRelevant ? 5 : 4,
+                title: 'Engagement & Contact',
+                subtitle: 'Pricing, eligibility, and how people reach you',
+                icon: Icons.handshake_outlined,
+                isLocked: !s5Unlocked,
+                isDone: _s5Done,
+                onComplete: _s5Done
+                    ? null
+                    : () {
+                        if (_validateS5()) {
+                          setState(() => _s5Done = true);
+                          _scrollToSection(5);
+                        }
+                      },
+                child: _engagementContactSection(),
+              ),
+              const SizedBox(height: 16),
+
+              // ── S6: Images & Status ───────────────────────────────────────
+              _SectionWrapper(
+                key: _sectionKeys[5],
+                index: locationRelevant ? 6 : 5,
+                title: 'Images & Status',
+                subtitle: 'Cover photo, gallery, and programme visibility',
+                icon: Icons.photo_library_outlined,
+                isLocked: !_s5Done,
+                isDone: false,
+                showCompleteButton: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _statusRow(),
+                    const SizedBox(height: 20),
+                    _imageGrid(),
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppTheme.primary,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2),
+                            )
+                          : Text(
+                              _isEdit ? 'Save changes' : 'Publish programme',
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.w700),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ── Section helpers ───────────────────────────────────────────────────────────
+  // ── Section content builders ───────────────────────────────────────────────
 
-  Widget _section(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-            color: AppTheme.darkGreen.withOpacity(0.45)),
-      ),
+  Widget _basicInfoSection() {
+    return Column(
+      children: [
+        TextFormField(
+          controller: _titleCtrl,
+          decoration: _inputDec(
+            label: 'Programme title',
+            icon: Icons.title_outlined,
+          ),
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? 'Title is required' : null,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _summaryCtrl,
+          maxLines: 2,
+          decoration: _inputDec(
+            label: 'Summary (shown on cards)',
+            icon: Icons.short_text_outlined,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: _descCtrl,
+          maxLines: 5,
+          decoration: _inputDec(
+            label: 'Full description',
+            icon: Icons.notes_outlined,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _field(
-    TextEditingController ctrl,
-    String label,
-    String hint, {
-    bool required = false,
-    int maxLines = 1,
-  }) {
-    return TextFormField(
-      controller: ctrl,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.white,
-        border:
-            OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide:
-                BorderSide(color: AppTheme.lightGreen.withOpacity(0.3))),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide:
-                const BorderSide(color: AppTheme.primary, width: 1.5)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      ),
-      validator: required
-          ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
-          : null,
+  Widget _engagementContactSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('Pricing model'),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: EngagementModel.values.map((e) {
+            final active = _engagement == e;
+            return GestureDetector(
+              onTap: () => setState(() => _engagement = e),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppTheme.primary.withOpacity(0.12)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: active ? AppTheme.primary : Colors.grey.shade200,
+                    width: active ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  e.label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: active ? AppTheme.primary : AppTheme.darkGreen,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (_engagement == EngagementModel.paid) ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _priceCtrl,
+            keyboardType: TextInputType.number,
+            decoration: _inputDec(
+                label: 'Price (KES)', icon: Icons.payments_outlined),
+            validator: (v) =>
+                _engagement == EngagementModel.paid &&
+                        (v == null || double.tryParse(v.trim()) == null)
+                    ? 'Enter a valid price'
+                    : null,
+          ),
+        ],
+        if (_engagement == EngagementModel.volunteer) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.accent.withOpacity(0.25)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: AppTheme.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Volunteer programmes link to People › Volunteers for enrolment.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.darkGreen.withOpacity(0.7)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _eligCtrl,
+          decoration: _inputDec(
+            label: 'Eligibility',
+            hint: 'Who can join? (leave blank if open to all)',
+            icon: Icons.people_outline,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _sectionLabel('How people reach you'),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<ProgrammeContactMode>(
+          value: _contactMode,
+          decoration: _inputDec(
+            label: 'Contact method',
+            icon: Icons.contact_mail_outlined,
+          ),
+          items: ProgrammeContactMode.values
+              .map((m) => DropdownMenuItem(value: m, child: Text(m.label)))
+              .toList(),
+          onChanged: (v) => setState(() => _contactMode = v!),
+        ),
+        if (_contactMode != ProgrammeContactMode.enquiry ||
+            _type == ProgrammeType.onlineCourse) ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _linkCtrl,
+            keyboardType: TextInputType.url,
+            decoration: _inputDec(
+              label: _type == ProgrammeType.onlineCourse
+                  ? 'Course link (required)'
+                  : 'External link',
+              icon: Icons.link_outlined,
+            ),
+            validator: (_type == ProgrammeType.onlineCourse ||
+                    _contactMode != ProgrammeContactMode.enquiry)
+                ? (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Link is required' : null
+                : null,
+          ),
+        ],
+        const SizedBox(height: 8),
+        SwitchListTile.adaptive(
+          value: _enquiryEnabled,
+          activeColor: AppTheme.primary,
+          onChanged: (v) => setState(() => _enquiryEnabled = v),
+          title: const Text('Allow enquiries',
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: AppTheme.darkGreen)),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+        ),
+      ],
+    );
+  }
+
+  Widget _statusRow() {
+    final visible = [
+      ProgrammeStatus.draft,
+      ProgrammeStatus.upcoming,
+      ProgrammeStatus.active,
+      ProgrammeStatus.completed,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('Visibility status'),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: visible.map((s) {
+            final active = _status == s;
+            return GestureDetector(
+              onTap: () => setState(() => _status = s),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppTheme.primary.withOpacity(0.1)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: active ? AppTheme.primary : Colors.grey.shade200,
+                      width: active ? 1.5 : 1),
+                ),
+                child: Text(
+                  s.label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: active ? AppTheme.primary : AppTheme.darkGreen),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
@@ -471,14 +792,15 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
           onTap: () => setState(() {
             _type = t;
             if (t == ProgrammeType.onlineCourse) _isOnline = true;
-            if (t == ProgrammeType.membership || t == ProgrammeType.mentorship) {
+            if (t == ProgrammeType.membership ||
+                t == ProgrammeType.mentorship) {
               _contactMode = ProgrammeContactMode.enquiry;
             }
           }),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: active ? AppTheme.accent.withOpacity(0.12) : Colors.white,
               borderRadius: BorderRadius.circular(20),
@@ -500,52 +822,12 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
     );
   }
 
-  // ── Status selector ────────────────────────────────────────────────────────
-
-  Widget _statusSelector() {
-    final visible = [
-      ProgrammeStatus.draft,
-      ProgrammeStatus.upcoming,
-      ProgrammeStatus.active,
-      ProgrammeStatus.completed,
-    ];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: visible.map((s) {
-        final active = _status == s;
-        return GestureDetector(
-          onTap: () => setState(() => _status = s),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: active ? AppTheme.primary.withOpacity(0.1) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                  color: active ? AppTheme.primary : Colors.grey.shade200,
-                  width: active ? 1.5 : 1),
-            ),
-            child: Text(
-              s.label,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: active ? AppTheme.primary : AppTheme.darkGreen),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   // ── Schedule section ───────────────────────────────────────────────────────
 
   Widget _scheduleSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Online toggle (disabled if type forces online)
         SwitchListTile.adaptive(
           value: _isOnline,
           activeColor: AppTheme.primary,
@@ -561,20 +843,25 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
           dense: true,
         ),
         const SizedBox(height: 10),
-        // Recurrence
         DropdownButtonFormField<RecurrencePattern>(
           value: _recurrence,
-          decoration: _inputDeco('Recurrence'),
+          decoration: _inputDec(
+              label: 'Recurrence', icon: Icons.repeat_outlined),
           items: RecurrencePattern.values
               .map((r) => DropdownMenuItem(value: r, child: Text(r.label)))
               .toList(),
           onChanged: (v) => setState(() => _recurrence = v!),
         ),
         const SizedBox(height: 12),
-        // Duration text
-        _field(_durationCtrl, 'Duration', 'e.g. 3 hours / 6 weeks'),
+        TextFormField(
+          controller: _durationCtrl,
+          decoration: _inputDec(
+            label: 'Duration',
+            hint: 'e.g. 3 hours / 6 weeks',
+            icon: Icons.timelapse_outlined,
+          ),
+        ),
         const SizedBox(height: 12),
-        // Date row
         Row(
           children: [
             Expanded(
@@ -595,7 +882,6 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
           ],
         ),
         const SizedBox(height: 12),
-        // Certificate
         SwitchListTile.adaptive(
           value: _certificate,
           activeColor: AppTheme.primary,
@@ -619,7 +905,8 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
       children: [
         DropdownButtonFormField<String>(
           value: _selectedCity,
-          decoration: _inputDeco('City'),
+          decoration: _inputDec(
+              label: 'City', icon: Icons.location_city_outlined),
           items: _kenyaCities.keys
               .map((c) => DropdownMenuItem(value: c, child: Text(c)))
               .toList(),
@@ -631,147 +918,22 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           value: _selectedArea,
-          decoration: _inputDeco('Area / neighbourhood'),
+          decoration: _inputDec(
+              label: 'Area / neighbourhood', icon: Icons.place_outlined),
           items: _areas
               .map((a) => DropdownMenuItem(
-                  value: a['area'] as String,
-                  child: Text(a['area'] as String)))
+                  value: a['area'] as String, child: Text(a['area'] as String)))
               .toList(),
           onChanged: _onAreaSelected,
         ),
         const SizedBox(height: 10),
-        _field(_venueCtrl, 'Venue', 'e.g. Community Hall, Gate 2'),
-      ],
-    );
-  }
-
-  // ── Engagement section ─────────────────────────────────────────────────────
-
-  Widget _engagementSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: EngagementModel.values.map((e) {
-            final active = _engagement == e;
-            return GestureDetector(
-              onTap: () => setState(() => _engagement = e),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 9),
-                decoration: BoxDecoration(
-                  color: active
-                      ? AppTheme.tertiary.withOpacity(0.12)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: active
-                          ? AppTheme.tertiary
-                          : Colors.grey.shade200,
-                      width: active ? 1.5 : 1),
-                ),
-                child: Text(
-                  e.label,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: active
-                          ? AppTheme.tertiary
-                          : AppTheme.darkGreen),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        if (_engagement == EngagementModel.paid) ...[
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _priceCtrl,
-            keyboardType: TextInputType.number,
-            decoration: _inputDeco('Price (KES)'),
-            validator: (v) => _engagement == EngagementModel.paid &&
-                    (v == null || double.tryParse(v.trim()) == null)
-                ? 'Enter a valid price'
-                : null,
+        TextFormField(
+          controller: _venueCtrl,
+          decoration: _inputDec(
+            label: 'Venue',
+            hint: 'e.g. Community Hall, Gate 2',
+            icon: Icons.business_outlined,
           ),
-        ],
-        if (_engagement == EngagementModel.volunteer) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.accent.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.accent.withOpacity(0.25)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, size: 16, color: AppTheme.accent),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Volunteer programmes link to People › Volunteers for enrolment.',
-                    style: TextStyle(
-                        fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.7)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-        const SizedBox(height: 12),
-        _field(_eligCtrl, 'Eligibility', 'Who can join? (leave blank if open to all)'),
-      ],
-    );
-  }
-
-  // ── Contact section ────────────────────────────────────────────────────────
-
-  Widget _contactSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DropdownButtonFormField<ProgrammeContactMode>(
-          value: _contactMode,
-          decoration: _inputDeco('How people reach you'),
-          items: ProgrammeContactMode.values
-              .map((m) =>
-                  DropdownMenuItem(value: m, child: Text(m.label)))
-              .toList(),
-          onChanged: (v) => setState(() => _contactMode = v!),
-        ),
-        if (_contactMode != ProgrammeContactMode.enquiry ||
-            _type == ProgrammeType.onlineCourse) ...[
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _linkCtrl,
-            keyboardType: TextInputType.url,
-            decoration: _inputDeco(
-              _type == ProgrammeType.onlineCourse
-                  ? 'Course link (required for online courses)'
-                  : 'External link',
-            ),
-            validator: (_type == ProgrammeType.onlineCourse ||
-                    _contactMode != ProgrammeContactMode.enquiry)
-                ? (v) => (v == null || v.trim().isEmpty) ? 'Link is required' : null
-                : null,
-          ),
-        ],
-        const SizedBox(height: 8),
-        SwitchListTile.adaptive(
-          value: _enquiryEnabled,
-          activeColor: AppTheme.primary,
-          onChanged: (v) => setState(() => _enquiryEnabled = v),
-          title: const Text('Allow enquiries',
-              style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: AppTheme.darkGreen)),
-          contentPadding: EdgeInsets.zero,
-          dense: true,
         ),
       ],
     );
@@ -783,6 +945,8 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _sectionLabel('Photos (slot 1 = cover, up to 5 supporting)'),
+        const SizedBox(height: 12),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -797,6 +961,7 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
             final hasNew      = _imageSlots[i] != null;
             final existingUrl = _existingUrls[i];
             final hasImage    = hasNew || existingUrl != null;
+
             return GestureDetector(
               onTap: () => _pickImage(i),
               child: Container(
@@ -815,16 +980,14 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(11),
                             child: hasNew
-                                ? Image.file(
-                                    File(_imageSlots[i]!.path),
-                                    fit: BoxFit.cover,
-                                  )
+                                ? Image.file(File(_imageSlots[i]!.path),
+                                    fit: BoxFit.cover)
                                 : Image.network(
                                     existingUrl!,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
-                                        const Icon(Icons.broken_image_outlined,
-                                            color: Colors.grey),
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.broken_image_outlined,
+                                        color: Colors.grey),
                                   ),
                           ),
                           Positioned(
@@ -879,38 +1042,390 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
             );
           },
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Slot 1 is the cover. Slots 2–6 are supporting images (hard cap: 5 supporting).',
-          style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.4)),
-        ),
       ],
     );
   }
 
-  // ── Input decoration helper ────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
-  InputDecoration _inputDeco(String label) {
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.darkGreen.withOpacity(0.55),
+          letterSpacing: 0.3),
+    );
+  }
+
+  InputDecoration _inputDec({
+    required String label,
+    String? hint,
+    IconData icon = Icons.edit_outlined,
+    Color accent = AppTheme.primary,
+  }) {
     return InputDecoration(
       labelText: label,
+      hintText: hint,
+      labelStyle: TextStyle(color: accent.withOpacity(0.75), fontSize: 13),
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      prefixIcon: Padding(
+        padding: const EdgeInsets.all(10),
+        child: _IconPill(icon: icon, color: accent),
+      ),
+      prefixIconConstraints:
+          const BoxConstraints(minWidth: 52, minHeight: 52),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: accent.withOpacity(0.2))),
       enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              BorderSide(color: AppTheme.lightGreen.withOpacity(0.3))),
+          borderSide: BorderSide(color: accent.withOpacity(0.22))),
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5)),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          borderSide: BorderSide(color: accent, width: 2)),
+      errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.red.shade300)),
+      focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.red.shade400, width: 2)),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Date button
+// _SectionWrapper — progressive-lock card (adapted from org_register_wizard)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SectionWrapper extends StatefulWidget {
+  final int index;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool isLocked;
+  final bool isDone;
+  final Widget child;
+  final VoidCallback? onComplete;
+  final String? completeLabel;
+  final bool showCompleteButton;
+
+  const _SectionWrapper({
+    super.key,
+    required this.index,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.isLocked,
+    required this.isDone,
+    required this.child,
+    this.onComplete,
+    this.completeLabel,
+    this.showCompleteButton = true,
+  });
+
+  @override
+  State<_SectionWrapper> createState() => _SectionWrapperState();
+}
+
+class _SectionWrapperState extends State<_SectionWrapper>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _unlockAnim;
+  late Animation<double> _unlockFade;
+  late Animation<double> _unlockScale;
+  bool _wasLocked = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _wasLocked = widget.isLocked;
+    _unlockAnim = AnimationController(
+        duration: const Duration(milliseconds: 450), vsync: this);
+    _unlockFade =
+        CurvedAnimation(parent: _unlockAnim, curve: Curves.easeOut);
+    _unlockScale = Tween<double>(begin: 0.97, end: 1.0).animate(
+        CurvedAnimation(parent: _unlockAnim, curve: Curves.easeOutBack));
+    if (!widget.isLocked) _unlockAnim.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(_SectionWrapper old) {
+    super.didUpdateWidget(old);
+    if (_wasLocked && !widget.isLocked) {
+      _wasLocked = false;
+      _unlockAnim.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlockAnim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDone   = widget.isDone;
+    final isLocked = widget.isLocked;
+
+    final headerColor = isDone
+        ? AppTheme.primary
+        : isLocked
+            ? AppTheme.darkGreen.withOpacity(0.35)
+            : AppTheme.darkGreen;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDone
+              ? AppTheme.primary.withOpacity(0.4)
+              : isLocked
+                  ? Colors.grey.withOpacity(0.15)
+                  : AppTheme.lightGreen.withOpacity(0.35),
+          width: isDone ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDone
+                ? AppTheme.primary.withOpacity(0.08)
+                : Colors.black.withOpacity(0.04),
+            blurRadius: isDone ? 16 : 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDone
+                      ? AppTheme.primary
+                      : isLocked
+                          ? Colors.grey.withOpacity(0.12)
+                          : AppTheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isDone
+                      ? Icons.check_rounded
+                      : isLocked
+                          ? Icons.lock_outline_rounded
+                          : widget.icon,
+                  color: isDone
+                      ? Colors.white
+                      : isLocked
+                          ? Colors.grey.withOpacity(0.45)
+                          : AppTheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Text(
+                          'Step ${widget.index}',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: headerColor.withOpacity(0.55),
+                              letterSpacing: 0.5),
+                        ),
+                        if (isDone) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text('Complete',
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primary)),
+                          ),
+                        ],
+                      ]),
+                      const SizedBox(height: 2),
+                      Text(widget.title,
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: headerColor)),
+                      Text(widget.subtitle,
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: headerColor.withOpacity(0.6))),
+                    ]),
+              ),
+            ]),
+          ),
+
+          // Locked overlay vs content
+          if (isLocked)
+            _LockedPlaceholder()
+          else
+            FadeTransition(
+              opacity: _unlockFade,
+              child: ScaleTransition(
+                scale: _unlockScale,
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Divider(height: 1, thickness: 1),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                        child: widget.child,
+                      ),
+                      if (widget.showCompleteButton && !isDone) ...[
+                        const SizedBox(height: 20),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                          child: FilledButton(
+                            onPressed: widget.onComplete,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppTheme.primary,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size.fromHeight(50),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                            ),
+                            child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    widget.completeLabel ?? 'Continue',
+                                    style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.arrow_forward, size: 18),
+                                ]),
+                          ),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 18),
+                      ],
+                    ]),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LockedPlaceholder extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.symmetric(vertical: 22),
+      decoration: BoxDecoration(
+        color: Colors.grey.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.withOpacity(0.12)),
+      ),
+      child: Column(children: [
+        Icon(Icons.lock_outline_rounded,
+            size: 28, color: Colors.grey.withOpacity(0.3)),
+        const SizedBox(height: 8),
+        Text('Complete the previous section to continue',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 12, color: Colors.grey.withOpacity(0.55))),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _EditorProgressBar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EditorProgressBar extends StatelessWidget {
+  final List<bool> completedSections;
+
+  const _EditorProgressBar({required this.completedSections});
+
+  @override
+  Widget build(BuildContext context) {
+    final done  = completedSections.where((b) => b).length;
+    final total = completedSections.length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text('$done of $total steps complete',
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.darkGreen)),
+        const Spacer(),
+        Text('${((done / total) * 100).round()}%',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.primary)),
+      ]),
+      const SizedBox(height: 8),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: LinearProgressIndicator(
+          value: done / total,
+          backgroundColor: AppTheme.lightGreen.withOpacity(0.18),
+          valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+          minHeight: 6,
+        ),
+      ),
+    ]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _IconPill
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _IconPill extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+
+  const _IconPill({required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, size: 16, color: color),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _DateButton
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _DateButton extends StatelessWidget {
@@ -950,12 +1465,13 @@ class _DateButton extends StatelessWidget {
                     ? '${date!.day}/${date!.month}/${date!.year}'
                     : label,
                 style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: date != null ? FontWeight.w600 : FontWeight.w400,
-                  color: date != null
-                      ? AppTheme.darkGreen
-                      : Colors.grey.shade400,
-                ),
+                    fontSize: 13,
+                    fontWeight:
+                        date != null ? FontWeight.w600 : FontWeight.w400,
+                    color: date != null
+                        ? AppTheme.darkGreen
+                        : Colors.grey.shade400),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

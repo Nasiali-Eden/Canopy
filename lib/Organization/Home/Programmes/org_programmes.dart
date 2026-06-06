@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../Models/programme.dart';
@@ -9,17 +10,13 @@ import '../../../Shared/theme/app_theme.dart';
 import 'programme_editor.dart';
 import 'programme_logic.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
-
 const _kBg = Color(0xFFF7F5F0);
 // Nav-bar visual height above the system safe area — matches org_home's
 // floating pill bar (SafeArea min-bottom 16 + padding 20 + content ≈41).
 const _kNavBarAboveSafeArea = 80.0;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OrgProgrammes — management view (replaces placeholder)
+// OrgProgrammes — management view (editorial redesign)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class OrgProgrammes extends StatefulWidget {
@@ -82,21 +79,72 @@ class _OrgProgrammesState extends State<OrgProgrammes>
     return Scaffold(
       backgroundColor: _kBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: _kBg,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: false,
         centerTitle: false,
-        title: const Text(
-          'Programmes',
-          style: TextStyle(
-            color: AppTheme.darkGreen,
-            fontWeight: FontWeight.w800,
-            fontSize: 20,
-          ),
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarBrightness: Brightness.light,
+          statusBarIconBrightness: Brightness.dark,
         ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Programmes',
+              style: TextStyle(
+                color: AppTheme.darkGreen,
+                fontWeight: FontWeight.w800,
+                fontSize: 22,
+                letterSpacing: -0.4,
+                height: 1.1,
+              ),
+            ),
+            Text(
+              'Manage your offerings',
+              style: TextStyle(
+                color: AppTheme.darkGreen.withOpacity(0.38),
+                fontWeight: FontWeight.w500,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          if (_orgId != null && _tab.index == 0)
+            GestureDetector(
+              onTap: _openEditor,
+              child: Container(
+                margin: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, size: 15, color: Colors.white),
+                    SizedBox(width: 4),
+                    Text(
+                      'New',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            const SizedBox(width: 16),
+        ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
+          preferredSize: const Size.fromHeight(62),
           child: _buildTabBar(),
         ),
       ),
@@ -105,84 +153,55 @@ class _OrgProgrammesState extends State<OrgProgrammes>
               child: CircularProgressIndicator(color: AppTheme.primary))
           : _orgId == null
               ? _buildNoOrg()
-              : Stack(
-                  children: [
-                    _buildTabView(navBottom),
-                    // FAB — Positioned above the floating nav bar (Offerings tab only)
-                    if (_tab.index == 0)
-                      Positioned(
-                        right: 20,
-                        bottom: navBottom + 8,
-                        child: FloatingActionButton(
-                          heroTag: 'programmes_fab',
-                          onPressed: () => _openEditor(),
-                          backgroundColor: AppTheme.tertiary,
-                          foregroundColor: Colors.white,
-                          elevation: 6,
-                          child: const Icon(Icons.add, size: 26),
-                        ),
-                      ),
-                  ],
-                ),
+              : _buildTabView(navBottom),
     );
   }
 
-  // ── Tab bar ────────────────────────────────────────────────────────────────
+  // ── Custom tab bar ─────────────────────────────────────────────────────────
 
   Widget _buildTabBar() {
-    return Container(
-      color: Colors.white,
-      child: _orgId == null
-          ? const SizedBox.shrink()
-          : StreamBuilder<List<ProgrammeEnquiry>>(
-              stream: ProgrammeLogic.streamEnquiries(_orgId!),
-              builder: (context, snap) {
-                final unread = (snap.data ?? [])
-                    .where((e) => e.status == EnquiryStatus.unread)
-                    .length;
-                return TabBar(
-                  controller: _tab,
-                  labelColor: AppTheme.primary,
-                  unselectedLabelColor: AppTheme.darkGreen.withOpacity(0.45),
-                  indicatorColor: AppTheme.primary,
-                  indicatorWeight: 2.5,
-                  labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 13),
-                  unselectedLabelStyle:
-                      const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
-                  tabs: [
-                    const Tab(text: 'Offerings'),
-                    const Tab(text: 'Track Record'),
-                    Tab(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Enquiries'),
-                          if (unread > 0) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppTheme.tertiary,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '$unread',
-                                style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
+    if (_orgId == null) return const SizedBox.shrink();
+    return StreamBuilder<List<ProgrammeEnquiry>>(
+      stream: ProgrammeLogic.streamEnquiries(_orgId!),
+      builder: (context, snap) {
+        final unread = (snap.data ?? [])
+            .where((e) => e.status == EnquiryStatus.unread)
+            .length;
+        return Container(
+          color: _kBg,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: AppTheme.darkGreen.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(14),
             ),
+            child: Row(
+              children: [
+                _TabPill(
+                  label: 'Offerings',
+                  icon: Icons.layers_outlined,
+                  index: 0,
+                  controller: _tab,
+                ),
+                _TabPill(
+                  label: 'Track Record',
+                  icon: Icons.workspace_premium_outlined,
+                  index: 1,
+                  controller: _tab,
+                ),
+                _TabPill(
+                  label: 'Enquiries',
+                  icon: Icons.forum_outlined,
+                  index: 2,
+                  controller: _tab,
+                  badge: unread,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -212,6 +231,7 @@ class _OrgProgrammesState extends State<OrgProgrammes>
               programmes: offerings,
               navBottom: navBottom,
               onEdit: (p) => _openEditor(programme: p),
+              onCreate: _openEditor,
             ),
             _TrackRecordTab(
               programmes: trackRecord,
@@ -236,6 +256,101 @@ class _OrgProgrammesState extends State<OrgProgrammes>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Segmented tab control
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TabPill extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final int index;
+  final TabController controller;
+  final int badge;
+
+  const _TabPill({
+    required this.label,
+    required this.icon,
+    required this.index,
+    required this.controller,
+    this.badge = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = controller.index == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => controller.animateTo(index),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: AppTheme.darkGreen.withOpacity(0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    )
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 14,
+                color: isActive
+                    ? AppTheme.darkGreen
+                    : AppTheme.darkGreen.withOpacity(0.38),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive
+                      ? AppTheme.darkGreen
+                      : AppTheme.darkGreen.withOpacity(0.38),
+                  letterSpacing: isActive ? 0.1 : 0,
+                ),
+              ),
+              if (badge > 0) ...[
+                const SizedBox(width: 4),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 14),
+                  height: 14,
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.tertiary,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    badge > 9 ? '9+' : '$badge',
+                    style: const TextStyle(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Offerings tab
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -243,29 +358,35 @@ class _OfferingsTab extends StatelessWidget {
   final List<Programme> programmes;
   final double navBottom;
   final void Function(Programme) onEdit;
+  final VoidCallback onCreate;
 
   const _OfferingsTab({
     required this.programmes,
     required this.navBottom,
     required this.onEdit,
+    required this.onCreate,
   });
 
   @override
   Widget build(BuildContext context) {
     if (programmes.isEmpty) {
-      return _EmptyState(
-        icon: Icons.folder_open_outlined,
-        title: 'No offerings yet',
-        subtitle: 'Tap + to publish your first programme.',
-        navBottom: navBottom,
+      return ListView(
+        padding: EdgeInsets.fromLTRB(16, 20, 16, navBottom + 32),
+        children: [
+          _AddOfferingCard(onTap: onCreate),
+        ],
       );
     }
     return ListView.builder(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, navBottom + 80),
+      padding: EdgeInsets.fromLTRB(16, 20, 16, navBottom + 88),
       itemCount: programmes.length,
-      itemBuilder: (context, i) => _ProgrammeCard(
-        programme: programmes[i],
-        onTap: () => onEdit(programmes[i]),
+      itemBuilder: (context, i) => _FadeSlideIn(
+        key: ValueKey('off-${programmes[i].id}'),
+        delay: Duration(milliseconds: i * 55),
+        child: _OfferingCard(
+          programme: programmes[i],
+          onTap: () => onEdit(programmes[i]),
+        ),
       ),
     );
   }
@@ -285,16 +406,20 @@ class _TrackRecordTab extends StatelessWidget {
   Widget build(BuildContext context) {
     if (programmes.isEmpty) {
       return _EmptyState(
-        icon: Icons.verified_outlined,
+        icon: Icons.workspace_premium_outlined,
         title: 'Track record builds here',
-        subtitle: 'Completed programmes appear with their verified impact.',
+        body: 'Completed programmes appear with their verified impact.',
         navBottom: navBottom,
       );
     }
     return ListView.builder(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, navBottom + 24),
+      padding: EdgeInsets.fromLTRB(16, 20, 16, navBottom + 32),
       itemCount: programmes.length,
-      itemBuilder: (context, i) => _TrackRecordCard(programme: programmes[i]),
+      itemBuilder: (context, i) => _FadeSlideIn(
+        key: ValueKey('tr-${programmes[i].id}'),
+        delay: Duration(milliseconds: i * 55),
+        child: _TrackRecordCard(programme: programmes[i]),
+      ),
     );
   }
 }
@@ -321,9 +446,9 @@ class _EnquiriesTab extends StatelessWidget {
         final enquiries = snap.data ?? [];
         if (enquiries.isEmpty) {
           return _EmptyState(
-            icon: Icons.inbox_outlined,
-            title: 'No enquiries yet',
-            subtitle:
+            icon: Icons.mark_email_unread_outlined,
+            title: 'Inbox is quiet',
+            body:
                 'When community members reach out, their messages appear here.',
             navBottom: navBottom,
           );
@@ -334,23 +459,35 @@ class _EnquiriesTab extends StatelessWidget {
         for (final e in enquiries) {
           groups.putIfAbsent(e.status, () => []).add(e);
         }
-        final order = [
+        const order = [
           EnquiryStatus.unread,
           EnquiryStatus.read,
           EnquiryStatus.responded,
           EnquiryStatus.closed,
         ];
 
-        final sections = <Widget>[];
+        final children = <Widget>[];
+        var animIdx = 0;
         for (final status in order) {
           final list = groups[status];
           if (list == null || list.isEmpty) continue;
-          sections.add(_EnquirySection(status: status, enquiries: list));
+          children.add(
+            _EnquirySectionHeader(status: status, count: list.length),
+          );
+          for (final e in list) {
+            children.add(_FadeSlideIn(
+              key: ValueKey('enq-${e.id}'),
+              delay: Duration(milliseconds: animIdx * 45),
+              child: _EnquiryTile(enquiry: e),
+            ));
+            animIdx++;
+          }
+          children.add(const SizedBox(height: 20));
         }
 
         return ListView(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, navBottom + 24),
-          children: sections,
+          padding: EdgeInsets.fromLTRB(16, 20, 16, navBottom + 32),
+          children: children,
         );
       },
     );
@@ -358,113 +495,120 @@ class _EnquiriesTab extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Programme card (Offerings)
+// Add offering card — tappable ghost card shown when list is empty
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ProgrammeCard extends StatelessWidget {
-  final Programme programme;
+class _AddOfferingCard extends StatelessWidget {
   final VoidCallback onTap;
-
-  const _ProgrammeCard({required this.programme, required this.onTap});
+  const _AddOfferingCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final p = programme;
-    final Color statusColor;
-    switch (p.status) {
-      case ProgrammeStatus.active:   statusColor = AppTheme.primary;  break;
-      case ProgrammeStatus.upcoming: statusColor = AppTheme.accent;   break;
-      case ProgrammeStatus.draft:    statusColor = Colors.grey;       break;
-      default:                       statusColor = AppTheme.secondary; break;
-    }
-
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: AppTheme.primary.withOpacity(0.25),
+            width: 1.5,
+            strokeAlign: BorderSide.strokeAlignInside,
+          ),
           boxShadow: [
             BoxShadow(
-                color: AppTheme.primary.withOpacity(0.06),
-                blurRadius: 14,
-                offset: const Offset(0, 4)),
+              color: AppTheme.darkGreen.withOpacity(0.05),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
-        child: Row(
+        child: Column(
           children: [
-            // Cover image
+            // Ghost image area with dashed-style look
             ClipRRect(
-              borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  bottomLeft: Radius.circular(18)),
-              child: _CoverThumb(url: p.coverImageUrl, size: 90),
-            ),
-            // Content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(17)),
+              child: Container(
+                height: 160,
+                width: double.infinity,
+                color: AppTheme.primary.withOpacity(0.04),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Row(
-                      children: [
-                        _TypeChip(type: p.type),
-                        const SizedBox(width: 6),
-                        _PriceChip(programme: p),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      p.title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: AppTheme.darkGreen,
-                          height: 1.25),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (p.summary.isNotEmpty) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        p.summary,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.5)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withOpacity(0.08),
+                        shape: BoxShape.circle,
                       ),
-                    ],
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            p.status.label,
-                            style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: statusColor),
-                          ),
-                        ),
-                      ],
+                      child: const Icon(
+                        Icons.add_rounded,
+                        size: 28,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Tap to add a new offering',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primary.withOpacity(0.8),
+                        letterSpacing: -0.1,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.only(right: 12),
-              child: Icon(Icons.edit_outlined,
-                  size: 16, color: AppTheme.lightGreen),
+            // Ghost content area
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 70,
+                        height: 11,
+                        decoration: BoxDecoration(
+                          color: AppTheme.lightGreen.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 40,
+                        height: 11,
+                        decoration: BoxDecoration(
+                          color: AppTheme.lightGreen.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: AppTheme.lightGreen.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: 180,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: AppTheme.lightGreen.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -474,7 +618,146 @@ class _ProgrammeCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Track Record card
+// Offering card — image-led, full-width banner
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _OfferingCard extends StatelessWidget {
+  final Programme programme;
+  final VoidCallback onTap;
+
+  const _OfferingCard({required this.programme, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = programme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.darkGreen.withOpacity(0.09),
+              blurRadius: 22,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Cover banner ────────────────────────────────────────────
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(18)),
+              child: Stack(
+                children: [
+                  _CoverThumb(url: p.coverImageUrl, height: 170, fullWidth: true),
+                  // Status badge — top right, dark frosted
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: _StatusBadge(status: p.status),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Content ─────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Meta: type · price (inline, quiet)
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w500),
+                      children: [
+                        TextSpan(
+                          text: p.type.label,
+                          style: TextStyle(
+                              color: AppTheme.darkGreen.withOpacity(0.45)),
+                        ),
+                        TextSpan(
+                          text: '  ·  ',
+                          style: TextStyle(
+                              color: AppTheme.darkGreen.withOpacity(0.25)),
+                        ),
+                        TextSpan(
+                          text: p.displayPrice,
+                          style: TextStyle(
+                            color: p.isPaid
+                                ? AppTheme.tertiary
+                                : AppTheme.darkGreen.withOpacity(0.45),
+                            fontWeight: p.isPaid
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Title + chevron
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          p.title,
+                          style: const TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.darkGreen,
+                            height: 1.2,
+                            letterSpacing: -0.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 12,
+                          color: AppTheme.darkGreen.withOpacity(0.28),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  if (p.summary.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      p.summary,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.darkGreen.withOpacity(0.48),
+                        height: 1.4,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Track Record card — editorial hero with verified impact
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TrackRecordCard extends StatelessWidget {
@@ -485,116 +768,280 @@ class _TrackRecordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = programme;
+    final hasImpact = p.impactRefs.isNotEmpty;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-              color: AppTheme.primary.withOpacity(0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 4)),
+            color: AppTheme.darkGreen.withOpacity(0.09),
+            blurRadius: 22,
+            offset: const Offset(0, 6),
+          ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cover + overlay
+          // ── Hero image — title overlaid on deep scrim ────────────────
           ClipRRect(
             borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(18)),
             child: Stack(
               children: [
-                _CoverThumb(url: p.coverImageUrl, size: 140, fullWidth: true),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(14, 24, 14, 10),
+                _CoverThumb(url: p.coverImageUrl, height: 210, fullWidth: true),
+
+                // Deep bottom-up gradient scrim
+                Positioned.fill(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
+                        stops: const [0.30, 1.0],
                         colors: [
                           Colors.transparent,
-                          Colors.black.withOpacity(0.55)
+                          Colors.black.withOpacity(0.76),
                         ],
                       ),
                     ),
-                    child: Row(
+                  ),
+                ),
+
+                // Type chip — frosted, top left
+                Positioned(
+                  top: 14,
+                  left: 14,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                          color: Colors.white.withOpacity(0.25), width: 0.5),
+                    ),
+                    child: Text(
+                      p.type.label,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Gold "Verified" badge — top right
+                Positioned(
+                  top: 14,
+                  right: 14,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.tertiary.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _TypeChip(type: p.type, dark: true),
-                        const Spacer(),
-                        if (p.publishedAt != null)
-                          Text(
-                            DateFormat('MMM yyyy').format(p.publishedAt!),
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w500),
+                        Icon(Icons.verified_rounded,
+                            size: 10, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          'Verified',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.2,
                           ),
+                        ),
                       ],
                     ),
                   ),
                 ),
+
+                // Title — bottom left, display weight
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 56, 16),
+                    child: Text(
+                      p.title,
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1.2,
+                        letterSpacing: -0.4,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black26,
+                            offset: Offset(0, 1),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+
+                // Completion date — bottom right
+                if (p.publishedAt != null)
+                  Positioned(
+                    bottom: 16,
+                    right: 14,
+                    child: Text(
+                      DateFormat('MMM yyyy').format(p.publishedAt!),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withOpacity(0.65),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-          // Info
+
+          // ── Impact strip ─────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  p.title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: AppTheme.darkGreen),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (p.summary.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    p.summary,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                // Verified impact strip (read-only — derived from impactRefs)
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.lightGreen.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: hasImpact
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Icon(Icons.verified_outlined,
-                          size: 14, color: AppTheme.primary),
+                      Text(
+                        '${p.impactRefs.length}',
+                        style: const TextStyle(
+                          fontSize: 40,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.darkGreen,
+                          height: 1,
+                          letterSpacing: -2,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'VERIFIED IMPACT RECORDS',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
+                                  color: AppTheme.tertiary,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Linked to this programme\'s outcomes',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.darkGreen.withOpacity(0.42),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded,
+                          size: 15, color: AppTheme.tertiary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Verified completion',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.darkGreen.withOpacity(0.72),
+                        ),
+                      ),
                       const SizedBox(width: 6),
                       Text(
-                        p.impactRefs.isNotEmpty
-                            ? '${p.impactRefs.length} verified impact records'
-                            : 'Verified completion · no impact figures yet',
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary),
+                        '· no impact figures yet',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.darkGreen.withOpacity(0.33),
+                        ),
                       ),
                     ],
                   ),
+          ),
+
+          if (p.summary.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Text(
+                p.summary,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.darkGreen.withOpacity(0.48),
+                  height: 1.4,
                 ),
-              ],
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enquiry section header
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EnquirySectionHeader extends StatelessWidget {
+  final EnquiryStatus status;
+  final int count;
+
+  const _EnquirySectionHeader(
+      {required this.status, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final isUnread = status == EnquiryStatus.unread;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10, top: 2),
+      child: Row(
+        children: [
+          Text(
+            status.label.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.3,
+              color:
+                  isUnread ? AppTheme.tertiary : AppTheme.darkGreen.withOpacity(0.4),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '($count)',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.darkGreen.withOpacity(0.32),
             ),
           ),
         ],
@@ -604,37 +1051,8 @@ class _TrackRecordCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Enquiry section + tile
+// Enquiry tile — refined inbox row
 // ─────────────────────────────────────────────────────────────────────────────
-
-class _EnquirySection extends StatelessWidget {
-  final EnquiryStatus status;
-  final List<ProgrammeEnquiry> enquiries;
-
-  const _EnquirySection({required this.status, required this.enquiries});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8, top: 4),
-          child: Text(
-            status.label.toUpperCase(),
-            style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.2,
-                color: AppTheme.darkGreen.withOpacity(0.45)),
-          ),
-        ),
-        ...enquiries.map((e) => _EnquiryTile(enquiry: e)),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-}
 
 class _EnquiryTile extends StatelessWidget {
   final ProgrammeEnquiry enquiry;
@@ -649,126 +1067,200 @@ class _EnquiryTile extends StatelessWidget {
         if (isUnread) ProgrammeLogic.markRead(enquiry.id);
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color: isUnread
-              ? AppTheme.primary.withOpacity(0.04)
-              : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isUnread
-                ? AppTheme.primary.withOpacity(0.2)
-                : Colors.grey.shade100,
-          ),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2)),
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: AppTheme.lightGreen.withOpacity(0.18),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    enquiry.fromUserName.isNotEmpty
-                        ? enquiry.fromUserName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primary,
-                        fontSize: 14),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Gold leading bar — unread only
+              Container(
+                width: 3.5,
+                decoration: BoxDecoration(
+                  color: isUnread ? AppTheme.tertiary : Colors.transparent,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(14),
+                    bottomLeft: Radius.circular(14),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
+              ),
+              // Content
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        enquiry.fromUserName,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          color: AppTheme.darkGreen,
-                        ),
+                      // Header row: avatar + name/programme + date
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [AppTheme.primary, AppTheme.secondary],
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              enquiry.fromUserName.isNotEmpty
+                                  ? enquiry.fromUserName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  enquiry.fromUserName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: isUnread
+                                        ? AppTheme.darkGreen
+                                        : AppTheme.darkGreen.withOpacity(0.75),
+                                  ),
+                                ),
+                                Text(
+                                  enquiry.programmeTitle,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: AppTheme.darkGreen.withOpacity(0.42),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (enquiry.createdAt != null) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat('d MMM').format(enquiry.createdAt!),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppTheme.darkGreen.withOpacity(0.32),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
+                      const SizedBox(height: 9),
+
+                      // Message preview
                       Text(
-                        enquiry.programmeTitle,
+                        enquiry.message,
                         style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.5)),
-                        maxLines: 1,
+                          fontSize: 12,
+                          color: AppTheme.darkGreen
+                              .withOpacity(isUnread ? 0.78 : 0.58),
+                          height: 1.45,
+                        ),
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+
+                      // Contact info — de-emphasised
+                      if (enquiry.contactPhone != null ||
+                          enquiry.contactEmail != null) ...[
+                        const SizedBox(height: 7),
+                        Wrap(
+                          spacing: 12,
+                          children: [
+                            if (enquiry.contactPhone != null)
+                              _ContactLine(
+                                icon: Icons.phone_outlined,
+                                text: enquiry.contactPhone!,
+                              ),
+                            if (enquiry.contactEmail != null)
+                              _ContactLine(
+                                icon: Icons.mail_outline_rounded,
+                                text: enquiry.contactEmail!,
+                              ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
-                if (isUnread)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                        color: AppTheme.primary, shape: BoxShape.circle),
-                  ),
-                if (enquiry.createdAt != null) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    DateFormat('d MMM').format(enquiry.createdAt!),
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: AppTheme.darkGreen.withOpacity(0.4)),
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              enquiry.message,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.darkGreen.withOpacity(0.75),
-                  height: 1.4),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (enquiry.contactPhone != null ||
-                enquiry.contactEmail != null) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  if (enquiry.contactPhone != null) ...[
-                    Icon(Icons.phone_outlined,
-                        size: 11, color: AppTheme.accent),
-                    const SizedBox(width: 3),
-                    Text(enquiry.contactPhone!,
-                        style: TextStyle(
-                            fontSize: 11, color: AppTheme.accent)),
-                    const SizedBox(width: 12),
-                  ],
-                  if (enquiry.contactEmail != null) ...[
-                    Icon(Icons.email_outlined,
-                        size: 11, color: AppTheme.accent),
-                    const SizedBox(width: 3),
-                    Text(enquiry.contactEmail!,
-                        style: TextStyle(
-                            fontSize: 11, color: AppTheme.accent)),
-                  ],
-                ],
               ),
             ],
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _ContactLine({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 10, color: AppTheme.accent.withOpacity(0.6)),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 10,
+            color: AppTheme.accent.withOpacity(0.6),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Status badge — overlaid on image, dark frosted
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatusBadge extends StatelessWidget {
+  final ProgrammeStatus status;
+
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.42),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        status.label.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+          letterSpacing: 0.8,
         ),
       ),
     );
@@ -776,24 +1268,28 @@ class _EnquiryTile extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared small widgets
+// Cover thumb — Image.network with graceful error fallback (unchanged contract)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CoverThumb extends StatelessWidget {
   final String? url;
-  final double size;
+  final double height;
   final bool fullWidth;
 
-  const _CoverThumb({this.url, required this.size, this.fullWidth = false});
+  const _CoverThumb({
+    this.url,
+    required this.height,
+    this.fullWidth = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final w = fullWidth ? double.infinity : size;
+    final w = fullWidth ? double.infinity : height;
     if (url != null && url!.isNotEmpty) {
       return Image.network(
         url!,
         width: w,
-        height: size,
+        height: height,
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => _placeholder(w),
       );
@@ -804,81 +1300,33 @@ class _CoverThumb extends StatelessWidget {
   Widget _placeholder(double w) {
     return Container(
       width: w,
-      height: size,
+      height: height,
       color: AppTheme.lightGreen.withOpacity(0.12),
-      child: Icon(Icons.image_outlined,
-          color: AppTheme.lightGreen.withOpacity(0.5), size: 28),
-    );
-  }
-}
-
-class _TypeChip extends StatelessWidget {
-  final ProgrammeType type;
-  final bool dark;
-
-  const _TypeChip({required this.type, this.dark = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: dark
-            ? Colors.white.withOpacity(0.18)
-            : AppTheme.accent.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        type.label,
-        style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: dark ? Colors.white : AppTheme.accent),
+      child: Center(
+        child: Icon(
+          Icons.image_outlined,
+          size: 36,
+          color: AppTheme.lightGreen.withOpacity(0.38),
+        ),
       ),
     );
   }
 }
 
-class _PriceChip extends StatelessWidget {
-  final Programme programme;
-
-  const _PriceChip({required this.programme});
-
-  @override
-  Widget build(BuildContext context) {
-    final Color color;
-    if (programme.isPaid) {
-      color = AppTheme.tertiary;
-    } else if (programme.isVolunteer) {
-      color = AppTheme.accent;
-    } else {
-      color = AppTheme.secondary;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        programme.displayPrice,
-        style: TextStyle(
-            fontSize: 10, fontWeight: FontWeight.w700, color: color),
-      ),
-    );
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty state — on-brand, editorial
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String subtitle;
+  final String body;
   final double navBottom;
 
   const _EmptyState({
     required this.icon,
     required this.title,
-    required this.subtitle,
+    required this.body,
     required this.navBottom,
   });
 
@@ -886,33 +1334,93 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: EdgeInsets.only(bottom: navBottom, left: 40, right: 40),
+        padding: EdgeInsets.fromLTRB(48, 0, 48, navBottom + 40),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppTheme.lightGreen.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(20),
+            Icon(icon, size: 52, color: AppTheme.lightGreen.withOpacity(0.45)),
+            const SizedBox(height: 20),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.darkGreen,
+                letterSpacing: -0.2,
               ),
-              child: Icon(icon,
-                  size: 32, color: AppTheme.lightGreen.withOpacity(0.7)),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.darkGreen)),
-            const SizedBox(height: 6),
-            Text(subtitle,
-                style: TextStyle(
-                    fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.45)),
-                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(
+              body,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.darkGreen.withOpacity(0.45),
+                height: 1.55,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Staggered fade+slide entrance animation
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FadeSlideIn extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+
+  const _FadeSlideIn({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+  });
+
+  @override
+  State<_FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<_FadeSlideIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    if (widget.delay == Duration.zero) {
+      _ctrl.forward();
+    } else {
+      Future.delayed(widget.delay, () {
+        if (mounted) _ctrl.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _ctrl,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.05),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic)),
+        child: widget.child,
       ),
     );
   }
