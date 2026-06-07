@@ -1,6 +1,12 @@
+// lib/EnvironmentalOps/Shared/zone_drawing_controller.dart
+//
+// Tap-on-map zone drawing — no manual lat/lng input.
+// User taps the map to place numbered pins; polyline and polygon
+// update live. "Close Zone" seals the shape; "Save Zone" confirms.
+
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../Shared/theme/app_theme.dart';
@@ -18,15 +24,14 @@ class ZoneDrawingConfig {
   const ZoneDrawingConfig({
     required this.zoneType,
     required this.overlayColor,
-    this.minPins = 10,
+    this.minPins = 3,
     this.requireFollowUp = false,
   });
 
   static const ZoneDrawingConfig collectionDefault = ZoneDrawingConfig(
     zoneType: ZoneType.collectionZone,
     overlayColor: Color(0xFF2D7A4F),
-    minPins: 10,
-    requireFollowUp: false,
+    minPins: 3,
   );
 
   static const ZoneDrawingConfig plantingDefault = ZoneDrawingConfig(
@@ -64,44 +69,6 @@ class ZoneDrawingResult {
   }
 }
 
-// ─── Coordinate entry ─────────────────────────────────────────────────────────
-class _CoordEntry {
-  final TextEditingController latCtrl;
-  final TextEditingController lngCtrl;
-
-  _CoordEntry()
-      : latCtrl = TextEditingController(),
-        lngCtrl = TextEditingController();
-
-  LatLng? get latLng {
-    final lat = double.tryParse(latCtrl.text.trim());
-    final lng = double.tryParse(lngCtrl.text.trim());
-    if (lat == null || lng == null) return null;
-    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
-    return LatLng(lat, lng);
-  }
-
-  void dispose() {
-    latCtrl.dispose();
-    lngCtrl.dispose();
-  }
-}
-
-// ─── Haversine distance in metres ─────────────────────────────────────────────
-double _haversineM(LatLng a, LatLng b) {
-  const R = 6371000.0;
-  final lat1 = a.latitude * math.pi / 180;
-  final lat2 = b.latitude * math.pi / 180;
-  final dLat = (b.latitude - a.latitude) * math.pi / 180;
-  final dLng = (b.longitude - a.longitude) * math.pi / 180;
-  final h = math.sin(dLat / 2) * math.sin(dLat / 2) +
-      math.cos(lat1) *
-          math.cos(lat2) *
-          math.sin(dLng / 2) *
-          math.sin(dLng / 2);
-  return R * 2 * math.atan2(math.sqrt(h), math.sqrt(1 - h));
-}
-
 // ─── Zone Drawing Controller ──────────────────────────────────────────────────
 class ZoneDrawingController extends StatefulWidget {
   final ZoneDrawingConfig config;
@@ -125,64 +92,52 @@ class ZoneDrawingController extends StatefulWidget {
 
 class ZoneDrawingControllerState extends State<ZoneDrawingController> {
   GoogleMapController? _mapController;
-  final List<_CoordEntry> _entries = [];
-  final ScrollController _scrollCtrl = ScrollController();
+
+  final List<LatLng> _pins = [];
   ZoneDrawingState _drawState = ZoneDrawingState.drawing;
 
-  @override
-  void initState() {
-    super.initState();
-    for (int i = 0; i < widget.config.minPins; i++) {
-      _addEntry(notify: false);
-    }
+  // Cached numbered pin icons
+  final Map<int, BitmapDescriptor> _pinIcons = {};
+
+  // ── Tap handler ──────────────────────────────────────────────────────────
+  void _onMapTap(LatLng pos) {
+    if (_drawState == ZoneDrawingState.closed) return;
+    if (_pins.length >= 50) return; // reasonable cap
+    _ensurePinIcon(_pins.length + 1); // pre-generate next icon
+    setState(() => _pins.add(pos));
   }
 
-  void _addEntry({bool notify = true}) {
-    final entry = _CoordEntry();
-    entry.latCtrl.addListener(_rebuild);
-    entry.lngCtrl.addListener(_rebuild);
-    _entries.add(entry);
-    if (notify) setState(() {});
+  void _undoLast() {
+    if (_pins.isEmpty) return;
+    setState(() {
+      _drawState = ZoneDrawingState.drawing;
+      _pins.removeLast();
+    });
   }
-
-  void _removeEntry(int index) {
-    if (_entries.length <= widget.config.minPins) return;
-    _entries[index].dispose();
-    setState(() => _entries.removeAt(index));
-  }
-
-  void _rebuild() => setState(() {});
-
-  List<LatLng> get _validPins =>
-      _entries.map((e) => e.latLng).whereType<LatLng>().toList();
-
-  int get _validCount => _validPins.length;
-
-  bool get _canClose =>
-      _validCount >= widget.config.minPins &&
-      _drawState == ZoneDrawingState.drawing;
 
   void _closeZone() {
-    if (!_canClose) return;
+    if (_pins.length < widget.config.minPins) return;
     setState(() => _drawState = ZoneDrawingState.closed);
-    _fitMapToPins();
+    _fitBounds();
+  }
+
+  void _reopenZone() {
+    setState(() => _drawState = ZoneDrawingState.drawing);
   }
 
   void _confirmZone() {
-    final pins = _validPins;
-    if (pins.length < widget.config.minPins) return;
+    if (_pins.length < widget.config.minPins) return;
     widget.onZoneClosed(ZoneDrawingResult(
-      vertices: List.unmodifiable(pins),
+      vertices: List.unmodifiable(_pins),
       zoneType: widget.config.zoneType,
     ));
   }
 
-  void _fitMapToPins() {
-    final pins = _validPins;
-    if (pins.length < 2 || _mapController == null) return;
-    final bounds = pins.fold(
-      LatLngBounds(southwest: pins.first, northeast: pins.first),
-      (LatLngBounds acc, LatLng p) => LatLngBounds(
+  void _fitBounds() {
+    if (_pins.length < 2 || _mapController == null) return;
+    final bounds = _pins.fold<LatLngBounds>(
+      LatLngBounds(southwest: _pins.first, northeast: _pins.first),
+      (acc, p) => LatLngBounds(
         southwest: LatLng(
           math.min(acc.southwest.latitude, p.latitude),
           math.min(acc.southwest.longitude, p.longitude),
@@ -194,31 +149,101 @@ class ZoneDrawingControllerState extends State<ZoneDrawingController> {
       ),
     );
     _mapController!.animateCamera(
-      CameraUpdate.newLatLngBounds(bounds, 48),
+      CameraUpdate.newLatLngBounds(bounds, 60),
     );
   }
 
+  // ── Marker icons ─────────────────────────────────────────────────────────
+  Future<void> _ensurePinIcon(int number) async {
+    if (_pinIcons.containsKey(number)) return;
+    final icon = await _buildNumberedPin(
+      number: number,
+      color: number == 1
+          ? widget.config.overlayColor
+          : widget.config.overlayColor.withOpacity(0.75),
+      size: 60.0,
+    );
+    if (mounted) setState(() => _pinIcons[number] = icon);
+  }
+
+  Future<BitmapDescriptor> _buildNumberedPin({
+    required int number,
+    required Color color,
+    required double size,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final r = size / 2;
+
+    // Drop shadow
+    canvas.drawCircle(
+      Offset(r, r + 3),
+      r - 6,
+      Paint()
+        ..color = Colors.black.withOpacity(0.22)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    // Circle fill
+    canvas.drawCircle(
+      Offset(r, r),
+      r - 6,
+      Paint()..color = color,
+    );
+    // White ring
+    canvas.drawCircle(
+      Offset(r, r),
+      r - 7,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
+    );
+    // Number text
+    final pb = ui.ParagraphBuilder(
+      ui.ParagraphStyle(textAlign: TextAlign.center, textDirection: ui.TextDirection.ltr),
+    )
+      ..pushStyle(ui.TextStyle(
+        color: Colors.white,
+        fontSize: size * 0.32,
+        fontWeight: ui.FontWeight.w800,
+      ))
+      ..addText('$number');
+    final para = pb.build()
+      ..layout(ui.ParagraphConstraints(width: size));
+    canvas.drawParagraph(para, Offset(0, r - para.height / 2));
+
+    final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+  }
+
+  // ── Map objects ──────────────────────────────────────────────────────────
   Set<Marker> get _markers {
-    final pins = _validPins;
-    return pins.asMap().entries.map((e) {
+    return _pins.asMap().entries.map((e) {
+      final n = e.key + 1;
+      final icon = _pinIcons[n] ??
+          BitmapDescriptor.defaultMarkerWithHue(
+              widget.config.zoneType == ZoneType.collectionZone
+                  ? BitmapDescriptor.hueGreen
+                  : BitmapDescriptor.hueCyan);
       return Marker(
-        markerId: MarkerId('pin_${e.key}'),
+        markerId: MarkerId('pin_$n'),
         position: e.value,
-        icon: e.key == 0
-            ? BitmapDescriptor.defaultMarkerWithHue(
-                widget.config.zoneType == ZoneType.collectionZone
-                    ? BitmapDescriptor.hueGreen
-                    : BitmapDescriptor.hueCyan)
-            : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        icon: icon,
+        zIndex: e.key == 0 ? 2.0 : 1.0,
+        infoWindow: InfoWindow.noText,
+        draggable: _drawState == ZoneDrawingState.drawing,
+        onDragEnd: (newPos) {
+          setState(() => _pins[e.key] = newPos);
+        },
       );
     }).toSet();
   }
 
   Set<Polyline> get _polylines {
-    final pins = _validPins;
-    if (pins.length < 2) return {};
-    final points = [...pins];
-    if (_drawState == ZoneDrawingState.closed) points.add(pins.first);
+    if (_pins.length < 2) return {};
+    final points = [..._pins];
+    if (_drawState == ZoneDrawingState.closed) points.add(_pins.first);
     return {
       Polyline(
         polylineId: const PolylineId('zone_outline'),
@@ -228,575 +253,399 @@ class ZoneDrawingControllerState extends State<ZoneDrawingController> {
         patterns: _drawState == ZoneDrawingState.drawing
             ? [PatternItem.dash(16), PatternItem.gap(8)]
             : [],
+        jointType: JointType.round,
+        startCap: Cap.roundCap,
+        endCap: Cap.roundCap,
       ),
     };
   }
 
   Set<Polygon> get _polygons {
-    if (_drawState != ZoneDrawingState.closed) return {};
-    final pins = _validPins;
-    if (pins.length < 3) return {};
+    if (_drawState != ZoneDrawingState.closed || _pins.length < 3) return {};
     return {
       Polygon(
         polygonId: const PolygonId('zone_fill'),
-        points: pins,
-        fillColor: widget.config.overlayColor.withOpacity(0.22),
+        points: _pins,
+        fillColor: widget.config.overlayColor.withOpacity(0.20),
         strokeColor: widget.config.overlayColor,
         strokeWidth: 3,
       ),
     };
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    // Pre-generate icons on first build
+    for (int i = 1; i <= widget.config.minPins; i++) {
+      _ensurePinIcon(i);
+    }
+
+    final topPad = MediaQuery.of(context).padding.top;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final isClosed = _drawState == ZoneDrawingState.closed;
+    final canClose = _pins.length >= widget.config.minPins;
+    final remaining = math.max(0, widget.config.minPins - _pins.length);
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // ── Full-screen map ─────────────────────────────────────────────
+          Positioned.fill(
+            child: GoogleMap(
+              initialCameraPosition: widget.initialPosition,
+              onMapCreated: (c) {
+                _mapController = c;
+                if (widget.mapStyle.isNotEmpty) c.setMapStyle(widget.mapStyle);
+              },
+              onTap: _onMapTap,
+              markers: _markers,
+              polylines: _polylines,
+              polygons: _polygons,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
+            ),
+          ),
+
+          // ── Top status badge ────────────────────────────────────────────
+          Positioned(
+            top: topPad + 12,
+            left: 16,
+            right: 80,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.94),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.10), blurRadius: 12)
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: isClosed
+                          ? const Color(0xFF2E7D32)
+                          : widget.config.overlayColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isClosed
+                          ? Icons.check_rounded
+                          : Icons.edit_location_alt_outlined,
+                      size: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          isClosed
+                              ? 'Zone closed  ·  ${_pins.length} pins'
+                              : '${_pins.length} pin${_pins.length == 1 ? '' : 's'} placed',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.darkGreen,
+                          ),
+                        ),
+                        Text(
+                          isClosed
+                              ? '${_computeResult()?.areaKm2.toStringAsFixed(4) ?? "0"} km²'
+                              : canClose
+                                  ? 'Tap map to refine — ready to close'
+                                  : '$remaining more needed to close zone',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppTheme.darkGreen.withOpacity(0.55),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Cancel / back ───────────────────────────────────────────────
+          Positioned(
+            top: topPad + 12,
+            right: 16,
+            child: _FloatButton(
+              icon: Icons.close,
+              color: Colors.white,
+              bg: Colors.black.withOpacity(0.45),
+              onTap: widget.onCancel ?? () {},
+            ),
+          ),
+
+          // ── Undo last pin ───────────────────────────────────────────────
+          if (_pins.isNotEmpty && !isClosed)
+            Positioned(
+              bottom: bottomPad + 90,
+              right: 16,
+              child: _FloatButton(
+                icon: Icons.undo_rounded,
+                color: Colors.white,
+                bg: Colors.black.withOpacity(0.45),
+                onTap: _undoLast,
+                label: 'Undo',
+              ),
+            ),
+
+          // ── Fit bounds button ───────────────────────────────────────────
+          if (_pins.length >= 2)
+            Positioned(
+              bottom: bottomPad + 160,
+              right: 16,
+              child: _FloatButton(
+                icon: Icons.fit_screen_rounded,
+                color: AppTheme.primary,
+                bg: Colors.white,
+                onTap: _fitBounds,
+              ),
+            ),
+
+          // ── Hint bar (drawing mode) ─────────────────────────────────────
+          if (!isClosed)
+            Positioned(
+              bottom: bottomPad + 90,
+              left: 16,
+              right: 70,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.92),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.touch_app_outlined,
+                        size: 15,
+                        color: widget.config.overlayColor),
+                    const SizedBox(width: 8),
+                    Text(
+                      _pins.isEmpty
+                          ? 'Tap the map to place zone pins'
+                          : 'Tap to add · drag pins to adjust',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.darkGreen.withOpacity(0.75),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // ── Bottom action bar ───────────────────────────────────────────
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPad + 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(20)),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.10),
+                      blurRadius: 16,
+                      offset: const Offset(0, -3)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Cancel
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: widget.onCancel,
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: Colors.grey.shade300),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // Close Zone / Save Zone / Edit Zone
+                  Expanded(
+                    flex: 2,
+                    child: isClosed
+                        ? Row(
+                            children: [
+                              // Edit
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _reopenZone,
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(
+                                        color: widget.config.overlayColor
+                                            .withOpacity(0.5)),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(14)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                  ),
+                                  child: Text(
+                                    'Edit',
+                                    style: TextStyle(
+                                      color: widget.config.overlayColor,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Save
+                              Expanded(
+                                flex: 2,
+                                child: ElevatedButton.icon(
+                                  onPressed: _confirmZone,
+                                  icon: const Icon(Icons.save_rounded,
+                                      size: 15, color: Colors.white),
+                                  label: const Text(
+                                    'Save Zone',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        widget.config.overlayColor,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(14)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        : ElevatedButton(
+                            onPressed: canClose ? _closeZone : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: canClose
+                                  ? widget.config.overlayColor
+                                  : Colors.grey.shade100,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              canClose
+                                  ? 'Close Zone'
+                                  : '$remaining more pin${remaining == 1 ? '' : 's'} needed',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: canClose
+                                    ? Colors.white
+                                    : Colors.grey.shade400,
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  ZoneDrawingResult? _computeResult() {
+    if (_pins.length < 3) return null;
+    return ZoneDrawingResult(
+        vertices: _pins, zoneType: widget.config.zoneType);
+  }
+
   @override
   void dispose() {
-    for (final e in _entries) e.dispose();
-    _scrollCtrl.dispose();
     _mapController?.dispose();
     super.dispose();
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: const Color(0xFFF7F5F0),
-      body: Column(
-        children: [
-          Expanded(flex: 4, child: _buildMap()),
-          Expanded(flex: 6, child: _buildInputPanel()),
-        ],
-      ),
-    );
-  }
-
-  // ── Map preview ──────────────────────────────────────────────────────────────
-  Widget _buildMap() {
-    return Stack(
-      children: [
-        GoogleMap(
-          initialCameraPosition: widget.initialPosition,
-          onMapCreated: (c) {
-            _mapController = c;
-            if (widget.mapStyle.isNotEmpty) c.setMapStyle(widget.mapStyle);
-          },
-          markers: _markers,
-          polylines: _polylines,
-          polygons: _polygons,
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: false,
-          mapToolbarEnabled: false,
-        ),
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 8,
-          left: 16,
-          child: _MapBadge(
-            color: widget.config.overlayColor,
-            validCount: _validCount,
-            drawState: _drawState,
-          ),
-        ),
-        if (_validCount >= 2)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            right: 16,
-            child: GestureDetector(
-              onTap: _fitMapToPins,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 6),
-                  ],
-                ),
-                child: const Icon(Icons.fit_screen, size: 16,
-                    color: AppTheme.accent),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // ── Input panel ──────────────────────────────────────────────────────────────
-  Widget _buildInputPanel() {
-    final validCount = _validCount;
-    final minPins = widget.config.minPins;
-    final progress = (validCount / minPins).clamp(0.0, 1.0);
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black12,
-              blurRadius: 12,
-              offset: Offset(0, -2)),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Handle
-          const SizedBox(height: 10),
-          Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 14),
-          // Header row
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Icon(Icons.pin_drop_outlined,
-                    size: 17, color: widget.config.overlayColor),
-                const SizedBox(width: 8),
-                const Text(
-                  'Zone Coordinates',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.darkGreen),
-                ),
-                const Spacer(),
-                _PinCountBadge(
-                    count: validCount,
-                    min: minPins,
-                    color: widget.config.overlayColor),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Progress
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 5,
-                backgroundColor: Colors.grey.shade100,
-                valueColor: AlwaysStoppedAnimation(
-                    validCount >= minPins
-                        ? widget.config.overlayColor
-                        : AppTheme.tertiary),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Icon(Icons.straighten_outlined,
-                    size: 12,
-                    color: AppTheme.darkGreen.withOpacity(0.4)),
-                const SizedBox(width: 4),
-                Text(
-                  '~100 m recommended spacing between pins',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.darkGreen.withOpacity(0.45)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Divider(height: 1),
-          // Coordinate rows
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollCtrl,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              itemCount: _entries.length + 1,
-              itemBuilder: (ctx, i) {
-                if (i == _entries.length) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        _addEntry();
-                        Future.delayed(
-                          const Duration(milliseconds: 120),
-                          () {
-                            if (_scrollCtrl.hasClients) {
-                              _scrollCtrl.animateTo(
-                                _scrollCtrl.position.maxScrollExtent,
-                                duration: const Duration(milliseconds: 200),
-                                curve: Curves.easeOut,
-                              );
-                            }
-                          },
-                        );
-                      },
-                      icon: const Icon(Icons.add_location_alt_outlined,
-                          size: 15),
-                      label: const Text('Add Pin',
-                          style: TextStyle(fontSize: 13)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: widget.config.overlayColor,
-                        side: BorderSide(
-                            color:
-                                widget.config.overlayColor.withOpacity(0.4)),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        minimumSize: const Size.fromHeight(40),
-                      ),
-                    ),
-                  );
-                }
-                return _buildCoordRow(i);
-              },
-            ),
-          ),
-          _buildActions(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCoordRow(int index) {
-    final entry = _entries[index];
-    final pin = entry.latLng;
-    final canDelete = _entries.length > widget.config.minPins;
-
-    // Distance to next row's pin
-    String? distLabel;
-    if (pin != null && index < _entries.length - 1) {
-      final next = _entries[index + 1].latLng;
-      if (next != null) {
-        final d = _haversineM(pin, next);
-        distLabel = d >= 1000
-            ? '${(d / 1000).toStringAsFixed(2)} km'
-            : '${d.toStringAsFixed(0)} m';
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          margin: const EdgeInsets.symmetric(vertical: 3),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: pin != null
-                ? widget.config.overlayColor.withOpacity(0.05)
-                : Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: pin != null
-                  ? widget.config.overlayColor.withOpacity(0.25)
-                  : Colors.grey.shade200,
-              width: 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              // Pin number badge
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: pin != null
-                      ? widget.config.overlayColor
-                      : Colors.grey.shade300,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  '${index + 1}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color:
-                        pin != null ? Colors.white : Colors.grey.shade600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Latitude
-              Expanded(
-                child: _CoordField(
-                  controller: entry.latCtrl,
-                  label: 'Lat',
-                  hint: '-1.3133',
-                  color: widget.config.overlayColor,
-                ),
-              ),
-              const SizedBox(width: 6),
-              // Longitude
-              Expanded(
-                child: _CoordField(
-                  controller: entry.lngCtrl,
-                  label: 'Lng',
-                  hint: '36.7862',
-                  color: widget.config.overlayColor,
-                ),
-              ),
-              const SizedBox(width: 4),
-              // Delete
-              GestureDetector(
-                onTap: canDelete ? () => _removeEntry(index) : null,
-                child: Padding(
-                  padding: const EdgeInsets.all(4),
-                  child: Icon(
-                    Icons.remove_circle_outline,
-                    size: 17,
-                    color: canDelete
-                        ? Colors.red.shade300
-                        : Colors.grey.shade200,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Distance indicator between consecutive pins
-        if (distLabel != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 46, bottom: 2),
-            child: Row(
-              children: [
-                Icon(Icons.arrow_downward_rounded,
-                    size: 10,
-                    color: AppTheme.darkGreen.withOpacity(0.35)),
-                const SizedBox(width: 3),
-                Text(
-                  distLabel,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.darkGreen.withOpacity(0.45),
-                  ),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildActions() {
-    final canClose = _canClose;
-    final isClosed = _drawState == ZoneDrawingState.closed;
-    final remaining = math.max(0, widget.config.minPins - _validCount);
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          16, 10, 16, MediaQuery.of(context).padding.bottom + 10),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey.shade100)),
-        color: Colors.white,
-      ),
-      child: Row(
-        children: [
-          // Cancel
-          Expanded(
-            child: OutlinedButton(
-              onPressed: widget.onCancel,
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.grey.shade300),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                padding: const EdgeInsets.symmetric(vertical: 13),
-              ),
-              child: const Text('Cancel',
-                  style: TextStyle(
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13)),
-            ),
-          ),
-          const SizedBox(width: 10),
-          // Close Zone / Save Zone
-          Expanded(
-            flex: 2,
-            child: isClosed
-                ? ElevatedButton.icon(
-                    onPressed: _confirmZone,
-                    icon: const Icon(Icons.save_outlined,
-                        size: 15, color: Colors.white),
-                    label: const Text('Save Zone',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: widget.config.overlayColor,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                    ),
-                  )
-                : ElevatedButton(
-                    onPressed: canClose ? _closeZone : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: canClose
-                          ? widget.config.overlayColor
-                          : Colors.grey.shade100,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                    ),
-                    child: Text(
-                      canClose
-                          ? 'Close Zone'
-                          : '$remaining more needed',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: canClose
-                            ? Colors.white
-                            : Colors.grey.shade400,
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-// ─── Map badge ────────────────────────────────────────────────────────────────
-class _MapBadge extends StatelessWidget {
+// ─── Float button ─────────────────────────────────────────────────────────────
+class _FloatButton extends StatelessWidget {
+  final IconData icon;
   final Color color;
-  final int validCount;
-  final ZoneDrawingState drawState;
+  final Color bg;
+  final VoidCallback onTap;
+  final String? label;
 
-  const _MapBadge(
-      {required this.color,
-      required this.validCount,
-      required this.drawState});
-
-  @override
-  Widget build(BuildContext context) {
-    final label = drawState == ZoneDrawingState.closed
-        ? 'Zone closed · $validCount pins'
-        : '$validCount pin${validCount == 1 ? '' : 's'} placed';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.08), blurRadius: 8),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            drawState == ZoneDrawingState.closed
-                ? Icons.check_circle_outline
-                : Icons.map_outlined,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: color),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Pin count badge ──────────────────────────────────────────────────────────
-class _PinCountBadge extends StatelessWidget {
-  final int count;
-  final int min;
-  final Color color;
-
-  const _PinCountBadge(
-      {required this.count, required this.min, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    final met = count >= min;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: met ? color.withOpacity(0.12) : AppTheme.tertiary.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        '$count / $min pins',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: met ? color : AppTheme.darkGreen.withOpacity(0.55),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Coordinate text field ────────────────────────────────────────────────────
-class _CoordField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final Color color;
-
-  const _CoordField({
-    required this.controller,
-    required this.label,
-    required this.hint,
+  const _FloatButton({
+    required this.icon,
     required this.color,
+    required this.bg,
+    required this.onTap,
+    this.label,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType:
-          const TextInputType.numberWithOptions(signed: true, decimal: true),
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'[-0-9.]')),
-      ],
-      style: const TextStyle(
-          fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.darkGreen),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        labelStyle:
-            TextStyle(fontSize: 11, color: color.withOpacity(0.7)),
-        hintStyle:
-            TextStyle(fontSize: 11, color: Colors.grey.shade400),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.shade300),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(11),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.12), blurRadius: 10)
+          ],
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey.shade200),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: color, width: 1.5),
-        ),
-        isDense: true,
-        filled: true,
-        fillColor: Colors.white,
+        child: label != null
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 17, color: color),
+                  const SizedBox(width: 5),
+                  Text(label!,
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: color)),
+                ],
+              )
+            : Icon(icon, size: 19, color: color),
       ),
     );
   }

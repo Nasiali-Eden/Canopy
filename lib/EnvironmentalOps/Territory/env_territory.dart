@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -75,11 +76,12 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   bool _isDrawingMode = false;
   CollectionZone? _selectedZone;
   List<CollectionZone> _zones = [];
+  GoogleMapController? _staticMapController;
 
-  static const LatLng _kiberaCenter = LatLng(-1.3133, 36.7862);
+  static const LatLng _fallbackCenter = LatLng(-1.2921, 36.8219);
 
-  static const CameraPosition _initialCamera = CameraPosition(
-    target: _kiberaCenter,
+  CameraPosition _initialCamera = const CameraPosition(
+    target: _fallbackCenter,
     zoom: 14,
   );
 
@@ -97,6 +99,35 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   void initState() {
     super.initState();
     _loadZones();
+    _initLocation();
+  }
+
+  Future<void> _initLocation() async {
+    try {
+      bool enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) return;
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied ||
+          perm == LocationPermission.deniedForever) return;
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 8),
+      );
+      final latLng = LatLng(pos.latitude, pos.longitude);
+      if (!mounted) return;
+      setState(() {
+        _initialCamera = CameraPosition(target: latLng, zoom: 15);
+      });
+      _staticMapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(latLng, 15),
+      );
+    } catch (_) {
+      // Keep fallback Nairobi centre
+    }
   }
 
   Future<void> _loadZones() async {
@@ -291,7 +322,11 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   Widget _buildStaticMap() {
     return GoogleMap(
       initialCameraPosition: _initialCamera,
-      onMapCreated: (c) => c.setMapStyle(_mapStyle),
+      onMapCreated: (c) {
+        _staticMapController = c;
+        c.setMapStyle(_mapStyle);
+      },
+      myLocationEnabled: true,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
       mapToolbarEnabled: false,

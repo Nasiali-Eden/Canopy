@@ -112,6 +112,7 @@ flutter:
     - pngs/
     # Explicit asset files and nested paths
     - assets/organization_taxonomy.json
+    - assets/environmental/material_types.json
     - assets/WorldCountries.json
     - assets/Cities/African/KenyaCities.json
 

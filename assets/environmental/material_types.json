@@ -1,0 +1,471 @@
+{
+  "version": "1.2",
+  "note": "Material taxonomy for the Canopy Environmental Market. price_hint is KSh/kg unless noted. recurring=true means orgs typically post standing buy listings for this material.",
+  "categories": [
+    {
+      "id": "plastics",
+      "label": "Plastics",
+      "emoji": "♻️",
+      "color": "#1565C0",
+      "description": "All plastic resin types",
+      "sub_types": [
+        {
+          "id": "pet",
+          "label": "PET / PETE (Plastic #1)",
+          "short": "PET Clean",
+          "description": "Water bottles, soda bottles, juice bottles",
+          "common_items": ["Water bottles", "Soda bottles", "Juice bottles", "Food containers"],
+          "grades": ["Grade A — clean, sorted, clear", "Grade B — sorted, coloured", "Mixed / unsorted", "Crushed", "Baled"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 20, "max": 38 },
+          "recurring": true,
+          "notes": "Most in-demand plastic. Buyers often post standing orders.",
+          "sample_image_url": "https://picsum.photos/seed/pet_bottles/400/250"
+        },
+        {
+          "id": "hdpe",
+          "label": "HDPE (Plastic #2)",
+          "short": "HDPE",
+          "description": "Milk jugs, shampoo bottles, detergent containers, jerry cans",
+          "common_items": ["Milk jugs", "Shampoo bottles", "Detergent containers", "Jerry cans", "Piping"],
+          "grades": ["Clean white", "Coloured", "Mixed", "Pellets"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 18, "max": 30 },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/hdpe_containers/400/250"
+        },
+        {
+          "id": "pvc",
+          "label": "PVC (Plastic #3)",
+          "short": "PVC",
+          "description": "Pipes, fittings, window frames, flooring",
+          "common_items": ["PVC pipes", "Window frames", "Flooring tiles", "Garden hoses"],
+          "grades": ["Clean rigid", "Mixed", "Flexible"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 8, "max": 16 },
+          "recurring": false,
+          "notes": "Specialist recyclers only — contains chlorine.",
+          "sample_image_url": "https://picsum.photos/seed/pvc_pipes/400/250"
+        },
+        {
+          "id": "ldpe",
+          "label": "LDPE (Plastic #4)",
+          "short": "Carrier Bags / Film",
+          "description": "Carrier bags, bread bags, cling film, agricultural film",
+          "common_items": ["Carrier bags", "Bread bags", "Cling film", "Stretch wrap", "Agricultural film"],
+          "grades": ["Clean black bags", "Coloured mixed", "Film mixed"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 6, "max": 14 },
+          "recurring": true,
+          "notes": "High volume in informal settlements; easy to collect in bulk.",
+          "sample_image_url": "https://picsum.photos/seed/plastic_bags/400/250"
+        },
+        {
+          "id": "pp",
+          "label": "Polypropylene (Plastic #5)",
+          "short": "PP",
+          "description": "Bottle caps, yoghurt tubs, straws, woven sacks",
+          "common_items": ["Bottle caps", "Yoghurt cups", "Straws", "Woven sacks", "Car bumpers"],
+          "grades": ["Clean sorted", "Mixed", "Ground / regrind"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 15, "max": 28 },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/pp_plastic/400/250"
+        },
+        {
+          "id": "ps",
+          "label": "Polystyrene / EPS (Plastic #6)",
+          "short": "Styrofoam / EPS",
+          "description": "Foam cups, food trays, packing material",
+          "common_items": ["Foam cups", "Food trays", "Packing blocks", "Insulation boards"],
+          "grades": ["Clean EPS blocks", "Mixed foam", "Densified"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 3, "max": 10 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/styrofoam_eps/400/250"
+        },
+        {
+          "id": "other_plastics",
+          "label": "Mixed / Other Plastics (#7)",
+          "short": "Mixed Plastics",
+          "description": "Multi-layer, bioplastics, unclassified resins",
+          "common_items": ["Multi-layer packaging", "Nylon", "Acrylic", "Polycarbonate"],
+          "grades": ["Mixed baled", "Sorted by type"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 4, "max": 12 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/mixed_plastics/400/250"
+        }
+      ]
+    },
+    {
+      "id": "metals",
+      "label": "Metals",
+      "emoji": "🔩",
+      "color": "#455A64",
+      "description": "Ferrous and non-ferrous scrap metals",
+      "sub_types": [
+        {
+          "id": "aluminium_cans",
+          "label": "Aluminium Cans",
+          "short": "Alu Cans",
+          "description": "Beverage cans, aerosol cans",
+          "common_items": ["Beer cans", "Soda cans", "Aerosol cans"],
+          "grades": ["Clean crushed", "Clean uncrushed", "Mixed aluminium"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 80, "max": 130 },
+          "recurring": true,
+          "notes": "High value — separate from other metals.",
+          "sample_image_url": "https://picsum.photos/seed/aluminium_cans/400/250"
+        },
+        {
+          "id": "aluminium_scrap",
+          "label": "Aluminium Scrap",
+          "short": "Alu Scrap",
+          "description": "Sheets, profiles, castings, cooking pots",
+          "common_items": ["Window frames", "Cooking pots", "Aluminium sheet", "Extrusions"],
+          "grades": ["Clean", "Mixed with other metals", "Foil"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 60, "max": 110 },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/aluminium_scrap/400/250"
+        },
+        {
+          "id": "copper",
+          "label": "Copper",
+          "short": "Copper Wire / Pipe",
+          "description": "Bare copper wire, pipe, tubing, fittings",
+          "common_items": ["Electrical wire", "Plumbing pipe", "Bus bars", "Copper fittings"],
+          "grades": ["Bare bright (bare wire)", "Copper #1 (clean pipe)", "Copper #2 (mixed)", "Insulated wire"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 350, "max": 700 },
+          "recurring": true,
+          "notes": "Highest value metal — verify before selling.",
+          "sample_image_url": "https://picsum.photos/seed/copper_wire/400/250"
+        },
+        {
+          "id": "brass",
+          "label": "Brass",
+          "short": "Brass",
+          "description": "Taps, valves, shell casings, keys",
+          "common_items": ["Water taps", "Valves", "Door handles", "Bearings"],
+          "grades": ["Clean yellow brass", "Mixed brass"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 250, "max": 500 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/brass_metal/400/250"
+        },
+        {
+          "id": "steel_iron",
+          "label": "Steel & Iron Scrap",
+          "short": "Steel / Iron",
+          "description": "Rebar, structural steel, cast iron, car parts",
+          "common_items": ["Rebar", "Steel beams", "Car body panels", "Cast iron", "Machinery parts"],
+          "grades": ["Heavy steel", "Light steel", "Cast iron", "Shredded"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 8, "max": 18 },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/steel_scrap/400/250"
+        },
+        {
+          "id": "stainless_steel",
+          "label": "Stainless Steel",
+          "short": "Stainless",
+          "description": "Cookware, appliances, industrial equipment",
+          "common_items": ["Pots and pans", "Sinks", "Industrial tanks", "Cutlery"],
+          "grades": ["304 grade", "316 grade", "Mixed"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 50, "max": 90 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/stainless_steel/400/250"
+        },
+        {
+          "id": "lead",
+          "label": "Lead / Lead Acid Batteries",
+          "short": "Lead / Batteries",
+          "description": "Car batteries, lead pipes, lead sheets",
+          "common_items": ["Car batteries", "Lead sheets", "Old UPS batteries"],
+          "grades": ["Whole batteries", "Lead (clean)", "Lead alloy"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 20, "max": 55 },
+          "recurring": true,
+          "notes": "Hazardous — requires proper handling.",
+          "sample_image_url": "https://picsum.photos/seed/lead_batteries/400/250"
+        }
+      ]
+    },
+    {
+      "id": "electronics",
+      "label": "Electronics / E-Waste",
+      "emoji": "📱",
+      "color": "#6A1B9A",
+      "description": "End-of-life electronic and electrical equipment",
+      "sub_types": [
+        {
+          "id": "mobile_phones",
+          "label": "Mobile Phones",
+          "short": "Old Phones",
+          "description": "Feature phones, smartphones — working or broken",
+          "common_items": ["Smartphones", "Feature phones", "Tablets", "Smartwatches"],
+          "grades": ["Working", "Broken screen", "Dead / parts only"],
+          "units": "piece",
+          "price_hint_ksh": { "min": 50, "max": 800, "note": "per piece — varies widely by model" },
+          "recurring": true,
+          "notes": "High demand from refurbishers. Recyclers post standing buy listings.",
+          "sample_image_url": "https://picsum.photos/seed/old_phones/400/250"
+        },
+        {
+          "id": "computers",
+          "label": "Computers & Laptops",
+          "short": "Computers",
+          "description": "Desktops, laptops, monitors, keyboards",
+          "common_items": ["Laptops", "Desktop PCs", "Monitors (LCD/CRT)", "Keyboards", "Mice"],
+          "grades": ["Working", "Faulty — repairable", "For parts", "CRT monitor (special handling)"],
+          "units": "piece",
+          "price_hint_ksh": { "min": 200, "max": 5000, "note": "per unit — varies by spec" },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/old_computers/400/250"
+        },
+        {
+          "id": "televisions",
+          "label": "Televisions",
+          "short": "Old TVs",
+          "description": "CRT, LCD, plasma, LED televisions",
+          "common_items": ["CRT TVs", "LCD TVs", "Plasma TVs", "LED screens"],
+          "grades": ["Working LCD/LED", "Broken screen", "CRT (hazardous — lead glass)"],
+          "units": "piece",
+          "price_hint_ksh": { "min": 100, "max": 3000, "note": "per unit" },
+          "recurring": true,
+          "notes": "CRT TVs contain hazardous lead — specialist handlers only.",
+          "sample_image_url": "https://picsum.photos/seed/old_televisions/400/250"
+        },
+        {
+          "id": "cables_wiring",
+          "label": "Cables & Wiring",
+          "short": "Cables / Wire",
+          "description": "Power cables, data cables, extension cords",
+          "common_items": ["Power cables", "USB cables", "Ethernet cables", "Extension cords", "Speaker wire"],
+          "grades": ["Insulated mixed", "Stripped (bare copper)", "Data cables"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 30, "max": 250 },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/cables_wiring/400/250"
+        },
+        {
+          "id": "household_appliances",
+          "label": "Household Appliances",
+          "short": "Appliances",
+          "description": "Fridges, washing machines, microwaves, kettles",
+          "common_items": ["Refrigerators", "Washing machines", "Microwaves", "Electric kettles", "Blenders", "Fans"],
+          "grades": ["Working", "Faulty", "For scrap"],
+          "units": "piece",
+          "price_hint_ksh": { "min": 200, "max": 8000, "note": "per unit" },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/household_appliances/400/250"
+        },
+        {
+          "id": "circuit_boards",
+          "label": "Circuit Boards / PCBs",
+          "short": "PCBs",
+          "description": "Motherboards, graphics cards, RAM, other PCBs",
+          "common_items": ["Motherboards", "Graphics cards", "RAM sticks", "Server boards"],
+          "grades": ["High grade (gold-bearing)", "Mixed PCBs", "Low grade"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 150, "max": 900 },
+          "recurring": true,
+          "notes": "Contains precious metals. High-grade boards fetch premium prices.",
+          "sample_image_url": "https://picsum.photos/seed/circuit_boards/400/250"
+        }
+      ]
+    },
+    {
+      "id": "paper_cardboard",
+      "label": "Paper & Cardboard",
+      "emoji": "📦",
+      "color": "#E65100",
+      "description": "All paper and cardboard grades",
+      "sub_types": [
+        {
+          "id": "corrugated_cardboard",
+          "label": "Corrugated Cardboard (OCC)",
+          "short": "Cardboard / OCC",
+          "description": "Brown boxes, shipping cartons",
+          "common_items": ["Shipping boxes", "Moving boxes", "Retail cartons"],
+          "grades": ["Dry clean", "Slightly soiled", "Wet / damaged (lower grade)"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 6, "max": 14 },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/cardboard_boxes/400/250"
+        },
+        {
+          "id": "newspapers",
+          "label": "Newspapers & Magazines",
+          "short": "Newsprint",
+          "description": "Newspapers, magazines, catalogues",
+          "common_items": ["Daily newspapers", "Magazines", "Catalogues", "Phone directories"],
+          "grades": ["Sorted newsprint", "Mixed print paper", "Magazines"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 4, "max": 10 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/old_newspapers/400/250"
+        },
+        {
+          "id": "office_paper",
+          "label": "Office Paper (ONP)",
+          "short": "White Paper",
+          "description": "White A4, printing paper, envelopes",
+          "common_items": ["A4 paper", "Printer paper", "Envelopes", "Notebooks"],
+          "grades": ["White sorted", "Mixed white", "Mixed office"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 8, "max": 16 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/office_paper/400/250"
+        },
+        {
+          "id": "tetra_pak",
+          "label": "Tetra Pak / Liquid Cartons",
+          "short": "Tetra Pak",
+          "description": "Juice cartons, milk cartons, UHT cartons",
+          "common_items": ["Juice cartons", "Milk cartons", "Soup cartons"],
+          "grades": ["Clean flattened", "Mixed"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 5, "max": 12 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/tetra_pak/400/250"
+        }
+      ]
+    },
+    {
+      "id": "glass",
+      "label": "Glass",
+      "emoji": "🍾",
+      "color": "#00695C",
+      "description": "All glass types — bottles, jars, flat glass",
+      "sub_types": [
+        {
+          "id": "glass_bottles",
+          "label": "Glass Bottles & Jars",
+          "short": "Glass Bottles",
+          "description": "Beer, wine, spirit, condiment, medicine bottles",
+          "common_items": ["Beer bottles", "Wine bottles", "Condiment jars", "Medicine bottles", "Sauce bottles"],
+          "grades": ["Clear sorted", "Brown sorted", "Green sorted", "Mixed colour"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 3, "max": 10 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/glass_bottles/400/250"
+        },
+        {
+          "id": "flat_glass",
+          "label": "Flat Glass (Window / Mirror)",
+          "short": "Flat Glass",
+          "description": "Window glass, mirror glass, glass panels",
+          "common_items": ["Window panes", "Mirror glass", "Shower glass"],
+          "grades": ["Clear flat", "Tinted", "Tempered"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 4, "max": 8 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/flat_glass/400/250"
+        }
+      ]
+    },
+    {
+      "id": "rubber_composites",
+      "label": "Rubber & Composites",
+      "emoji": "⚙️",
+      "color": "#37474F",
+      "description": "Tyres, conveyor belts, rubber goods",
+      "sub_types": [
+        {
+          "id": "tyres",
+          "label": "Tyres / Tires",
+          "short": "Tyres",
+          "description": "Used car, truck, motorcycle tyres",
+          "common_items": ["Car tyres", "Truck tyres", "Motorcycle tyres", "Bicycle tyres"],
+          "grades": ["Whole (for retreading)", "Shredded rubber", "Wire-free crumb"],
+          "units": "piece",
+          "price_hint_ksh": { "min": 20, "max": 150, "note": "per tyre" },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/used_tyres/400/250"
+        },
+        {
+          "id": "conveyor_belts",
+          "label": "Conveyor Belts & Industrial Rubber",
+          "short": "Industrial Rubber",
+          "description": "Conveyor belts, gaskets, hoses, mats",
+          "common_items": ["Conveyor belts", "Rubber hoses", "Gaskets", "Floor mats"],
+          "grades": ["Clean", "Mixed"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 5, "max": 15 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/industrial_rubber/400/250"
+        }
+      ]
+    },
+    {
+      "id": "reclaimed_wood",
+      "label": "Reclaimed Wood & Biomass",
+      "emoji": "🪵",
+      "color": "#5D4037",
+      "description": "Salvaged timber, pallets, sawdust, biomass",
+      "sub_types": [
+        {
+          "id": "pallets",
+          "label": "Wooden Pallets",
+          "short": "Pallets",
+          "description": "Standard and non-standard wooden pallets",
+          "common_items": ["Euro pallets", "Industrial pallets", "Broken pallets"],
+          "grades": ["Grade A (reusable)", "Grade B (minor damage)", "Scrap / firewood"],
+          "units": "piece",
+          "price_hint_ksh": { "min": 100, "max": 600, "note": "per pallet" },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/wooden_pallets/400/250"
+        },
+        {
+          "id": "timber_offcuts",
+          "label": "Timber Offcuts & Sawdust",
+          "short": "Wood Offcuts",
+          "description": "Construction timber offcuts, sawmill waste, sawdust",
+          "common_items": ["Timber offcuts", "Sawdust", "Wood shavings", "Bark chips"],
+          "grades": ["Dry clean offcuts", "Mixed offcuts", "Sawdust / shavings"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 2, "max": 8 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/timber_offcuts/400/250"
+        }
+      ]
+    },
+    {
+      "id": "textiles",
+      "label": "Textiles & Clothing",
+      "emoji": "👕",
+      "color": "#AD1457",
+      "description": "Second-hand clothing, fabric offcuts, industrial rags",
+      "sub_types": [
+        {
+          "id": "secondhand_clothing",
+          "label": "Second-Hand Clothing (Mitumba)",
+          "short": "Mitumba / Used Clothing",
+          "description": "Wearable used clothing and footwear",
+          "common_items": ["Shirts", "Trousers", "Dresses", "Shoes", "Jackets"],
+          "grades": ["Grade A (cream — excellent condition)", "Grade B (good)", "Grade C (fair)", "Rags / wipers"],
+          "units": "bale",
+          "price_hint_ksh": { "min": 500, "max": 8000, "note": "per bale (~50 kg)" },
+          "recurring": true,
+          "sample_image_url": "https://picsum.photos/seed/mitumba_clothing/400/250"
+        },
+        {
+          "id": "fabric_offcuts",
+          "label": "Fabric Offcuts & Industrial Rags",
+          "short": "Fabric / Rags",
+          "description": "Tailoring offcuts, industrial cleaning rags, linen",
+          "common_items": ["Tailoring offcuts", "Cleaning rags", "Linen", "Denim"],
+          "grades": ["Cotton sorted", "Synthetic sorted", "Mixed"],
+          "units": "kg",
+          "price_hint_ksh": { "min": 10, "max": 30 },
+          "recurring": false,
+          "sample_image_url": "https://picsum.photos/seed/fabric_offcuts/400/250"
+        }
+      ]
+    }
+  ]
+}
