@@ -4,9 +4,13 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../Shared/theme/app_theme.dart';
+import '../../Organization/Explorer/org_explorer_screen.dart';
+import '../../Organization/Map/org_map_ops.dart';
 import 'map_style.dart' as map_style
     hide kPlaceholderOrgs, kPlaceholderAmenities;
 import 'map_placeholders.dart';
@@ -237,9 +241,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   final Map<String, BitmapDescriptor> _orgIconsHero = {};
   final Map<AmenityType, BitmapDescriptor> _amenityIcons = {};
 
-  // Merged org list: Firestore (production) + placeholders
-  List<MapOrganization> get _allOrgs => kPlaceholderOrgs;
-  List<MapAmenity> get _allAmenities => kPlaceholderAmenities;
+  // Firestore live data
+  List<MapOrganization> _firestoreOrgs = [];
+  List<MapAmenity> _firestorePins = [];
+  StreamSubscription<QuerySnapshot>? _orgSub;
+  StreamSubscription<QuerySnapshot>? _pinSub;
+
+  // Org data for current user (for Add Pin button)
+  Map<String, dynamic>? _currentOrgData;
+
+  List<MapOrganization> get _allOrgs =>
+      _firestoreOrgs.isNotEmpty ? _firestoreOrgs : kPlaceholderOrgs;
+  List<MapAmenity> get _allAmenities =>
+      _firestorePins.isNotEmpty ? _firestorePins : kPlaceholderAmenities;
 
   final CameraPosition _initialPosition = const CameraPosition(
     target: LatLng(-1.2921, 36.8219),
@@ -415,14 +429,144 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       vsync: this,
     );
     _loadIconsAndBuildMarkers();
+    _startFirestoreStreams();
+    _loadCurrentOrgData();
   }
 
   @override
   void dispose() {
+    _orgSub?.cancel();
+    _pinSub?.cancel();
     _sheetController.dispose();
     _subSheetController.dispose();
     _mapController?.dispose();
     super.dispose();
+  }
+
+  // ── Firestore ────────────────────────────────────────────────────────────
+
+  void _startFirestoreStreams() {
+    _orgSub = FirebaseFirestore.instance
+        .collection('organizations')
+        .snapshots()
+        .listen((snap) {
+      final orgs = snap.docs
+          .map((d) => _orgFromFirestore(d.id, d.data()))
+          .where((o) => o != null)
+          .cast<MapOrganization>()
+          .toList();
+      if (mounted) {
+        setState(() => _firestoreOrgs = orgs);
+        _loadIconsAndBuildMarkers();
+      }
+    });
+
+    _pinSub = FirebaseFirestore.instance
+        .collection('map_pins')
+        .where('is_active', isEqualTo: true)
+        .snapshots()
+        .listen((snap) {
+      final pins = snap.docs
+          .map((d) => _pinFromFirestore(d.id, d.data()))
+          .where((p) => p != null)
+          .cast<MapAmenity>()
+          .toList();
+      if (mounted) {
+        setState(() => _firestorePins = pins);
+        _rebuildMarkers();
+      }
+    });
+  }
+
+  MapOrganization? _orgFromFirestore(String id, Map<String, dynamic> data) {
+    try {
+      final gp = data['location'] as GeoPoint?;
+      final lat = gp?.latitude ??
+          (data['lat'] as num?)?.toDouble() ??
+          -1.2921;
+      final lng = gp?.longitude ??
+          (data['lng'] as num?)?.toDouble() ??
+          36.8219;
+      return MapOrganization(
+        id: id,
+        name: (data['org_name'] ?? data['name'] ?? 'Unknown Org') as String,
+        description:
+            (data['description'] ?? data['bio'] ?? '') as String,
+        location: LatLng(lat, lng),
+        sectorId: data['sectorId'] as String? ?? 'sector_community',
+        orgTypeId: data['orgTypeId'] as String? ?? 'ot_neighbourhood_assoc',
+        subTypeIds: List<String>.from(data['subTypeIds'] ?? []),
+        beneficiaryGroupIds:
+            List<String>.from(data['beneficiaryGroupIds'] ?? []),
+        facilityTypeIds: List<String>.from(data['facilityTypeIds'] ?? []),
+        subFacilityIds: List<String>.from(data['subFacilityIds'] ?? []),
+        logoUrl: data['logoUrl'] as String?,
+        legalDesignation: data['designation'] as String? ?? '',
+        country: data['country'] as String? ?? 'Kenya',
+        city: data['city'] as String? ?? '',
+        area: data['area'] as String? ?? '',
+        verified: data['verified'] as bool? ?? false,
+        phone: data['phone'] as String?,
+        website: data['website'] as String?,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  MapAmenity? _pinFromFirestore(String id, Map<String, dynamic> data) {
+    try {
+      final gp = data['location'] as GeoPoint?;
+      if (gp == null) return null;
+      const typeMap = {
+        'water_point': AmenityType.waterPoint,
+        'waterPoint': AmenityType.waterPoint,
+        'recycling_dropoff': AmenityType.recyclingDropOff,
+        'recyclingDropOff': AmenityType.recyclingDropOff,
+        'dumpsite': AmenityType.dumpsite,
+        'canopy_hub': AmenityType.canopyHub,
+        'canopyHub': AmenityType.canopyHub,
+        'cleanup_event': AmenityType.cleanupEvent,
+        'cleanupEvent': AmenityType.cleanupEvent,
+        'tree_site': AmenityType.treeSite,
+        'treeSite': AmenityType.treeSite,
+      };
+      final typeStr = data['pin_type'] as String? ?? 'water_point';
+      final amenityType = typeMap[typeStr] ?? AmenityType.waterPoint;
+      return MapAmenity(
+        id: id,
+        name: data['name'] as String? ?? 'Community Pin',
+        amenityType: amenityType,
+        location: LatLng(gp.latitude, gp.longitude),
+        description: data['description'] as String? ?? '',
+        operatingHours: data['operating_hours'] as String?,
+        isActive: data['is_active'] as bool? ?? true,
+        reportedBy: data['added_by_org_name'] as String?,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _loadCurrentOrgData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final orgId = userDoc.data()?['orgId'] as String?;
+      if (orgId == null) return;
+      final orgDoc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      if (!orgDoc.exists) return;
+      final data = Map<String, dynamic>.from(orgDoc.data()!);
+      data['orgId'] = orgId;
+      if (mounted) setState(() => _currentOrgData = data);
+    } catch (_) {}
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -894,6 +1038,37 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+
+          // ── Org Explorer button ────────────────────────────────────────
+          Positioned(
+            bottom: bottomPad + navBarH + 70,
+            right: 16,
+            child: _MapIconButton(
+              icon: Icons.grid_view_rounded,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const OrgExplorerScreen()),
+              ),
+            ),
+          ),
+
+          // ── Add Pin button (org reps only) ─────────────────────────────
+          if (_currentOrgData != null)
+            Positioned(
+              bottom: bottomPad + navBarH + 124,
+              right: 16,
+              child: _MapIconButton(
+                icon: Icons.add_location_alt_outlined,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        OrgMapOpsScreen(orgData: _currentOrgData!),
+                  ),
+                ),
+              ),
+            ),
 
           // ── Sub-filter sheet ───────────────────────────────────────────
           if (_subSheetOpen)

@@ -242,8 +242,8 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
         ),
       ),
       ActivityHomeLogic.buildActivityTab(filter: _activityFilter),
-      const CommunityHeritageTab(),
       const MapScreen(),
+      const CommunityHeritageTab(),
       const ProfileScreen(),
     ];
 
@@ -327,16 +327,6 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
                     label: 'Activities',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.auto_stories_outlined,
-                        color: _isDarkTab
-                            ? Colors.white.withOpacity(0.70)
-                            : AppTheme.darkGreen.withOpacity(0.50)),
-                    selectedIcon: Icon(Icons.auto_stories,
-                        color:
-                            _isDarkTab ? Colors.white : AppTheme.primary),
-                    label: 'Heritage',
-                  ),
-                  NavigationDestination(
                     icon: Icon(Icons.map_outlined,
                         color: _isDarkTab
                             ? Colors.white.withOpacity(0.70)
@@ -345,6 +335,16 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
                         color:
                             _isDarkTab ? Colors.white : AppTheme.primary),
                     label: 'Map',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.auto_stories_outlined,
+                        color: _isDarkTab
+                            ? Colors.white.withOpacity(0.70)
+                            : AppTheme.darkGreen.withOpacity(0.50)),
+                    selectedIcon: Icon(Icons.auto_stories,
+                        color:
+                            _isDarkTab ? Colors.white : AppTheme.primary),
+                    label: 'Heritage',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.person_outline,
