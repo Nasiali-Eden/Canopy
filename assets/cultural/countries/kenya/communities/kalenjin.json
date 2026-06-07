@@ -1,0 +1,52 @@
+{
+  "id": "community_kalenjin",
+  "node_type": "community",
+  "country_id": "country_kenya",
+  "region_id": "region_rift_valley",
+  "name": "Kalenjin",
+  "name_in_own_language": "Kalenjin",
+  "name_variants": ["Kalenjiin", "Nandi-Kipsigis group"],
+  "flag_emoji": "🇰🇪",
+  "language_primary": "Kalenjin",
+  "language_iso": "kln",
+  "language_family": "Nilotic",
+  "population_approx": "6.4 million (Kenya, 2019 census)",
+  "description": "Kalenjin is an umbrella term coined in the 1940s for a group of related Nilotic-speaking communities of the Rift Valley. The name comes from the phrase 'I say to you' (Kale a enjin), used in radio broadcasts to unite these communities politically. Sub-groups include the Nandi, Kipsigis, Tugen, Elgeyo, Marakwet, Pokot, Sabaot, and Terik. They are highland pastoralists and farmers known for their age-grade system, their role in Kenya's running dominance, and elaborate circumcision ceremonies.",
+  "sub_groups": [
+    {"name": "Nandi", "region": "Nandi County"},
+    {"name": "Kipsigis", "region": "Kericho County"},
+    {"name": "Tugen", "region": "Baringo County"},
+    {"name": "Elgeyo-Marakwet", "region": "Elgeyo-Marakwet County"},
+    {"name": "Pokot", "region": "West Pokot County"},
+    {"name": "Sabaot", "region": "Trans-Nzoia County / Mt Elgon"},
+    {"name": "Terik", "region": "Nandi County"}
+  ],
+  "cultural_highlights": [
+    "Circumcision age-grade system — the central rite of passage that defines cohort identity and social obligation across all Kalenjin sub-groups",
+    "Tum — a traditional communication system using distinct horn calls to convey messages across long distances",
+    "Sigirion — ceremonial songs and poetry composed for specific age-grades, recited as civic duty",
+    "Koito — a traditional court dance performed at weddings, harvest festivals, and after successful cattle raids"
+  ],
+  "food_traditions": [
+    {"name": "Mursik", "description": "Fermented milk stored in a smoked gourd (sotet) — the defining Kalenjin beverage, a probiotic staple and gift of honour"},
+    {"name": "Ugali with vegetables", "description": "Maize ugali with indigenous vegetables (rotich, saget) and fermented milk"},
+    {"name": "Kimiet", "description": "Roasted or dried maize ground into a travel food — light, portable sustenance for warriors and herders"}
+  ],
+  "music_traditions": [
+    "Sinendet — a thumb piano played during quiet evenings and storytelling",
+    "Leldet — competitive group singing with rhythmic stamping, performed at night dances",
+    "Arap — praise poetry performed solo by a man recounting his clan's history and achievements"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A2A0A",
+    "gradient_end": "#3A5A1A"
+  },
+  "firestore_id": "community_kalenjin",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

@@ -1,0 +1,22 @@
+{
+  "_file": "communities/_index.json",
+  "_note": "Major community list for Tanzania. Communities with full_data:true have a matching detail JSON in this folder.",
+  "country_id": "country_tanzania",
+  "communities": [
+    {"id":"community_sukuma",       "name":"Sukuma",             "region_id":"region_lake_zone_tz",       "language":"Sukuma",    "full_data":true},
+    {"id":"community_chagga",       "name":"Chagga",             "region_id":"region_northern_tz",        "language":"Chaga",     "full_data":true},
+    {"id":"community_makonde",      "name":"Makonde",            "region_id":"region_coastal_tz",         "language":"Makonde",   "full_data":true},
+    {"id":"community_haya",         "name":"Haya",               "region_id":"region_lake_zone_tz",       "language":"Haya",      "full_data":true},
+    {"id":"community_nyamwezi",     "name":"Nyamwezi",           "region_id":"region_central_tz",         "language":"Nyamwezi",  "full_data":true},
+    {"id":"community_maasai_tz",    "name":"Maasai (Tanzania)",  "region_id":"region_northern_tz",        "language":"Maa",       "full_data":false},
+    {"id":"community_gogo",         "name":"Gogo",               "region_id":"region_central_tz",         "language":"Gogo",      "full_data":false},
+    {"id":"community_hehe",         "name":"Hehe",               "region_id":"region_southern_highlands", "language":"Hehe",      "full_data":false},
+    {"id":"community_zaramo",       "name":"Zaramo",             "region_id":"region_coastal_tz",         "language":"Zaramo",    "full_data":false},
+    {"id":"community_swahili_tz",   "name":"Swahili Coast",      "region_id":"region_coastal_tz",         "language":"Swahili",   "full_data":false},
+    {"id":"community_sandawe",      "name":"Sandawe",            "region_id":"region_central_tz",         "language":"Sandawe",   "full_data":false},
+    {"id":"community_meru_tz",      "name":"Meru (Tanzania)",    "region_id":"region_northern_tz",        "language":"Meru (TZ)", "full_data":false},
+    {"id":"community_bena",         "name":"Bena",               "region_id":"region_southern_highlands", "language":"Bena",      "full_data":false},
+    {"id":"community_kerewe",       "name":"Kerewe",             "region_id":"region_lake_zone_tz",       "language":"Kerewe",    "full_data":false},
+    {"id":"community_rangi",        "name":"Rangi",              "region_id":"region_central_tz",         "language":"Rangi",     "full_data":false}
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "id": "community_kikuyu",
+  "node_type": "community",
+  "country_id": "country_kenya",
+  "region_id": "region_central_kenya",
+  "name": "Kikuyu",
+  "name_in_own_language": "Agikuyu",
+  "name_variants": ["Gikuyu", "Akikuyu"],
+  "flag_emoji": "🇰🇪",
+  "language_primary": "Kikuyu",
+  "language_iso": "kik",
+  "language_family": "Bantu",
+  "population_approx": "8.1 million (Kenya, 2019 census)",
+  "description": "The Agikuyu are the largest ethnic group in Kenya, inhabiting the fertile highlands of Central Kenya around Mount Kenya — which they call Kiriinyaga. Their cosmology centres on Ngai, the Supreme God who dwells on the mountain's peak. Their society is organised into age-sets (mariika) and councils of elders (kiama). The fig tree (mugumo) is sacred, serving as a site of prayer and sacrifice. Traditionally farmers and traders, the Kikuyu played a central role in Kenya's independence movement.",
+  "sub_groups": [
+    {"name": "Kiambu", "region": "Kiambu County"},
+    {"name": "Murang'a", "region": "Murang'a County"},
+    {"name": "Nyeri", "region": "Nyeri County"},
+    {"name": "Kirinyaga", "region": "Kirinyaga County"},
+    {"name": "Nyandarua", "region": "Nyandarua County"}
+  ],
+  "cultural_highlights": [
+    "Age-set (mariika) system organises civic duties, rites of passage, and governance from circumcision to elderhood",
+    "Thigi tree council — elders hold court under the mugumo fig tree for dispute resolution",
+    "Gichandi — a traditional rattle instrument played alongside oral poetry competitions",
+    "Mũthirigu — a banned colonial-era protest dance that embedded coded political messages",
+    "Gũtũra ceremony — nine-bead beadwork symbolising life stages from birth to death"
+  ],
+  "food_traditions": [
+    {"name": "Mũrũo (Githeri)", "description": "Slow-cooked maize and beans, the foundational everyday meal"},
+    {"name": "Mũtũra", "description": "Stuffed intestine — a delicacy at celebrations and harvest festivals"},
+    {"name": "Irio", "description": "Mashed green peas, potato and maize — a comfort staple associated with Central Kenya highlands"},
+    {"name": "Njohi ya mũgũnde", "description": "Fermented sugarcane beer used in ritual and social gatherings"}
+  ],
+  "music_traditions": [
+    "Gichandi rattle-poetry — competitive performance art combining percussion and oral literature",
+    "Mwomboko — a communal circle dance with call-and-response singing at harvest",
+    "Kamba-influence benga — fusion guitar popular in Kikuyu urban settings"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0D2A1A",
+    "gradient_end": "#2D5A2A"
+  },
+  "firestore_id": "community_kikuyu",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

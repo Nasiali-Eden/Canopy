@@ -1,0 +1,11 @@
+{
+  "_file": "regions/_index.json",
+  "_note": "Uganda's four administrative regions used to group communities.",
+  "country_id": "country_uganda",
+  "regions": [
+    {"id": "region_central_uganda",  "name": "Central Region",     "communities": ["community_baganda","community_banyarwanda","community_basamia","community_basoga"]},
+    {"id": "region_eastern_uganda",  "name": "Eastern Region",     "communities": ["community_iteso","community_basoga","community_bagwere","community_bagisu","community_jopadhola"]},
+    {"id": "region_northern_uganda", "name": "Northern Region",    "communities": ["community_acholi","community_langi","community_alur","community_lugbara","community_madi"]},
+    {"id": "region_western_uganda",  "name": "Western Region",     "communities": ["community_banyankole","community_bakiga","community_banyoro","community_batooro","community_bafumbira"]}
+  ]
+}

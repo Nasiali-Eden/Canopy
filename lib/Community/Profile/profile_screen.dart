@@ -201,7 +201,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onCulturalTap: () {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => CultureHomeScreen(orgId: orgId)),
+            MaterialPageRoute(
+              builder: (_) => CultureHomeScreen(
+                orgId: orgId,
+                memberContextBuilder: (_) => const ProfileScreen(),
+              ),
+            ),
             (route) => false,
           );
         },

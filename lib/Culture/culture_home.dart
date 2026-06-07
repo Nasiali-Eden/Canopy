@@ -4,19 +4,25 @@ import '../Shared/theme/app_theme.dart';
 import 'Heritage/Archive/heritage_archive_screen.dart';
 import 'Heritage/Create/create_entry_screen.dart';
 import 'Heritage/Feedback/heritage_feedback_screen.dart';
-import 'Heritage/Disputes/heritage_disputes_screen.dart';
-import 'Heritage/Connections/heritage_connections_screen.dart';
-import 'Heritage/Media/heritage_media_screen.dart';
+import 'Heritage/Profile/cultural_org_profile_page.dart';
 import 'Heritage/heritage_theme.dart';
 import 'Heritage/Services/heritage_providers.dart';
 
-/// CultureHomeScreen — Main entry point for Cultural Archive (Layer 4)
-/// Contains the five Heritage screens accessed via bottom navigation bar
+/// CultureHomeScreen — Layer 4 Cultural Archive
+/// 4-tab layout: Archive | Add Entry | Feedback | Profile
 class CultureHomeScreen extends StatefulWidget {
   final String orgId;
+  final WidgetBuilder? orgContextBuilder;
+  final WidgetBuilder? memberContextBuilder;
+  final WidgetBuilder? envOpsContextBuilder;
+  final bool hasEnvOps;
 
   const CultureHomeScreen({
     required this.orgId,
+    this.orgContextBuilder,
+    this.memberContextBuilder,
+    this.envOpsContextBuilder,
+    this.hasEnvOps = false,
     Key? key,
   }) : super(key: key);
 
@@ -25,18 +31,41 @@ class CultureHomeScreen extends StatefulWidget {
 }
 
 class _CultureHomeScreenState extends State<CultureHomeScreen> {
-  int _currentIndex = 0;
+  // 0=Archive  2=Feedback  3=Profile  (index 1 = Add → pushes CreateEntryScreen)
+  int _selectedNavIndex = 0;
+
+  void _handleNavTap(int navIndex) {
+    if (navIndex == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateEntryScreen(orgId: widget.orgId),
+        ),
+      );
+      return;
+    }
+    setState(() => _selectedNavIndex = navIndex);
+  }
+
+  Widget _buildCurrentPage() {
+    switch (_selectedNavIndex) {
+      case 2:
+        return HeritageFeedbackScreen(orgId: widget.orgId);
+      case 3:
+        return CulturalOrgProfilePage(
+          orgId: widget.orgId,
+          orgContextBuilder: widget.orgContextBuilder,
+          memberContextBuilder: widget.memberContextBuilder,
+          envOpsContextBuilder: widget.envOpsContextBuilder,
+          hasEnvOps: widget.hasEnvOps,
+        );
+      default:
+        return HeritageArchiveScreen(orgId: widget.orgId);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      HeritageArchiveScreen(orgId: widget.orgId),
-      HeritageFeedbackScreen(orgId: widget.orgId),
-      HeritageDisputesScreen(orgId: widget.orgId),
-      HeritageConnectionsScreen(orgId: widget.orgId),
-      HeritageMediaScreen(orgId: widget.orgId),
-    ];
-
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => HeritageEntriesProvider()),
@@ -49,6 +78,11 @@ class _CultureHomeScreenState extends State<CultureHomeScreen> {
       child: Scaffold(
         backgroundColor: HeritageTheme.heritageBackground,
         appBar: AppBar(
+          backgroundColor: HeritageTheme.heritageBackground,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          foregroundColor: AppTheme.darkGreen,
+          centerTitle: true,
           title: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -73,29 +107,8 @@ class _CultureHomeScreenState extends State<CultureHomeScreen> {
               ),
             ],
           ),
-          backgroundColor: HeritageTheme.heritageBackground,
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          foregroundColor: AppTheme.darkGreen,
-          centerTitle: true,
         ),
-        body: pages[_currentIndex],
-        floatingActionButton: _currentIndex == 0
-            ? FloatingActionButton.extended(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CreateEntryScreen(orgId: widget.orgId),
-                    ),
-                  );
-                },
-                backgroundColor: AppTheme.tertiary,
-                foregroundColor: Colors.white,
-                icon: const Icon(Icons.add),
-                label: const Text('Add to Archive'),
-              )
-            : null,
+        body: _buildCurrentPage(),
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -112,43 +125,53 @@ class _CultureHomeScreenState extends State<CultureHomeScreen> {
               backgroundColor: Colors.transparent,
               surfaceTintColor: Colors.transparent,
               shadowColor: Colors.transparent,
-              selectedIndex: _currentIndex,
-              onDestinationSelected: (index) =>
-                  setState(() => _currentIndex = index),
-              indicatorColor: AppTheme.primary.withOpacity(0.15),
+              selectedIndex: _selectedNavIndex,
+              onDestinationSelected: _handleNavTap,
+              indicatorColor: AppTheme.tertiary.withOpacity(0.15),
               height: 70,
               labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
               destinations: [
                 NavigationDestination(
                   icon: Icon(Icons.archive_outlined,
                       color: AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.archive, color: AppTheme.primary),
+                  selectedIcon: Icon(Icons.archive, color: AppTheme.tertiary),
                   label: 'Archive',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.feedback_outlined,
+                  icon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.tertiary.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                          color: AppTheme.tertiary.withOpacity(0.35)),
+                    ),
+                    child: Icon(Icons.add,
+                        color: AppTheme.tertiary, size: 20),
+                  ),
+                  selectedIcon: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.tertiary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.add,
+                        color: Colors.white, size: 20),
+                  ),
+                  label: 'Add Entry',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.forum_outlined,
                       color: AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.feedback, color: AppTheme.primary),
+                  selectedIcon: Icon(Icons.forum, color: AppTheme.tertiary),
                   label: 'Feedback',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.gavel_outlined,
-                      color: AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.gavel, color: AppTheme.primary),
-                  label: 'Disputes',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.link_outlined,
-                      color: AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.link, color: AppTheme.primary),
-                  label: 'Connections',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.photo_library_outlined,
+                  icon: Icon(Icons.person_outline,
                       color: AppTheme.darkGreen.withOpacity(0.50)),
                   selectedIcon:
-                      Icon(Icons.photo_library, color: AppTheme.primary),
-                  label: 'Media',
+                      Icon(Icons.person, color: AppTheme.tertiary),
+                  label: 'Profile',
                 ),
               ],
             ),

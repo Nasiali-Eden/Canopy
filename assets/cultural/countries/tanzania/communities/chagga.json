@@ -1,0 +1,50 @@
+{
+  "id": "community_chagga",
+  "node_type": "community",
+  "country_id": "country_tanzania",
+  "region_id": "region_northern_tz",
+  "name": "Chagga",
+  "name_in_own_language": "Wachagga",
+  "name_variants": ["Chaga", "Jagga"],
+  "flag_emoji": "🇹🇿",
+  "language_primary": "Chaga",
+  "language_iso": "jmc",
+  "language_family": "Bantu",
+  "population_approx": "2 million",
+  "description": "The Chagga (Wachagga) inhabit the fertile southern slopes of Mount Kilimanjaro, Africa's highest mountain. Historically they were organised into competing chiefdoms under chiefs (mangi), and were among the first East Africans to engage in large-scale trade with Arab and European merchants, building wealth through coffee cultivation and cattle. Their home, with reliable mountain water and fertile volcanic soil, supported intensive agriculture — including a sophisticated irrigation system of furrows (mifereji) that channels glacial meltwater to farms.",
+  "sub_groups": [
+    {"name": "Rombo Chagga", "region": "Rombo District (eastern slopes)"},
+    {"name": "Hai Chagga", "region": "Hai District (western slopes)"},
+    {"name": "Moshi Urban Chagga", "region": "Moshi Municipal"},
+    {"name": "Uru", "region": "Moshi Rural District"},
+    {"name": "Machame", "region": "Hai District"}
+  ],
+  "cultural_highlights": [
+    "Kilimanjaro irrigation furrows (mifereji) — pre-colonial canals channelling mountain water to terraced farms; a feat of hydraulic engineering still in use",
+    "Coffee heritage — the Chagga were among the first Tanzanian communities to cultivate Arabica coffee commercially; coffee remains a cultural and economic cornerstone",
+    "Mangi chieftaincy system — competitive chiefdoms that fiercely resisted Maasai raids and later German colonialism under leaders like Chief Rindi and Mangi Meli",
+    "Mbege (banana beer) ceremony — fermented banana and millet beer exchanged at weddings, funerals, and meetings as a social bond"
+  ],
+  "food_traditions": [
+    {"name": "Mbege (banana beer)", "description": "Fermented green banana and finger millet beer — served at all social occasions; refusing it is considered impolite"},
+    {"name": "Ndizi na nyama (banana and meat)", "description": "Boiled green banana with stewed beef or goat — a Chagga staple reflecting the highlands' banana-rich landscape"},
+    {"name": "Kichocheo (spiced tea)", "description": "Spiced tea with ginger and cardamom, reflecting Swahili-Arab trade influence in Chagga highlands"}
+  ],
+  "music_traditions": [
+    "Kilimanjaro ngoma — highland drum ceremonies marking births, circumcisions, and the installation of chiefs",
+    "Rinding — a competitive praise-singing tradition between age-mates that reinforces social bonds",
+    "Mchiriku — a popular syncretic music/dance style from the coastal Zaramo, adopted by urban Chagga in Moshi"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A1A2A",
+    "gradient_end": "#1A3A5A"
+  },
+  "firestore_id": "community_chagga",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

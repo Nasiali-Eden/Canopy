@@ -1,0 +1,49 @@
+{
+  "id": "community_dagomba",
+  "node_type": "community",
+  "country_id": "country_ghana",
+  "region_id": "region_northern_ghana",
+  "name": "Dagomba",
+  "name_in_own_language": "Dagbamba",
+  "name_variants": ["Dagbani", "Dagbon"],
+  "flag_emoji": "🇬🇭",
+  "language_primary": "Dagbani",
+  "language_iso": "dag",
+  "language_family": "Niger-Congo (Gur)",
+  "population_approx": "1.0 million",
+  "description": "The Dagomba are the ruling ethnic group of the Dagbon Kingdom — the most powerful traditional state in northern Ghana, founded by a Mamprussi prince in the 15th century. They are Muslim and their identity is shaped by the convergence of indigenous Gur traditions with Saharan Islamic court culture. The Dagbon Kingdom is still active today under the Ya-Na (king) in Yendi, and its culture — drumming, griots, and Islamic scholarship — is a bridge between forest Ghana and the Sahel.",
+  "sub_groups": [
+    {"name": "Yendi (royal capital)", "region": "Yendi Municipal"},
+    {"name": "Tolon", "region": "Tolon District"},
+    {"name": "Savelugu", "region": "Savelugu Municipal"},
+    {"name": "Gushegu", "region": "Gushegu Municipal"}
+  ],
+  "cultural_highlights": [
+    "Ya-Na (king) institution — the paramount chief of Dagbon whose elaborate enstoolment ceremony (Damba) is one of northern Ghana's most spectacular events",
+    "Damba festival — a celebration of the Prophet Muhammad's birth, featuring elaborate royal drumming and horsemanship",
+    "Dagbon court music (takai) — ensemble music combining talking drums, long trumpets, and royal praise poetry performed only by hereditary musicians",
+    "Griots (lunsi) — hereditary praise singers who maintain royal genealogies and historical epics spanning centuries"
+  ],
+  "food_traditions": [
+    {"name": "TZ (Tuo Zaafi)", "description": "Northern Ghana's ugali equivalent — fermented sorghum or millet dough eaten with ayoyo leaf soup; a daily staple"},
+    {"name": "Peanut soup", "description": "Groundnut soup with dried fish and fermented locust beans (dawadawa) — a Sahel-influenced flavour profile common across northern Ghana"},
+    {"name": "Shea butter cooking", "description": "Shea nut fat used in cooking replaces palm oil in many northern dishes; shea trees are sacred women's trees"}
+  ],
+  "music_traditions": [
+    "Takai ensemble — a tightly choreographed dance with talking drums, flutes, and singing performed at royal courts",
+    "Talking drum (lunga) — a squeeze drum used by the lunsi griots to transmit royal messages and genealogies",
+    "Bamaaya — a harvest/water festival dance from the Tolon area, performed with calabash percussion"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A0A0A",
+    "gradient_end": "#5A1A1A"
+  },
+  "firestore_id": "community_dagomba",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

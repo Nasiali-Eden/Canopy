@@ -1,0 +1,27 @@
+{
+  "id": "country_kenya",
+  "node_type": "country",
+  "name": "Kenya",
+  "name_native": "Kenya",
+  "flag_emoji": "🇰🇪",
+  "iso_code": "KE",
+  "continent": "Africa",
+  "languages_official": ["Swahili", "English"],
+  "capital": "Nairobi",
+  "description": "Kenya is home to over 45 distinct ethnic communities, each carrying unique languages, oral traditions, food cultures, music, craft techniques, and histories stretching back centuries. The Canopy Cultural Archive begins here — documenting living knowledge from the Swahili coast to the Central Highlands, from the shores of Lake Victoria to the arid north-eastern plains.",
+  "region_count": 5,
+  "community_count": 45,
+  "is_live": true,
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "static_asset_fallback": "images/kenya.png",
+    "gradient_start": "#0D2A1A",
+    "gradient_end": "#1F5539"
+  },
+  "firestore_id": "country_kenya",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "last_updated": null
+}

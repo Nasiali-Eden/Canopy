@@ -1,0 +1,11 @@
+{
+  "_file": "regions/_index.json",
+  "_note": "Zambia's four broad cultural zones used to group communities.",
+  "country_id": "country_zambia",
+  "regions": [
+    {"id": "region_northern_zambia",  "name": "Northern & Copperbelt",  "communities": ["community_bemba","community_bisa","community_lungu","community_tabwa","community_ushi"]},
+    {"id": "region_southern_zambia",  "name": "Southern Province",      "communities": ["community_tonga","community_ila","community_leya","community_toka"]},
+    {"id": "region_eastern_zambia",   "name": "Eastern Province",       "communities": ["community_chewa","community_nsenga","community_tumbuka","community_ngoni_z"]},
+    {"id": "region_western_zambia",   "name": "Western Province (Barotseland)", "communities": ["community_lozi","community_luvale","community_kaonde","community_mbunda"]}
+  ]
+}

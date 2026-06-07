@@ -1,0 +1,50 @@
+{
+  "id": "community_tsonga",
+  "node_type": "community",
+  "country_id": "country_south_africa",
+  "region_id": "region_tsonga_sa",
+  "name": "Tsonga",
+  "name_in_own_language": "Vatsonga",
+  "name_variants": ["Shangaan", "Xitsonga speakers"],
+  "flag_emoji": "🇿🇦",
+  "language_primary": "Xitsonga",
+  "language_iso": "tso",
+  "language_family": "Bantu",
+  "population_approx": "2.3 million (South Africa & Mozambique)",
+  "description": "The Tsonga (Vatsonga) inhabit Limpopo Province and extend into southern Mozambique and Zimbabwe. They include several related groups — Shangaan, Thonga, Ronga, Ndzawu — and are famous for high-energy dance (Muchongolo), bright woven fabrics, and intricate beadwork. The Tsonga were profoundly affected by the Nguni military expansion (Mfecane) when Zulu general Soshangane established the Gaza Kingdom over their territory in the 1820s; many Tsonga clans still bear Shangaan identity from this period.",
+  "sub_groups": [
+    {"name": "Shangaan", "region": "Limpopo / Gaza Kingdom descendants"},
+    {"name": "Ndzawu", "region": "Vhembe District"},
+    {"name": "Hlengwe", "region": "Eastern Limpopo"},
+    {"name": "Ronga", "region": "Southern Mozambique"},
+    {"name": "Bila", "region": "Kruger National Park area"}
+  ],
+  "cultural_highlights": [
+    "Muchongolo warrior dance — a high-energy acrobatic war dance originally performed before raids; now a showpiece at cultural events",
+    "Xibelani skirt dance — women's circular skirt dance where layers of raffia and cloth create a spinning visual effect at ceremonies",
+    "Tilo (sky god) spiritual traditions — the Tsonga traditional religious system centres on ancestral spirits and the high god Tilo",
+    "Decorated homestead arts — Tsonga women create elaborate painted and sculpted decorations on their homestead walls"
+  ],
+  "food_traditions": [
+    {"name": "Xidzimba (pumpkin and maize)", "description": "Dried pumpkin slices cooked with maize — a preservation technique turned everyday comfort food"},
+    {"name": "Masonja (mopane worms)", "description": "Dried or fried mopane caterpillars — a protein-rich Limpopo delicacy shared by Tsonga, Venda, and Pedi communities"},
+    {"name": "Xigugu (dried meat)", "description": "Sun-dried beef or game meat — a traditional preservation method for the hot dry lowveld climate"}
+  ],
+  "music_traditions": [
+    "Xitende bow — a mouth resonated musical bow played for personal music-making and courtship",
+    "Xizambi — a lamellophone (thumb piano) played in quiet moments and small social settings",
+    "Muchongolo drumming — a specific ensemble of drums and voices driving the warrior dance tradition"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A0A1A",
+    "gradient_end": "#5A1A3A"
+  },
+  "firestore_id": "community_tsonga",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

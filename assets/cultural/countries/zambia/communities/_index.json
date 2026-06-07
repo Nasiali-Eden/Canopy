@@ -1,0 +1,22 @@
+{
+  "_file": "communities/_index.json",
+  "_note": "Major community list for Zambia. Zambia has 73 ethnic groups — this lists the most documented. Communities with full_data:true have a matching detail JSON in this folder.",
+  "country_id": "country_zambia",
+  "communities": [
+    {"id":"community_bemba",        "name":"Bemba",              "region_id":"region_northern_zambia",  "language":"Bemba",      "full_data":true},
+    {"id":"community_tonga",        "name":"Tonga",              "region_id":"region_southern_zambia",  "language":"Tonga",      "full_data":true},
+    {"id":"community_chewa",        "name":"Chewa (Nyanja)",     "region_id":"region_eastern_zambia",   "language":"Chewa",      "full_data":true},
+    {"id":"community_lozi",         "name":"Lozi (Barotse)",     "region_id":"region_western_zambia",   "language":"Silozi",     "full_data":true},
+    {"id":"community_luvale",       "name":"Luvale",             "region_id":"region_western_zambia",   "language":"Luvale",     "full_data":true},
+    {"id":"community_kaonde",       "name":"Kaonde",             "region_id":"region_western_zambia",   "language":"Kaonde",     "full_data":false},
+    {"id":"community_nsenga",       "name":"Nsenga",             "region_id":"region_eastern_zambia",   "language":"Nsenga",     "full_data":false},
+    {"id":"community_tumbuka",      "name":"Tumbuka",            "region_id":"region_eastern_zambia",   "language":"Tumbuka",    "full_data":false},
+    {"id":"community_ngoni_z",      "name":"Ngoni (Zambia)",     "region_id":"region_eastern_zambia",   "language":"Ngoni",      "full_data":false},
+    {"id":"community_bisa",         "name":"Bisa",               "region_id":"region_northern_zambia",  "language":"Bisa",       "full_data":false},
+    {"id":"community_ila",          "name":"Ila",                "region_id":"region_southern_zambia",  "language":"Ila",        "full_data":false},
+    {"id":"community_lungu",        "name":"Lungu",              "region_id":"region_northern_zambia",  "language":"Lungu",      "full_data":false},
+    {"id":"community_tabwa",        "name":"Tabwa",              "region_id":"region_northern_zambia",  "language":"Tabwa",      "full_data":false},
+    {"id":"community_mbunda",       "name":"Mbunda",             "region_id":"region_western_zambia",   "language":"Mbunda",     "full_data":false},
+    {"id":"community_leya",         "name":"Leya",               "region_id":"region_southern_zambia",  "language":"Leya",       "full_data":false}
+  ]
+}

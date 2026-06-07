@@ -1,0 +1,50 @@
+{
+  "id": "community_fante",
+  "node_type": "community",
+  "country_id": "country_ghana",
+  "region_id": "region_southern_ghana",
+  "name": "Fante",
+  "name_in_own_language": "Mfantse",
+  "name_variants": ["Fanti", "Akan coastal"],
+  "flag_emoji": "🇬🇭",
+  "language_primary": "Fante (Akan dialect)",
+  "language_iso": "fat",
+  "language_family": "Niger-Congo",
+  "population_approx": "2.5 million",
+  "description": "The Fante are a coastal Akan people of Ghana's Central and Western Regions, historically forming a confederation of states (the Fante Confederacy) that resisted both Ashanti expansion and European colonialism. As the first sub-Saharan Africans to formally write a constitution (the Fante Confederation Constitution of 1871), they hold a unique place in African political history. Their proximity to European traders made them early intermediaries in the Atlantic economy and some of the first West Africans to receive Western formal education.",
+  "sub_groups": [
+    {"name": "Cape Coast Fante", "region": "Cape Coast Metropolitan"},
+    {"name": "Elmina (Edina)", "region": "Komenda-Edina-Eguafo-Abrem"},
+    {"name": "Mankessim", "region": "Mfantsiman Municipal"},
+    {"name": "Anomabo", "region": "Mfantsiman Municipal"},
+    {"name": "Saltpond", "region": "Mfantseman Municipal"}
+  ],
+  "cultural_highlights": [
+    "Fante Confederation Constitution (1871) — one of the earliest written constitutions in sub-Saharan Africa, asserting sovereignty against British colonial encroachment",
+    "Asafo companies — warrior/civic companies organised around specific military flags (asafo flags); each with distinctive artistic traditions and communal responsibilities",
+    "Posuban shrines — elaborate cement and concrete shrines built by Asafo companies, each as distinctive as a company's flag",
+    "Fishing culture — canoe fishing on the Atlantic coast; the decorated prow design of Fante canoes is a craft tradition in itself"
+  ],
+  "food_traditions": [
+    {"name": "Fante fante (fish stew)", "description": "A distinctively coastal fish stew with tomato, pepper, onions and crab — the signature dish of the Central Region coast"},
+    {"name": "Akyeke (fermented cassava granules)", "description": "Fermented and granulated cassava, steamed and eaten with fish stew or groundnut soup — a coastal staple"},
+    {"name": "Abom (kontomire with palm nut)", "description": "Cocoyam leaves pounded with palm fruit and smoked fish — a forest-coastal fusion dish"}
+  ],
+  "music_traditions": [
+    "Osoode fishing songs — work songs sung by fishermen as they pull in nets, coordinating effort with rhythm",
+    "Asafo war songs — militant songs performed by the warrior companies during festivals and community mobilisation",
+    "Highlife roots — Cape Coast is considered one of the birthplaces of Ghanaian highlife music"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A2A1A",
+    "gradient_end": "#1A5A3A"
+  },
+  "firestore_id": "community_fante",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

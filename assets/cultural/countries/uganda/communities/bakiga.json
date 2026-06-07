@@ -1,0 +1,48 @@
+{
+  "id": "community_bakiga",
+  "node_type": "community",
+  "country_id": "country_uganda",
+  "region_id": "region_western_uganda",
+  "name": "Bakiga",
+  "name_in_own_language": "Abakiga",
+  "name_variants": ["Kiga", "Chiga"],
+  "flag_emoji": "🇺🇬",
+  "language_primary": "Rukiga",
+  "language_iso": "cgg",
+  "language_family": "Bantu",
+  "population_approx": "2.0 million (Uganda, est.)",
+  "description": "The Bakiga (meaning 'people of the mountains') inhabit the steep terraced highlands of south-western Uganda — one of the most densely populated rural areas in Africa. Unlike most Ugandan communities, the Bakiga historically had no centralised kingdom, instead organising around clan lineages (emiruka) under respected elders. They are renowned farmers who perfected hillside terracing, and their Ekitaguriro dance is among the most vigorous and visually stunning traditional dances in the Great Lakes region.",
+  "sub_groups": [
+    {"name": "Ndorwa", "region": "Kabale District"},
+    {"name": "Rubanda", "region": "Rubanda District"},
+    {"name": "Rukiga", "region": "Rukiga District"}
+  ],
+  "cultural_highlights": [
+    "Hillside terrace farming — centuries-old terraced agriculture on volcanic highlands, producing sorghum, millet, and Irish potato",
+    "Ekitaguriro dance — an energetic acrobatic dance with stamping, crouching, and high-energy jumping performed at celebrations",
+    "Clan lineage system — no king; social cohesion maintained through miruka clan councils of elders",
+    "Embaho (spear) — the traditional weapon and ceremonial object symbolising manhood and warrior identity"
+  ],
+  "food_traditions": [
+    {"name": "Ekitooke (boiled banana)", "description": "Boiled or roasted banana forms the staple of Kiga highland cooking"},
+    {"name": "Obushera (millet ferment)", "description": "Fermented finger millet drink — shared across western Uganda and especially popular in Kabale highlands"},
+    {"name": "Irish potato dishes", "description": "Introduced crops thrived in Kiga highlands; potato stew with vegetables is now a staple across Kabale"}
+  ],
+  "music_traditions": [
+    "Ekitaguriro drumming — powerful multi-drum ensembles drive the national dance, featuring call-and-response patterns",
+    "Engoma za Bakiga — specific drum configurations for funerals, weddings, and age-grade ceremonies",
+    "Praise songs (ebisakaate) — women's group songs recounting clan histories and honouring heroes"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A2A0A",
+    "gradient_end": "#3A5A1A"
+  },
+  "firestore_id": "community_bakiga",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

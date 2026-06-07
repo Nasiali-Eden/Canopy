@@ -1,0 +1,48 @@
+{
+  "id": "community_luvale",
+  "node_type": "community",
+  "country_id": "country_zambia",
+  "region_id": "region_western_zambia",
+  "name": "Luvale",
+  "name_in_own_language": "Balovale",
+  "name_variants": ["Lovale", "Lwena"],
+  "flag_emoji": "🇿🇲",
+  "language_primary": "Luvale",
+  "language_iso": "lue",
+  "language_family": "Bantu",
+  "population_approx": "700,000 (Zambia & Angola)",
+  "description": "The Luvale inhabit the upper Zambezi Valley in western Zambia and north-eastern Angola. They are closely related to the Lozi and Chokwe peoples and share the Makishi masquerade tradition, one of the most visually sophisticated masquerade systems in central Africa. Luvale women are renowned for their intricate fibre basketry and the Vingwe mat-making tradition. They are matrilineal and historically organised in small chiefdoms along the Zambezi's upper tributaries.",
+  "sub_groups": [
+    {"name": "Zambezi Luvale", "region": "Zambezi District"},
+    {"name": "Chavuma Luvale", "region": "Chavuma District"},
+    {"name": "Angola Luvale (Lwena)", "region": "Moxico Province, Angola"}
+  ],
+  "cultural_highlights": [
+    "Makishi masquerade — elaborately costumed ancestral spirit figures who appear during male initiation (mukanda); many characters shared with the Lozi and Chokwe",
+    "Chokwe art influence — the Luvale share artistic conventions with the Chokwe; carved masks, slit drums, and figurative sculpture are created by specialist craftsmen",
+    "Mukanda initiation — male circumcision and initiation process lasting several months; Makishi spirits supervise and educate the initiates",
+    "Ingomba praise songs — praise songs for chiefs and important families, performed by hereditary praise singers"
+  ],
+  "food_traditions": [
+    {"name": "Nshima with cassava leaves", "description": "Maize nshima with fermented cassava leaf relish — a western Zambia staple influenced by Angolan cassava cultivation"},
+    {"name": "Chikanda (African polony)", "description": "A savoury cake made from ground wild orchid tubers mixed with groundnut paste — a uniquely Zambian delicacy shared across western provinces"},
+    {"name": "Upper Zambezi fish", "description": "Barbel, bream, and tigerfish from the upper Zambezi — eaten fresh, dried, or smoked"}
+  ],
+  "music_traditions": [
+    "Makishi music — specific songs that summon different Makishi characters; each character has its own unique song and dance style",
+    "Ngombi harp — a multi-string harp-lute used in ceremonial and social music contexts",
+    "Likishi (Makishi drum) — a specific cylindrical drum used exclusively during the mukanda initiation season"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A2A2A",
+    "gradient_end": "#1A5A5A"
+  },
+  "firestore_id": "community_luvale",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

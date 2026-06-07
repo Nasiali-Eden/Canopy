@@ -1,0 +1,27 @@
+{
+  "id": "country_zambia",
+  "node_type": "country",
+  "name": "Zambia",
+  "name_native": "Zambia",
+  "flag_emoji": "🇿🇲",
+  "iso_code": "ZM",
+  "continent": "Africa",
+  "languages_official": ["English"],
+  "capital": "Lusaka",
+  "description": "Zambia is home to over 73 ethnic groups unified by the national motto 'One Zambia, One Nation'. The Bemba of the Copper Belt and Northern Province, the Tonga of the Southern Province, the Chewa of the Eastern Province, and the Lozi of Barotseland each carry distinct traditions of ceremony, music, agriculture, and governance. The Kuomboka ceremony of the Lozi — where the king moves to higher ground before floods — is among Africa's most celebrated living cultural events.",
+  "region_count": 4,
+  "community_count": 73,
+  "is_live": false,
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "static_asset_fallback": null,
+    "gradient_start": "#0A2A0A",
+    "gradient_end": "#1A5A1A"
+  },
+  "firestore_id": "country_zambia",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "last_updated": null
+}

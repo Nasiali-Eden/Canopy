@@ -1,0 +1,50 @@
+{
+  "id": "community_ga_dangme",
+  "node_type": "community",
+  "country_id": "country_ghana",
+  "region_id": "region_southern_ghana",
+  "name": "Ga-Dangme",
+  "name_in_own_language": "Gã / Adangme",
+  "name_variants": ["Ga", "Dangme", "Adangbe"],
+  "flag_emoji": "🇬🇭",
+  "language_primary": "Ga / Dangme",
+  "language_iso": "gaa",
+  "language_family": "Niger-Congo",
+  "population_approx": "1.5 million",
+  "description": "The Ga-Dangme are the original inhabitants of the Greater Accra region, the site of Ghana's capital. The Ga people, centred in Accra (La, Osu, James Town), and the Dangme (Shai, Ada, Krobo) to the east are linguistically related but socially distinct. The Ga of Accra are among the most urbanised people in West Africa, having absorbed centuries of Atlantic trade, European influence, and internal migration. Despite this, their cultural core — the Homowo festival, Wulomo priesthood, and kpanlogo music — has survived and thrives.",
+  "sub_groups": [
+    {"name": "La (Labadi)", "region": "La Dade-Kotopon Municipality"},
+    {"name": "Osu (Christiansborg)", "region": "Osu Klottey Sub-Metro"},
+    {"name": "James Town (Usshertown)", "region": "Accra Central"},
+    {"name": "Shai (Dangme)", "region": "Shai-Osudoku District"},
+    {"name": "Krobo (Dangme)", "region": "Yilo Krobo / Lower Manya Krobo"}
+  ],
+  "cultural_highlights": [
+    "Homowo festival — 'Hooting at hunger'; the most important Ga festival, honouring ancestors who survived famine with a communal feast of palm nut soup and kpokpoi (fermented corn meal)",
+    "Wulomo priesthood — hereditary priests who maintain the spiritual shrines (gbatsu) of Accra's founding clans",
+    "Fancy coffin tradition (abebuu adekai) — elaborate figurative coffins shaped as cars, fish, planes, or animals; a world-famous art form originated by Seth Kane Kwei",
+    "Krobo beadwork — intricate powdered glass beads (krobo beads) made by Dangme women; traded across West Africa as currency and adornment"
+  ],
+  "food_traditions": [
+    {"name": "Kpokpoi (Homowo food)", "description": "Fermented corn dough mixed with palm nut soup and smoked fish — eaten exclusively during the Homowo festival as an offering to ancestors"},
+    {"name": "Eto (mashed yam)", "description": "Mashed yam with palm oil, boiled eggs, and groundnuts — the Ga ritual food for Friday prayer and libation"},
+    {"name": "Grilled tilapia at Labadi beach", "description": "Freshly grilled tilapia on the beach is the quintessential Ga social meal — eaten with banku and pepper sauce"}
+  ],
+  "music_traditions": [
+    "Kpanlogo — a freestyle social dance with improvised drumming and lyrics; created in the 1960s in Accra as a fusion of Ga traditions with highlife energy",
+    "Oge drums — ceremonial drums with specific royal and priestly functions in Accra's Ga communities",
+    "Fontomfrom — shared royal drum tradition with the Akan but adapted in the Ga context"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A1A00",
+    "gradient_end": "#5A3A00"
+  },
+  "firestore_id": "community_ga_dangme",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

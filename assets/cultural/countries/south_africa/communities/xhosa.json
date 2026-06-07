@@ -1,0 +1,51 @@
+{
+  "id": "community_xhosa",
+  "node_type": "community",
+  "country_id": "country_south_africa",
+  "region_id": "region_nguni_sa",
+  "name": "Xhosa",
+  "name_in_own_language": "amaXhosa",
+  "name_variants": ["Xosa"],
+  "flag_emoji": "🇿🇦",
+  "language_primary": "isiXhosa",
+  "language_iso": "xho",
+  "language_family": "Bantu (Nguni)",
+  "population_approx": "8 million",
+  "description": "The Xhosa are the second largest ethnic group in South Africa, primarily concentrated in the Eastern Cape. isiXhosa is famous for its click consonants — three distinct click sounds (dental, lateral, alveolar) absorbed from the Khoisan peoples the Xhosa absorbed during their southward migration. The Xhosa are the people of Nelson Mandela, Oliver Tambo, Steve Biko, Desmond Tutu, and Miriam Makeba — an extraordinary concentration of political and cultural leadership in one community that shaped the anti-apartheid movement.",
+  "sub_groups": [
+    {"name": "Gcaleka (royal Xhosa)", "region": "Wild Coast, Eastern Cape"},
+    {"name": "Ngqika (Rarabe)", "region": "Eastern Cape midlands"},
+    {"name": "Thembu", "region": "Mthatha region (Mandela's clan)"},
+    {"name": "Mpondo", "region": "Eastern Cape coast"},
+    {"name": "Mpondomise", "region": "Eastern Cape highlands"}
+  ],
+  "cultural_highlights": [
+    "Click language — isiXhosa contains three Khoisan-derived click consonants; one of the most phonologically complex languages in the world",
+    "Ulwaluko initiation (Abakhwetha) — male circumcision initiation lasting several months; the most important rite of Xhosa culture, transforming boys to men",
+    "Umaskandi (iimvula) beadwork — elaborate white ochre and beadwork covering the initiates and their families during and after ulwaluko",
+    "Ubuntu philosophy — deeply embedded in Xhosa social life; community decision-making through consensus (Ubuntu)",
+    "Miriam Makeba — 'Mama Africa' brought Xhosa click songs to the global stage with The Click Song (Qongqothwane)"
+  ],
+  "food_traditions": [
+    {"name": "Umngqusho", "description": "Samp and sugar beans — the staple of Nelson Mandela's household and a pan-Xhosa comfort food"},
+    {"name": "Umleqwa (free-range chicken)", "description": "Slow-cooked indigenous scrawny chicken in onion and tomato — a celebratory meal served to important guests"},
+    {"name": "Intloko (sheep's head)", "description": "Boiled sheep's or goat's head — a communal ceremonial food shared at weddings and homecoming celebrations"}
+  ],
+  "music_traditions": [
+    "Umrhubhe — a mouth bow instrument played by women, creating hauntingly resonant sounds from a single string",
+    "Ingoma (group dance songs) — choral call-and-response sung at communal gatherings and initiations",
+    "Mbaqanga — South African township music with Xhosa musical roots; the foundation of much of South African popular music"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A0A2A",
+    "gradient_end": "#1A1A5A"
+  },
+  "firestore_id": "community_xhosa",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

@@ -1,0 +1,56 @@
+{
+  "country": "Nigeria",
+  "country_id": "country_nigeria",
+  "cities": {
+    "Lagos": [
+      {"area": "Lagos Island", "type": "LGA"},
+      {"area": "Lagos Mainland", "type": "LGA"},
+      {"area": "Ikeja", "type": "LGA"},
+      {"area": "Alimosho", "type": "LGA"},
+      {"area": "Surulere", "type": "LGA"},
+      {"area": "Kosofe", "type": "LGA"},
+      {"area": "Mushin", "type": "LGA"},
+      {"area": "Lekki", "type": "area"},
+      {"area": "Victoria Island", "type": "area"}
+    ],
+    "Abuja (FCT)": [
+      {"area": "Central Area", "type": "district"},
+      {"area": "Garki", "type": "district"},
+      {"area": "Maitama", "type": "district"},
+      {"area": "Wuse", "type": "district"},
+      {"area": "Asokoro", "type": "district"},
+      {"area": "Gwarinpa", "type": "suburb"}
+    ],
+    "Kano": [
+      {"area": "Kano Municipal", "type": "LGA"},
+      {"area": "Fagge", "type": "LGA"},
+      {"area": "Nassarawa", "type": "LGA"},
+      {"area": "Dala", "type": "LGA"}
+    ],
+    "Ibadan": [
+      {"area": "Ibadan North", "type": "LGA"},
+      {"area": "Ibadan South-West", "type": "LGA"},
+      {"area": "Ibadan South-East", "type": "LGA"},
+      {"area": "Egbeda", "type": "LGA"}
+    ],
+    "Port Harcourt": [
+      {"area": "Port Harcourt City", "type": "LGA"},
+      {"area": "Obio-Akpor", "type": "LGA"},
+      {"area": "Eleme", "type": "LGA"}
+    ],
+    "Enugu": [
+      {"area": "Enugu North", "type": "LGA"},
+      {"area": "Enugu East", "type": "LGA"},
+      {"area": "Enugu South", "type": "LGA"}
+    ],
+    "Benin City": [
+      {"area": "Oredo", "type": "LGA"},
+      {"area": "Egor", "type": "LGA"},
+      {"area": "Ikpoba Okha", "type": "LGA"}
+    ],
+    "Calabar": [
+      {"area": "Calabar Municipal", "type": "LGA"},
+      {"area": "Calabar South", "type": "LGA"}
+    ]
+  }
+}

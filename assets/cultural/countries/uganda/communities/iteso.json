@@ -1,0 +1,50 @@
+{
+  "id": "community_iteso",
+  "node_type": "community",
+  "country_id": "country_uganda",
+  "region_id": "region_eastern_uganda",
+  "name": "Iteso",
+  "name_in_own_language": "Ateso",
+  "name_variants": ["Teso", "Eteso"],
+  "flag_emoji": "🇺🇬",
+  "language_primary": "Ateso",
+  "language_iso": "teo",
+  "language_family": "Nilotic",
+  "population_approx": "3.0 million (Uganda & Kenya, est.)",
+  "description": "The Iteso are a Nilotic people of eastern Uganda and northwestern Kenya, forming one of Uganda's largest ethnic groups. Historically semi-nomadic cattle herders, they transitioned to settled agro-pastoralism under colonial pressure. They are organised around age grades and clan systems, with cattle remaining central to marriage, ceremony, and social identity. The Teso region around Lake Kyoga is one of Uganda's most important food-production zones.",
+  "sub_groups": [
+    {"name": "Ingoratok", "region": "Soroti District"},
+    {"name": "Ikomolo", "region": "Kumi District"},
+    {"name": "Iriiri", "region": "Napak District"},
+    {"name": "Ikarebwok", "region": "Kaberamaido District"},
+    {"name": "Iteso (Kenya branch)", "region": "Busia County, Kenya"}
+  ],
+  "cultural_highlights": [
+    "Age-grade initiation — the aikarebwok system organises civic duties and rites of passage from childhood to elderhood",
+    "Akiriket council — assembly of elders who mediate disputes and uphold community law",
+    "Emuria (cattle camp) — temporary cattle camps where young men herd and develop identity outside the homestead",
+    "Adungu musical culture — the harp-lute tradition of Teso is one of the most sophisticated stringed instrument traditions in Uganda"
+  ],
+  "food_traditions": [
+    {"name": "Atap (finger millet ugali)", "description": "Millet-based ugali called atap — denser and darker than maize ugali, the traditional Teso staple"},
+    {"name": "Ajon (fermented millet beer)", "description": "Communal millet beer drunk through long straws from a shared pot — central to social and ceremonial gatherings"},
+    {"name": "Dried meat (emung)", "description": "Sun-dried or smoked beef and game — preserved food for dry seasons and long travel"}
+  ],
+  "music_traditions": [
+    "Adungu harp-lute — a 9-string bow harp unique to Teso and neighbouring peoples, used for storytelling and ceremonial music",
+    "Amakondere — gourd trumpets played in court settings and during communal announcements",
+    "Akogo thumb piano — small finger-plucked idiophone used in personal music-making and small social gatherings"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A1A0A",
+    "gradient_end": "#5A3A1A"
+  },
+  "firestore_id": "community_iteso",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

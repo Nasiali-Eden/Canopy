@@ -1,0 +1,53 @@
+{
+  "id": "community_maasai",
+  "node_type": "community",
+  "country_id": "country_kenya",
+  "region_id": "region_rift_valley",
+  "name": "Maasai",
+  "name_in_own_language": "Maa",
+  "name_variants": ["Masai", "Maasai Mara"],
+  "flag_emoji": "🇰🇪",
+  "language_primary": "Maa",
+  "language_iso": "mas",
+  "language_family": "Nilotic",
+  "population_approx": "1.2 million (Kenya & Tanzania, est.)",
+  "description": "The Maasai are semi-nomadic pastoralists of the East African Great Rift Valley, spanning both Kenya and Tanzania. Their identity is inseparably bound to cattle — wealth, ceremony, diet, and social status are all measured in livestock. They are organised into age-grades (ilkiama) where warrior morans (ilmoran) form the society's protector class. Their red shukas, elaborate beadwork, and the adamu jumping dance make them among the most recognised cultures on the continent, though their traditions go far deeper than the iconic images.",
+  "sub_groups": [
+    {"name": "Purko", "region": "Narok County"},
+    {"name": "Kisongo", "region": "Kajiado County / Tanzania"},
+    {"name": "Keekonyokie", "region": "Kajiado County"},
+    {"name": "Matapato", "region": "Kajiado County"},
+    {"name": "Loitai", "region": "Narok County"},
+    {"name": "Siria", "region": "Trans-Mara"},
+    {"name": "Moitanik (Wuasinkishu)", "region": "Nakuru County"}
+  ],
+  "cultural_highlights": [
+    "Ilmoran warrior age-grade — young men who protect the community, herd cattle, and undergo multi-year initiation",
+    "Enkiama council of elders — governance by consensus among senior men, with women's councils having advisory roles",
+    "Enkidongi — the diviners (laibon) who provide spiritual guidance, medicine, and lead ceremonies",
+    "Adamu (jumping dance) — the warrior performance where height of jump demonstrates strength and stamina",
+    "Enkiama earrings and beadwork — colour-coded beadwork carries specific meaning: red = bravery, white = peace, blue = sky/God"
+  ],
+  "food_traditions": [
+    {"name": "Nyama choma (roasted meat)", "description": "Meat — particularly goat, sheep and beef — forms the core of celebration feasts"},
+    {"name": "Milk (fresh and fermented)", "description": "Maasai diet traditionally centres on cow's milk; oloisuki (fermented milk in a calabash) is a daily staple"},
+    {"name": "Blood and milk mixture", "description": "Enkioshe — fresh cattle blood mixed with milk, consumed during ceremonies and by warriors and new mothers"}
+  ],
+  "music_traditions": [
+    "Throat singing — polyphonic choral tradition performed without instruments, creating complex harmonic textures",
+    "Ilkiama ceremonial chants — specific chants for each transition: circumcision, warriorhood, elderhood, marriage",
+    "Enkidong bell and rattle — percussion instruments used to accompany cattle movements and ceremonial song"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#3A0A0A",
+    "gradient_end": "#7A1F1F"
+  },
+  "firestore_id": "community_maasai",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

@@ -1,0 +1,50 @@
+{
+  "id": "community_haya",
+  "node_type": "community",
+  "country_id": "country_tanzania",
+  "region_id": "region_lake_zone_tz",
+  "name": "Haya",
+  "name_in_own_language": "Bahaya",
+  "name_variants": ["Ziba", "Kiziba"],
+  "flag_emoji": "🇹🇿",
+  "language_primary": "Haya",
+  "language_iso": "hay",
+  "language_family": "Bantu",
+  "population_approx": "1.2 million",
+  "description": "The Haya inhabit the Kagera Region on the western shore of Lake Victoria — a lush, banana-growing landscape that supported multiple small kingdoms (Karagwe, Kiziba, Bugabo, Ihangiro, Kyamutwara). The Haya developed one of Africa's most sophisticated pre-industrial technologies: high-carbon steel smelting using forced-air blast furnaces around 1500 years ago — centuries before European steel-making achieved similar results. This discovery, documented by archaeologist Peter Schmidt, overturned long-held assumptions about African technological development.",
+  "sub_groups": [
+    {"name": "Karagwe", "region": "Karagwe District"},
+    {"name": "Kiziba", "region": "Bukoba Rural District"},
+    {"name": "Ihangiro", "region": "Muleba District"},
+    {"name": "Bugabo", "region": "Bukoba Rural District"},
+    {"name": "Kyamutwara", "region": "Misenyi District"}
+  ],
+  "cultural_highlights": [
+    "Ancient steel smelting — the Haya operated blast furnace steel production c. 1500–2000 years ago, producing carbon steel in preheated forced-air furnaces centuries before Europe achieved the same",
+    "Multiple kingdom system — the Haya maintained eight separate kingdoms simultaneously, each with distinct royal clans, musical traditions, and governance",
+    "Coffee culture — the Haya have cultivated Robusta coffee for centuries; chewing coffee beans as a social gift predates the Ottoman coffee house by generations",
+    "Banana civilisation — over 100 varieties of banana cultivated for food, beer, medicine, and construction material"
+  ],
+  "food_traditions": [
+    {"name": "Omwenge (banana beer)", "description": "Fermented banana beer — the daily drink of Haya society; offered to guests and ancestors alike"},
+    {"name": "Matoke (boiled banana)", "description": "Steamed highland cooking banana — the daily staple across all Haya kingdoms"},
+    {"name": "Ekitooke (roasted banana)", "description": "Roasted ripe banana eaten as a snack or accompaniment to stews"}
+  ],
+  "music_traditions": [
+    "Amakondere — curved ivory and animal horn trumpets used in royal court music of the Haya kingdoms",
+    "Ntongoli lyre — a 6-string lyre played in the evenings for personal music-making and small ceremonies",
+    "Kingdom praise songs — each kingdom had specific compositions honouring its royal lineage and historical events"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A2A0A",
+    "gradient_end": "#1A5A1A"
+  },
+  "firestore_id": "community_haya",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

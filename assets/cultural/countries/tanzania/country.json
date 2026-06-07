@@ -1,0 +1,27 @@
+{
+  "id": "country_tanzania",
+  "node_type": "country",
+  "name": "Tanzania",
+  "name_native": "Tanzania",
+  "flag_emoji": "🇹🇿",
+  "iso_code": "TZ",
+  "continent": "Africa",
+  "languages_official": ["Swahili", "English"],
+  "capital": "Dodoma",
+  "description": "Tanzania is home to over 130 ethnic groups and the birthplace of Swahili civilisation along the Indian Ocean coast. The Sukuma are the largest single group, dominating the Lake Victoria shore. The Chagga of Kilimanjaro, the Makonde of the south-east, the Maasai of the northern plains, and the coastal Swahili cultures each represent distinct and living traditions of farming, pastoralism, art, and seafaring.",
+  "region_count": 5,
+  "community_count": 130,
+  "is_live": false,
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "static_asset_fallback": null,
+    "gradient_start": "#0A1A2A",
+    "gradient_end": "#1A3A5A"
+  },
+  "firestore_id": "country_tanzania",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "last_updated": null
+}

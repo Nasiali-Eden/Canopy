@@ -115,6 +115,81 @@ flutter:
     - assets/WorldCountries.json
     - assets/Cities/African/KenyaCities.json
 
+    # Cultural hierarchy — butterfly folder structure
+    - assets/cultural/countries/_index.json
+    # Kenya
+    - assets/cultural/countries/kenya/country.json
+    - assets/cultural/countries/kenya/regions/_index.json
+    - assets/cultural/countries/kenya/communities/_index.json
+    - assets/cultural/countries/kenya/communities/kikuyu.json
+    - assets/cultural/countries/kenya/communities/luo.json
+    - assets/cultural/countries/kenya/communities/maasai.json
+    - assets/cultural/countries/kenya/communities/kamba.json
+    - assets/cultural/countries/kenya/communities/kalenjin.json
+    - assets/cultural/countries/kenya/subgroups/luhya/_index.json
+    - assets/cultural/countries/kenya/subgroups/kikuyu/_index.json
+    # Uganda
+    - assets/cultural/countries/uganda/country.json
+    - assets/cultural/countries/uganda/regions/_index.json
+    - assets/cultural/countries/uganda/communities/_index.json
+    - assets/cultural/countries/uganda/communities/baganda.json
+    - assets/cultural/countries/uganda/communities/banyankole.json
+    - assets/cultural/countries/uganda/communities/basoga.json
+    - assets/cultural/countries/uganda/communities/bakiga.json
+    - assets/cultural/countries/uganda/communities/iteso.json
+    # Nigeria
+    - assets/cultural/countries/nigeria/country.json
+    - assets/cultural/countries/nigeria/regions/_index.json
+    - assets/cultural/countries/nigeria/communities/_index.json
+    - assets/cultural/countries/nigeria/communities/yoruba.json
+    - assets/cultural/countries/nigeria/communities/igbo.json
+    - assets/cultural/countries/nigeria/communities/hausa_fulani.json
+    - assets/cultural/countries/nigeria/communities/ijaw.json
+    - assets/cultural/countries/nigeria/communities/kanuri.json
+    # Ghana
+    - assets/cultural/countries/ghana/country.json
+    - assets/cultural/countries/ghana/regions/_index.json
+    - assets/cultural/countries/ghana/communities/_index.json
+    - assets/cultural/countries/ghana/communities/ashanti.json
+    - assets/cultural/countries/ghana/communities/fante.json
+    - assets/cultural/countries/ghana/communities/ewe.json
+    - assets/cultural/countries/ghana/communities/ga_dangme.json
+    - assets/cultural/countries/ghana/communities/dagomba.json
+    # Tanzania
+    - assets/cultural/countries/tanzania/country.json
+    - assets/cultural/countries/tanzania/regions/_index.json
+    - assets/cultural/countries/tanzania/communities/_index.json
+    - assets/cultural/countries/tanzania/communities/sukuma.json
+    - assets/cultural/countries/tanzania/communities/chagga.json
+    - assets/cultural/countries/tanzania/communities/makonde.json
+    - assets/cultural/countries/tanzania/communities/haya.json
+    - assets/cultural/countries/tanzania/communities/nyamwezi.json
+    # South Africa
+    - assets/cultural/countries/south_africa/country.json
+    - assets/cultural/countries/south_africa/regions/_index.json
+    - assets/cultural/countries/south_africa/communities/_index.json
+    - assets/cultural/countries/south_africa/communities/zulu.json
+    - assets/cultural/countries/south_africa/communities/xhosa.json
+    - assets/cultural/countries/south_africa/communities/sotho.json
+    - assets/cultural/countries/south_africa/communities/tswana.json
+    - assets/cultural/countries/south_africa/communities/tsonga.json
+    # Zambia
+    - assets/cultural/countries/zambia/country.json
+    - assets/cultural/countries/zambia/regions/_index.json
+    - assets/cultural/countries/zambia/communities/_index.json
+    - assets/cultural/countries/zambia/communities/bemba.json
+    - assets/cultural/countries/zambia/communities/tonga.json
+    - assets/cultural/countries/zambia/communities/chewa.json
+    - assets/cultural/countries/zambia/communities/lozi.json
+    - assets/cultural/countries/zambia/communities/luvale.json
+    # City data for locality dropdowns
+    - assets/cultural/cities/uganda.json
+    - assets/cultural/cities/nigeria.json
+    - assets/cultural/cities/ghana.json
+    - assets/cultural/cities/tanzania.json
+    - assets/cultural/cities/south_africa.json
+    - assets/cultural/cities/zambia.json
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

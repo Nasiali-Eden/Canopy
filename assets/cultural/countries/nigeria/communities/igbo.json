@@ -1,0 +1,54 @@
+{
+  "id": "community_igbo",
+  "node_type": "community",
+  "country_id": "country_nigeria",
+  "region_id": "region_south_east_nigeria",
+  "name": "Igbo",
+  "name_in_own_language": "Ị̀gbò",
+  "name_variants": ["Ibo", "Biafra (colonial/conflict term)"],
+  "flag_emoji": "🇳🇬",
+  "language_primary": "Igbo",
+  "language_iso": "ibo",
+  "language_family": "Niger-Congo",
+  "population_approx": "35 million",
+  "description": "The Igbo are a people of south-eastern Nigeria known for their egalitarian social philosophy ('Igbo enwe eze' — the Igbo have no king), entrepreneurial spirit, and rich artistic tradition. Their communities historically governed themselves through village assemblies and title societies rather than centralised kingdoms. The Igbo-Ukwu bronzes (9th century) demonstrate a mastery of lost-wax casting predating European contact. The diaspora produced major literary figures including Chinua Achebe, whose 'Things Fall Apart' made Igbo storytelling global.",
+  "sub_groups": [
+    {"name": "Onitsha", "region": "Anambra State"},
+    {"name": "Aro", "region": "Abia State"},
+    {"name": "Owerri", "region": "Imo State"},
+    {"name": "Ngwa", "region": "Abia State"},
+    {"name": "Anambra", "region": "Anambra State"},
+    {"name": "Nri", "region": "Anambra State"},
+    {"name": "Cross River Igbo", "region": "Cross River State"}
+  ],
+  "cultural_highlights": [
+    "Ozo title society — an earned prestige system where men of wealth and character ascend through titled grades, each with specific rights",
+    "Mmanwu masquerade — masked ancestral spirits that appear during festivals and funerals to enforce social order and entertain",
+    "Igbo-Ukwu bronzes — 9th-century ritual bronzes discovered in 1939, demonstrating sophisticated metallurgy 600 years before European influence",
+    "New Yam Festival (Iri Ji) — the most important annual festival, marking harvest and honouring the earth deity (Ala)",
+    "Chi personal spirit — every Igbo individual has a chi (personal spirit/soul) that accompanies them from birth"
+  ],
+  "food_traditions": [
+    {"name": "Ofe Onugbu (bitter leaf soup)", "description": "Bitter leaf soup with assorted meat and cocoyam — the flagship soup of Igbo cuisine"},
+    {"name": "Nni ji (pounded yam)", "description": "Pounded yam eaten with soups — the preferred swallow for celebrations and hospitality"},
+    {"name": "Ofe Oha", "description": "Ora leaf soup with cocoyam thickener — distinct from bitter leaf, this delicate herb soup is served at important occasions"},
+    {"name": "Akara (bean cakes)", "description": "Deep-fried black-eyed pea fritters sold as street food and prepared as Sunday morning breakfast"}
+  ],
+  "music_traditions": [
+    "Oje-aja (masquerade music) — flute, drum, and horn ensemble that accompanies mmanwu performances",
+    "Ekwe — a slit drum made from hollowed hardwood, used for community announcements and ceremonial music",
+    "Highlife — the guitar-driven genre that defines Igbo popular music; influenced contemporary Afrobeats"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A2A0A",
+    "gradient_end": "#3A5A1A"
+  },
+  "firestore_id": "community_igbo",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

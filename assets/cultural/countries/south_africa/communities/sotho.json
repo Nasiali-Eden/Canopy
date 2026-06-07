@@ -1,0 +1,49 @@
+{
+  "id": "community_sotho",
+  "node_type": "community",
+  "country_id": "country_south_africa",
+  "region_id": "region_sotho_sa",
+  "name": "Sotho",
+  "name_in_own_language": "Basotho",
+  "name_variants": ["South Sotho", "Sesotho speakers"],
+  "flag_emoji": "🇿🇦",
+  "language_primary": "Sesotho",
+  "language_iso": "sot",
+  "language_family": "Bantu (Sotho-Tswana)",
+  "population_approx": "4 million (South Africa & Lesotho)",
+  "description": "The Basotho of South Africa are closely related to the people of Lesotho, whose kingdom was founded by King Moshoeshoe I in the early 19th century. He famously gathered refugees from the Mfecane wars and created a new nation on the mountain fortress of Thaba Bosiu, resisting both Zulu expansion and Boer encroachment. The Basotho blanket — a thick, colourful woollen blanket worn in all weather — is one of Africa's most iconic garments, adopted from European trade goods and completely absorbed into Sotho identity.",
+  "sub_groups": [
+    {"name": "Koena clan (royal)", "region": "Maseru, Lesotho"},
+    {"name": "Fokeng", "region": "Rustenburg, South Africa"},
+    {"name": "Tlokwa", "region": "Northern Lesotho"},
+    {"name": "Phuthi", "region": "Southern Lesotho"}
+  ],
+  "cultural_highlights": [
+    "Basotho blanket — a heavy woollen blanket with specific patterns worn by all ages and genders; different patterns mark life stages and status",
+    "Litema wall art — geometric mural paintings applied to house walls by Basotho women using earth pigments and finger-drawing techniques",
+    "Mokorotlo (conical hat) — the woven grass hat appearing on Lesotho's flag; a daily garment turned national symbol",
+    "King Moshoeshoe's Thaba Bosiu fortress — a mountain stronghold from which he unified refugees into the Lesotho nation"
+  ],
+  "food_traditions": [
+    {"name": "Papa (maize porridge)", "description": "Thick maize meal porridge eaten with vegetables, beans, or dried meat — the daily staple of Basotho households"},
+    {"name": "Merogo (wild leafy greens)", "description": "Foraged indigenous greens cooked with onion and tomato — a nutrition-rich addition to the daily meal"},
+    {"name": "Sorghum beer (joala ba sesotho)", "description": "Traditionally brewed sorghum beer served in communal pots at celebrations and social gatherings"}
+  ],
+  "music_traditions": [
+    "Sesotho folk songs (difela) — narrative poems and songs sung at weddings, funerals, and community gatherings",
+    "Lekolulo flute — a long shepherd's flute played by young men herding cattle in the mountains",
+    "Famo music — accordion-based urban genre originating in Johannesburg mines; expressive, competitive, and sometimes associated with gang culture"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A1A0A",
+    "gradient_end": "#5A3A1A"
+  },
+  "firestore_id": "community_sotho",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

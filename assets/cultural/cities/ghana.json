@@ -1,0 +1,43 @@
+{
+  "country": "Ghana",
+  "country_id": "country_ghana",
+  "cities": {
+    "Accra": [
+      {"area": "Accra Central", "type": "sub-metro"},
+      {"area": "Osu Klottey", "type": "sub-metro"},
+      {"area": "La Dade-Kotopon", "type": "municipality"},
+      {"area": "Ayawaso", "type": "sub-metro"},
+      {"area": "Tema", "type": "municipality"},
+      {"area": "East Legon", "type": "area"},
+      {"area": "Cantonments", "type": "area"}
+    ],
+    "Kumasi": [
+      {"area": "Kumasi Metropolitan", "type": "metro"},
+      {"area": "Bantama", "type": "sub-metro"},
+      {"area": "Oforikrom", "type": "sub-metro"},
+      {"area": "Asokwa", "type": "sub-metro"},
+      {"area": "Suame", "type": "sub-metro"}
+    ],
+    "Tamale": [
+      {"area": "Tamale Central", "type": "sub-metro"},
+      {"area": "Sagnarigu", "type": "municipality"}
+    ],
+    "Cape Coast": [
+      {"area": "Cape Coast Metropolitan", "type": "metro"},
+      {"area": "Abura-Asebu-Kwamankese", "type": "district"}
+    ],
+    "Takoradi": [
+      {"area": "Sekondi-Takoradi Metropolitan", "type": "metro"},
+      {"area": "Effia-Kwesimintsim", "type": "municipality"}
+    ],
+    "Koforidua": [
+      {"area": "Koforidua", "type": "town"}
+    ],
+    "Ho": [
+      {"area": "Ho Municipal", "type": "municipality"}
+    ],
+    "Bolgatanga": [
+      {"area": "Bolgatanga Municipal", "type": "municipality"}
+    ]
+  }
+}

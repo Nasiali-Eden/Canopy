@@ -1,0 +1,51 @@
+{
+  "id": "community_bemba",
+  "node_type": "community",
+  "country_id": "country_zambia",
+  "region_id": "region_northern_zambia",
+  "name": "Bemba",
+  "name_in_own_language": "Abemba",
+  "name_variants": ["Wemba", "Awemba"],
+  "flag_emoji": "🇿🇲",
+  "language_primary": "Bemba",
+  "language_iso": "bem",
+  "language_family": "Bantu",
+  "population_approx": "3.7 million (Zambia, DRC, Tanzania)",
+  "description": "The Bemba are Zambia's largest ethnic group, inhabiting the Copperbelt and Northern Province. Their paramount chief (Chitimukulu) commands one of Central Africa's most elaborate traditional paramount chieftaincies. The Bemba migrated from the Luba-Lunda empire region of the Congo basin around the 17th century and established the powerful Chitimukulu Kingdom. As the dominant labour force in the Copperbelt mines, they shaped modern Zambian working-class and political culture — Kenneth Kaunda, Zambia's first president, drew much of his support from Bemba constituencies.",
+  "sub_groups": [
+    {"name": "Citimukulu (royal Bemba)", "region": "Kasama District"},
+    {"name": "Bisa", "region": "Mpika District"},
+    {"name": "Lungu", "region": "Mbala District"},
+    {"name": "Tabwa", "region": "Northern Province"},
+    {"name": "Ushi", "region": "Luapula Province"}
+  ],
+  "cultural_highlights": [
+    "Chitimukulu paramount chieftaincy — one of Central Africa's most powerful traditional chieftaincies; the installation ceremony involves elaborate rituals lasting multiple days",
+    "Copperbelt labour heritage — the Bemba were the backbone of the Copperbelt mines; mine compound culture blended urban modernity with Bemba traditions",
+    "Chisungu ceremony — the female initiation ceremony is one of the most thoroughly documented in anthropological literature (Audrey Richards, 1956); lasts several weeks",
+    "Ancestral veneration (ubwanga) — elaborate rituals to honour and communicate with ancestral spirits who influence daily life"
+  ],
+  "food_traditions": [
+    {"name": "Nshima (thick maize porridge)", "description": "The Zambian ugali; thick maize-flour porridge eaten with relish (ifisashi or stew) — the national meal of Zambia"},
+    {"name": "Ifisashi (groundnut leaf stew)", "description": "Pounded groundnut paste with green vegetables — the classic Bemba relish for nshima"},
+    {"name": "Kapenta (dried whitebait)", "description": "Tiny dried whitebait from Lake Tanganyika, fried or stewed; a protein staple from the Zambia-DRC-Tanzania border lakes"},
+    {"name": "Chibwabwa (pumpkin leaves)", "description": "Fresh or dried pumpkin leaf stew — widely available and nutritious; a Bemba green-vegetable staple"}
+  ],
+  "music_traditions": [
+    "Kalela dance — a social dance that emerged in Copperbelt mine compounds blending rural Bemba rhythms with urban theatrical performance",
+    "Akasamba ceremony music — ceremonial songs and drumming accompanying the chisungu female initiation",
+    "Beni — military-style competitive ngoma inherited from Tanzanian Swahili influence via trade routes"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A0A2A",
+    "gradient_end": "#3A1A5A"
+  },
+  "firestore_id": "community_bemba",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

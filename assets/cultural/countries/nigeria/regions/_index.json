@@ -1,0 +1,13 @@
+{
+  "_file": "regions/_index.json",
+  "_note": "Nigeria's six geopolitical zones used to group communities.",
+  "country_id": "country_nigeria",
+  "regions": [
+    {"id": "region_south_west_nigeria",  "name": "South-West",    "communities": ["community_yoruba","community_awori","community_egba","community_ijebu","community_ondo"]},
+    {"id": "region_south_east_nigeria",  "name": "South-East",    "communities": ["community_igbo","community_aro","community_onitsha","community_anambra"]},
+    {"id": "region_south_south_nigeria", "name": "South-South",   "communities": ["community_ijaw","community_itsekiri","community_urhobo","community_efik","community_ibibio"]},
+    {"id": "region_north_west_nigeria",  "name": "North-West",    "communities": ["community_hausa_fulani","community_nupe"]},
+    {"id": "region_north_east_nigeria",  "name": "North-East",    "communities": ["community_kanuri","community_shuwa_arab","community_babur","community_bura"]},
+    {"id": "region_north_central_nigeria","name": "North-Central", "communities": ["community_tiv","community_igala","community_idoma","community_ebira","community_gwari"]}
+  ]
+}

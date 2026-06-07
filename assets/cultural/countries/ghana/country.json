@@ -1,0 +1,27 @@
+{
+  "id": "country_ghana",
+  "node_type": "country",
+  "name": "Ghana",
+  "name_native": "Ghana",
+  "flag_emoji": "🇬🇭",
+  "iso_code": "GH",
+  "continent": "Africa",
+  "languages_official": ["English"],
+  "capital": "Accra",
+  "description": "Ghana, the first sub-Saharan country to gain independence, is a mosaic of cultural richness. The Akan people — including the Ashanti and Fante — dominate the centre and south, renowned for kente cloth, gold craftsmanship, and matrilineal chieftaincy. The Ewe of the Volta Region carry distinct drumming and weaving traditions, while the Dagomba and other Mole-Dagbani peoples of the north preserve ancient Islamic court culture and oral epics.",
+  "region_count": 4,
+  "community_count": 100,
+  "is_live": false,
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "static_asset_fallback": null,
+    "gradient_start": "#3A1A00",
+    "gradient_end": "#7A3A00"
+  },
+  "firestore_id": "country_ghana",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "last_updated": null
+}

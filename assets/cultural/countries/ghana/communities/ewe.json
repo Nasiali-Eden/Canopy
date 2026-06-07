@@ -1,0 +1,51 @@
+{
+  "id": "community_ewe",
+  "node_type": "community",
+  "country_id": "country_ghana",
+  "region_id": "region_volta_ghana",
+  "name": "Ewe",
+  "name_in_own_language": "Eʋegbe",
+  "name_variants": ["Evhe", "Krepi"],
+  "flag_emoji": "🇬🇭",
+  "language_primary": "Ewe",
+  "language_iso": "ewe",
+  "language_family": "Niger-Congo",
+  "population_approx": "6 million (Ghana, Togo, Benin)",
+  "description": "The Ewe people inhabit the Volta Region of Ghana and extend into Togo and Benin. They migrated from Oyo (Nigeria) around the 17th century and settled in their current homelands after a period of conflict with the Fon Kingdom of Dahomey. The Ewe are renowned worldwide for their complex polyrhythmic drumming traditions and the Agbadza dance — a martial dance evolved from war dances that is now performed at celebrations. Their kente weaving tradition, centred in Kpetoe, is distinct from the Ashanti style.",
+  "sub_groups": [
+    {"name": "Anlo", "region": "Volta Region coast"},
+    {"name": "Tongu", "region": "South Volta"},
+    {"name": "Peki", "region": "Volta Region interior"},
+    {"name": "Ho", "region": "Ho Municipal"},
+    {"name": "Kpetoe", "region": "Adaklu District (kente weaving centre)"}
+  ],
+  "cultural_highlights": [
+    "Polyrhythmic drumming — Ewe drumming ensembles (up to 7 drums) play simultaneous interlocking rhythms; considered among Africa's most complex percussion traditions",
+    "Agbadza — a martial dance derived from a war dance; now the primary social and ceremonial dance of the Anlo Ewe",
+    "Kpetoe kente — Ewe kente uses different colour codes and geometric patterns than Ashanti kente; strips are narrower and more geometric",
+    "Hogbetsotso festival — the Anlo Ewe's annual homecoming festival commemorating their migration from Notsie (Togo)",
+    "Atsiagbekor — a warrior dance with spears and shields, performed to honour ancestors who fought in battle"
+  ],
+  "food_traditions": [
+    {"name": "Akple (corn dough)", "description": "Stiff corn porridge eaten with okra stew (fetri detsi) — the coastal Ewe staple, distinct from fufu"},
+    {"name": "Fetri detsi (okra stew)", "description": "Thick okra soup with crab, smoked fish, and palm oil — the classic Ewe soup served with akple"},
+    {"name": "Grilled tilapia", "description": "Freshwater tilapia from the Volta Lake, grilled over charcoal with pepper sauce — a Volta Region signature"}
+  ],
+  "music_traditions": [
+    "Agbekor war drum ensemble — 6-drum ensemble with specific roles for each drum, recreating battlefield communication",
+    "Brekete ceremony — a healing ceremony with its own distinct drum tradition and spirit possession practices",
+    "Adzogbo dance music — elaborate choreographed dance with sung call-and-response, learned through years of cultural schools"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A2A2A",
+    "gradient_end": "#1A5A5A"
+  },
+  "firestore_id": "community_ewe",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

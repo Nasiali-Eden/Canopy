@@ -1,0 +1,12 @@
+{
+  "_file": "regions/_index.json",
+  "_note": "Kenya's geographic regions used to group communities. Add a detail JSON file per region as content grows.",
+  "country_id": "country_kenya",
+  "regions": [
+    {"id": "region_central_kenya",   "name": "Central Kenya",      "communities": ["community_kikuyu","community_meru","community_embu","community_tharaka_nithi"]},
+    {"id": "region_western_kenya",   "name": "Western Kenya",      "communities": ["community_luhya","community_luo"]},
+    {"id": "region_rift_valley",     "name": "Rift Valley",        "communities": ["community_kalenjin","community_maasai","community_turkana","community_samburu","community_pokot"]},
+    {"id": "region_eastern_kenya",   "name": "Eastern Kenya",      "communities": ["community_kamba","community_borana","community_orma","community_rendille","community_gabra"]},
+    {"id": "region_coastal_kenya",   "name": "Coastal Kenya",      "communities": ["community_mijikenda","community_swahili","community_taita","community_bajuni","community_sanye"]}
+  ]
+}

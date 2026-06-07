@@ -1,0 +1,55 @@
+{
+  "id": "community_yoruba",
+  "node_type": "community",
+  "country_id": "country_nigeria",
+  "region_id": "region_south_west_nigeria",
+  "name": "Yoruba",
+  "name_in_own_language": "Yorùbá",
+  "name_variants": ["Anago", "Lucumi (diaspora)"],
+  "flag_emoji": "🇳🇬",
+  "language_primary": "Yoruba",
+  "language_iso": "yor",
+  "language_family": "Niger-Congo",
+  "population_approx": "42 million (Nigeria, Benin, Togo)",
+  "description": "The Yoruba are one of the largest ethnic groups in Africa, with a diaspora that spans the Americas, Caribbean, and Europe through the transatlantic slave trade. Their civilisation traces back to the ancient city of Ile-Ife, considered the birthplace of humanity in Yoruba cosmology. The Yoruba maintain a complex pantheon of orishas (spiritual forces), a sophisticated system of divination (Ifá), elaborate masquerade traditions, and the most urbanised pre-colonial societies in West Africa.",
+  "sub_groups": [
+    {"name": "Oyo", "region": "Oyo State"},
+    {"name": "Egba", "region": "Ogun State"},
+    {"name": "Ijebu", "region": "Ogun State"},
+    {"name": "Ijesa", "region": "Osun State"},
+    {"name": "Ekiti", "region": "Ekiti State"},
+    {"name": "Ondo", "region": "Ondo State"},
+    {"name": "Ife", "region": "Osun State"}
+  ],
+  "cultural_highlights": [
+    "Ifá divination system — a UNESCO Intangible Heritage; a complete corpus of oral literature used for spiritual guidance, healing, and decision-making",
+    "Orisha worship — a pantheon of 401 spiritual forces, each with specific domains; the basis of Candomblé, Santería, and Trinidad Orisha",
+    "Gelede masquerade — elaborate masks performed to honour the 'Great Mothers' and celebrate feminine power",
+    "Bronze and terracotta art — Ife bronzes and terracottas (12th–15th century) are among the finest artworks ever produced in Africa",
+    "Àgbàdo (Agbada) garment — the flowing embroidered robe is a pan-West African symbol of dignity and celebration"
+  ],
+  "food_traditions": [
+    {"name": "Jollof rice", "description": "The most contested dish in West Africa — the Yoruba claim their party jollof is definitive; cooked in a rich tomato-pepper base with spices"},
+    {"name": "Egusi soup", "description": "Ground melon seed soup with leafy vegetables and assorted proteins — served with pounded yam or eba"},
+    {"name": "Amala and ewedu", "description": "Dark yam-flour swallow paired with jute leaf soup and gbegiri (bean soup) — the iconic Yoruba street food combination"},
+    {"name": "Puff puff", "description": "Deep-fried sweet dough balls — the ubiquitous Yoruba party snack"}
+  ],
+  "music_traditions": [
+    "Talking drum (dundun) — a pressure drum that mimics Yoruba tonal language, capable of conveying full sentences",
+    "Bata drums — sacred drums associated with Sango (deity of thunder), used in orisha ceremonies across the diaspora",
+    "Jùjú music — guitar-led genre pioneered by King Sunny Ade blending traditional Yoruba percussion with modern instruments",
+    "Afrobeats — the global genre with deep Yoruba roots in Lagos; artists like Fela Kuti, Burna Boy, and Wizkid trace this tradition"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A0A0A",
+    "gradient_end": "#5A1A1A"
+  },
+  "firestore_id": "community_yoruba",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

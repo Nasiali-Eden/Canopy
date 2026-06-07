@@ -1,0 +1,50 @@
+{
+  "id": "community_basoga",
+  "node_type": "community",
+  "country_id": "country_uganda",
+  "region_id": "region_eastern_uganda",
+  "name": "Basoga",
+  "name_in_own_language": "Abasoga",
+  "name_variants": ["Soga", "Lusoga speakers"],
+  "flag_emoji": "🇺🇬",
+  "language_primary": "Lusoga",
+  "language_iso": "xog",
+  "language_family": "Bantu",
+  "population_approx": "3.4 million (Uganda, est.)",
+  "description": "The Basoga inhabit the Busoga region on the northern shores of Lake Victoria, east of the Nile. Unlike their Baganda neighbours, the Basoga historically had no single kingdom but rather a cluster of chiefdoms loosely federated under a Kyabazinga (paramount chief). They are celebrated as one of Uganda's most musical cultures — the amadinda and embaire xylophones of Busoga are considered a national cultural treasure.",
+  "sub_groups": [
+    {"name": "Bugabula", "region": "Kamuli District"},
+    {"name": "Kigulu", "region": "Iganga District"},
+    {"name": "Bulamogi", "region": "Kaliro District"},
+    {"name": "Busiki", "region": "Namutumba District"},
+    {"name": "Luuka", "region": "Luuka District"}
+  ],
+  "cultural_highlights": [
+    "Embaire xylophone ensemble — a 12-22 key xylophone played by up to 5 performers simultaneously; central to Busoga royal and civic music",
+    "Kyabazinga institution — the paramount chieftaincy of Busoga, a 20th-century federation of the traditional chiefdoms",
+    "Naming ceremonies (Okuzaalibwa) — elaborate rituals three days after birth to introduce the child to the community and ancestors",
+    "Imbalu circumcision — shared with the Bagisu, male circumcision is a cornerstone rite involving public performance and community witness"
+  ],
+  "food_traditions": [
+    {"name": "Matoke with groundnut stew", "description": "Steamed green bananas with peanut sauce — daily staple shared with Buganda"},
+    {"name": "Obukonde (cowpeas)", "description": "Boiled cowpeas seasoned with onion and tomato, often served alongside fish from Lake Victoria"},
+    {"name": "Kawunga (white maize flour)", "description": "Maize ugali eaten with dried fish, beans, or leafy greens"}
+  ],
+  "music_traditions": [
+    "Embaire ensemble — the largest and most prestigious xylophone tradition in East Africa, requiring years of training",
+    "Entengezi — a smaller royal xylophone used in court music and gentler ceremonial contexts",
+    "Ndere flute music — the end-blown flute (ndere) is played by herders and in quiet ceremonial settings"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A2A1A",
+    "gradient_end": "#1A5A3A"
+  },
+  "firestore_id": "community_basoga",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

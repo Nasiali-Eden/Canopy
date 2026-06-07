@@ -133,6 +133,17 @@ class CreateEntryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCountryId(String countryId) {
+    _locality = _locality.copyWith(
+      countryId: countryId,
+      // Reset community when country changes
+      communityId: null,
+      communityName: null,
+      communityUnknown: false,
+    );
+    notifyListeners();
+  }
+
   void setTitle(String v) {
     _title = v;
     notifyListeners();

@@ -1,0 +1,49 @@
+{
+  "id": "community_banyankole",
+  "node_type": "community",
+  "country_id": "country_uganda",
+  "region_id": "region_western_uganda",
+  "name": "Banyankole",
+  "name_in_own_language": "Banyankore",
+  "name_variants": ["Ankole", "Nkore"],
+  "flag_emoji": "🇺🇬",
+  "language_primary": "Runyankore",
+  "language_iso": "nyn",
+  "language_family": "Bantu",
+  "population_approx": "3.1 million (Uganda, est.)",
+  "description": "The Banyankole inhabit the fertile highlands of south-western Uganda, historically centred on the Kingdom of Nkore (Ankole). The society has traditionally comprised two classes — the Bahima (pastoralists) and the Bairu (agriculturalists) — though these boundaries have blurred significantly. They are renowned for their long-horned Ankole cattle, whose massive horns can span over two metres and are central to identity, wealth, and ceremony.",
+  "sub_groups": [
+    {"name": "Bahima", "region": "Kiruhura District (pastoralists)"},
+    {"name": "Bairu", "region": "Mbarara District (agriculturalists)"},
+    {"name": "Bashambo", "region": "Ibanda District"},
+    {"name": "Banzirankende", "region": "Isingiro District"}
+  ],
+  "cultural_highlights": [
+    "Ankole long-horned cattle — the Inyambo royal cattle with horns spanning over 2m are a living national symbol and a Ugandan heritage icon",
+    "Empaako naming system — a system of 12 praise names shared across communities in western Uganda as a symbol of brotherhood",
+    "Okuhingura — elaborate marriage ceremony involving dowry negotiation, cattle exchange, and communal feasting lasting multiple days",
+    "Ekitaguriro — the traditional dance of the Banyankole, performed with graceful, fluid movements mimicking cattle grazing"
+  ],
+  "food_traditions": [
+    {"name": "Eshabwe (ghee sauce)", "description": "Clarified butter mixed with fermented milk and dried beef — a ceremonial delicacy considered a luxury gift"},
+    {"name": "Obushera (millet porridge)", "description": "Fermented finger millet drink, the daily beverage of the highlands; sweetened versions served at celebrations"},
+    {"name": "Milk and blood mixture", "description": "Fresh blood mixed with milk — consumed by Bahima herders and during initiation ceremonies"}
+  ],
+  "music_traditions": [
+    "Engoma (drums) — large ceremonial drums played at the royal court and during the okurata ceremony",
+    "Ekitaguriro — the dance is accompanied by specific drum patterns and women's ululation (okushemererwa)",
+    "Praise poetry (ebivugo) — warrior praise poetry recited by men to honour ancestors and recount brave deeds"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A1A00",
+    "gradient_end": "#5A3A00"
+  },
+  "firestore_id": "community_banyankole",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

@@ -1,0 +1,50 @@
+{
+  "id": "community_ijaw",
+  "node_type": "community",
+  "country_id": "country_nigeria",
+  "region_id": "region_south_south_nigeria",
+  "name": "Ijaw",
+  "name_in_own_language": "Izon",
+  "name_variants": ["Ijo", "Izon"],
+  "flag_emoji": "🇳🇬",
+  "language_primary": "Ijaw",
+  "language_iso": "ijc",
+  "language_family": "Niger-Congo",
+  "population_approx": "18 million",
+  "description": "The Ijaw are one of the oldest indigenous peoples of the Niger Delta, with oral traditions placing their origins at Defoin (Oru Kingdom) thousands of years ago. They are a people of water — expert fishermen, canoeists, and traders who turned the labyrinthine creeks and mangroves of the Niger Delta into highways of commerce. The Ijaw have been at the centre of Nigeria's oil conflict, as their ancestral lands contain the bulk of the nation's petroleum reserves.",
+  "sub_groups": [
+    {"name": "Kalabari", "region": "Rivers State"},
+    {"name": "Nembe (Brass)", "region": "Bayelsa State"},
+    {"name": "Ogbia", "region": "Bayelsa State"},
+    {"name": "Okrika", "region": "Rivers State"},
+    {"name": "Kolokuma-Opokuma", "region": "Bayelsa State"}
+  ],
+  "cultural_highlights": [
+    "Owuamapu — an ancient water spirit masquerade, one of the oldest continuous masquerade traditions in the Niger Delta",
+    "Iria ceremony — female coming-of-age fattening ceremony (ekine) where girls are celebrated as symbols of beauty and fertility",
+    "Agiri fishing boats — highly decorated ritual canoes used in fishing festivals and ceremonies",
+    "Ijaw National Congress — a modern expression of Ijaw unity rooted in centuries-old confederacy traditions across the 40+ Ijaw kingdoms"
+  ],
+  "food_traditions": [
+    {"name": "Banga soup", "description": "Palm nut soup cooked with spices unique to the Delta; one of Nigeria's most complex and regionally specific soups"},
+    {"name": "Fisherman's stew", "description": "Fresh-water and salt-water fish cooked with Delta spices — a daily meal reflecting the Ijaw's intimate connection with water"},
+    {"name": "Ofe akwu", "description": "Palm fruit sauce shared with the Igbo of the south; the Delta's answer to palm oil stew"}
+  ],
+  "music_traditions": [
+    "Iria dance music — drumming and singing for female coming-of-age ceremonies, performed exclusively by women",
+    "War canoe dance (Biribi) — competitive canoe paddling paired with warrior songs celebrating fishing and battle victories",
+    "Sekiapu — a slit gong struck to convey messages across the creeks before modern communication"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A2A2A",
+    "gradient_end": "#1A5A5A"
+  },
+  "firestore_id": "community_ijaw",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

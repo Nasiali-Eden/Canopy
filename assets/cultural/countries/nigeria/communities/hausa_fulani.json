@@ -1,0 +1,52 @@
+{
+  "id": "community_hausa_fulani",
+  "node_type": "community",
+  "country_id": "country_nigeria",
+  "region_id": "region_north_west_nigeria",
+  "name": "Hausa-Fulani",
+  "name_in_own_language": "Hausa / Fulfulde",
+  "name_variants": ["Hausa", "Fulani", "Fula", "Fulbe"],
+  "flag_emoji": "🇳🇬",
+  "language_primary": "Hausa",
+  "language_iso": "hau",
+  "language_family": "Afro-Asiatic",
+  "population_approx": "80+ million (across West Africa)",
+  "description": "The Hausa are a Sahel and savannah people whose historic city-states (Kano, Katsina, Zaria, Sokoto) formed major trade and Islamic scholarship centres from the 12th century. The Fulani (Fulbe) are a wide-ranging pastoralist people who swept across West Africa in a series of 19th-century Islamic jihads, intermarrying with the Hausa to form the Hausa-Fulani political identity. Together they dominate northern Nigeria and are the largest Muslim cultural bloc in Africa south of the Sahara.",
+  "sub_groups": [
+    {"name": "Kano Hausa", "region": "Kano State"},
+    {"name": "Sokoto (Fulani Caliphate)", "region": "Sokoto State"},
+    {"name": "Cattle Fulani (Mbororo)", "region": "Across northern Nigeria"},
+    {"name": "Katsina Hausa", "region": "Katsina State"},
+    {"name": "Zaria (Zazzau)", "region": "Kaduna State"}
+  ],
+  "cultural_highlights": [
+    "Durbar festival — a magnificent display of mounted cavalry in royal regalia, performed for Eid and state visits; one of Africa's most spectacular royal ceremonies",
+    "Islamic scholarship — Kano and Katsina were centres of trans-Saharan learning; Usman dan Fodio's 19th-century Caliphate unified the region",
+    "Hausa architecture — tall mud-brick buildings with decorated interiors using geometric arabesques; the Kano Old City is a UNESCO site",
+    "Talakawa social philosophy — the value of communal dignity; the Hausa social contract where nobility carries responsibility to subjects",
+    "Adire (indigo cloth) — intricate resist-dyed indigo textiles traded across the Sahara"
+  ],
+  "food_traditions": [
+    {"name": "Tuwo Shinkafa", "description": "Rice pudding-like stew eaten with miyan taushe (pumpkin soup) — the flagship northern Nigerian meal"},
+    {"name": "Suya", "description": "Spiced grilled meat on skewers rubbed with groundnut cake (kuli-kuli) — the most famous Nigerian street food globally"},
+    {"name": "Kunu", "description": "Fermented grain drink made from sorghum or millet — a refreshing daily beverage served in calabashes"},
+    {"name": "Masa (rice cakes)", "description": "Fermented rice cakes cooked in a special mould; a northern breakfast staple eaten with honey or soup"}
+  ],
+  "music_traditions": [
+    "Kakaki trumpet — a 3-metre royal trumpet announcing the Emir's presence, one of the longest traditional instruments in Africa",
+    "Goge fiddle — a one-string spike fiddle used in praise music for nobles and at ceremonies",
+    "Waka music — women's sung poetry combining Islamic influences with Hausa oral traditions"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A0A2A",
+    "gradient_end": "#1A1A5A"
+  },
+  "firestore_id": "community_hausa_fulani",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

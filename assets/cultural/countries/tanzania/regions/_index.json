@@ -1,0 +1,12 @@
+{
+  "_file": "regions/_index.json",
+  "_note": "Tanzania's five cultural zones used to group communities.",
+  "country_id": "country_tanzania",
+  "regions": [
+    {"id": "region_lake_zone_tz",      "name": "Lake Zone",              "communities": ["community_sukuma","community_haya","community_zinza","community_kerewe"]},
+    {"id": "region_northern_tz",       "name": "Northern Highlands",     "communities": ["community_chagga","community_meru_tz","community_arusha","community_maasai_tz"]},
+    {"id": "region_central_tz",        "name": "Central Plateau",        "communities": ["community_nyamwezi","community_gogo","community_sandawe","community_rangi"]},
+    {"id": "region_southern_highlands","name": "Southern Highlands",     "communities": ["community_hehe","community_bena","community_kinga","community_pangwa"]},
+    {"id": "region_coastal_tz",        "name": "Coastal & Islands",      "communities": ["community_makonde","community_swahili_tz","community_zaramo","community_shirazi"]}
+  ]
+}

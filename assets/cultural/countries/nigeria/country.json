@@ -1,0 +1,27 @@
+{
+  "id": "country_nigeria",
+  "node_type": "country",
+  "name": "Nigeria",
+  "name_native": "Naìjíríà",
+  "flag_emoji": "🇳🇬",
+  "iso_code": "NG",
+  "continent": "Africa",
+  "languages_official": ["English"],
+  "capital": "Abuja",
+  "description": "Nigeria is Africa's most populous nation and one of its most culturally diverse — home to over 250 ethnic groups and 500+ languages. The Yoruba, Igbo, and Hausa-Fulani form the three major groupings, each with profound traditions in art, governance, literature, music, and spirituality. Smaller communities like the Ijaw, Tiv, Ibibio, and Kanuri carry equally rich but under-documented heritages.",
+  "region_count": 6,
+  "community_count": 250,
+  "is_live": false,
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "static_asset_fallback": null,
+    "gradient_start": "#1A0A00",
+    "gradient_end": "#4A2000"
+  },
+  "firestore_id": "country_nigeria",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "last_updated": null
+}

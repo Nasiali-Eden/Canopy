@@ -1,0 +1,51 @@
+{
+  "id": "community_kamba",
+  "node_type": "community",
+  "country_id": "country_kenya",
+  "region_id": "region_eastern_kenya",
+  "name": "Kamba",
+  "name_in_own_language": "Akamba",
+  "name_variants": ["Akamba", "Wakamba"],
+  "flag_emoji": "🇰🇪",
+  "language_primary": "Kamba",
+  "language_iso": "kam",
+  "language_family": "Bantu",
+  "population_approx": "4.7 million (Kenya, 2019 census)",
+  "description": "The Akamba are a Bantu people of Eastern Kenya's semi-arid lowlands, historically renowned as long-distance traders who connected the interior with the Swahili coast. Their trade networks stretched from the interior to Mombasa and beyond, dealing in ivory, iron, beeswax, and grain. The Kamba are celebrated for intricate woodcarving and basket-weaving — crafts that became their economic signature in the colonial and post-independence eras. Music, storytelling, and athletic dance are central to social life.",
+  "sub_groups": [
+    {"name": "Masaku", "region": "Machakos County"},
+    {"name": "Athi", "region": "Machakos County"},
+    {"name": "Mumoni", "region": "Kitui County"},
+    {"name": "Kitui", "region": "Kitui County"},
+    {"name": "Mutindwa", "region": "Machakos County"}
+  ],
+  "cultural_highlights": [
+    "Long-distance trade heritage — Akamba traders were the principal middlemen between interior Kenya and the Swahili coast through the 19th century",
+    "Woodcarving mastery — Kamba carvers produce both utilitarian and decorative objects; Wamunyu market near Machakos is a global export hub",
+    "Kilumi — a spirit possession ritual dance performed by women, considered a form of healing and spiritual communication",
+    "Mũsũlũ — a ceremony marking end of mourning where community feasts, dances, and restores balance after loss",
+    "Basket weaving — intricate sisal and grass weaving with complex geometric patterns unique to Kamba women's craft"
+  ],
+  "food_traditions": [
+    {"name": "Kimwe (mashed sorghum and beans)", "description": "Traditional everyday meal combining sorghum flour with beans or pigeon peas"},
+    {"name": "Mboo (fermented sorghum gruel)", "description": "Sour fermented porridge consumed as a probiotic drink and light meal"},
+    {"name": "Munyere (stewed game meat)", "description": "Slow-cooked wild meat with indigenous herbs — a traditional dry-season staple"}
+  ],
+  "music_traditions": [
+    "Kilumi drum ensemble — large ceremonial drums accompanying the spirit-possession healing dances",
+    "Mwali — coming-of-age songs sung by young women during initiation and courtship ceremonies",
+    "Iluta — competitive acrobatic dance where young men demonstrate athletic skill and stamina"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A1A00",
+    "gradient_end": "#5A3A00"
+  },
+  "firestore_id": "community_kamba",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

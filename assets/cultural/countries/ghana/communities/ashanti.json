@@ -1,0 +1,52 @@
+{
+  "id": "community_ashanti",
+  "node_type": "community",
+  "country_id": "country_ghana",
+  "region_id": "region_central_ghana",
+  "name": "Ashanti",
+  "name_in_own_language": "Asante",
+  "name_variants": ["Asante", "Twi-speaking Akan"],
+  "flag_emoji": "🇬🇭",
+  "language_primary": "Twi (Asante dialect)",
+  "language_iso": "twi",
+  "language_family": "Niger-Congo",
+  "population_approx": "9 million",
+  "description": "The Ashanti (Asante) are the dominant Akan sub-group of central Ghana and the seat of the Ashanti Kingdom — one of the wealthiest and most militarily powerful states in West African history. Their capital Kumasi (Kumase) rose to prominence in the 17th century under Osei Tutu I, who united Akan clans around the Golden Stool (Sika Dwa Kofi), the sacred symbol of Ashanti nationhood. They are renowned for kente cloth, gold-weight casting, and the Odwira festival.",
+  "sub_groups": [
+    {"name": "Kumasi (royal)", "region": "Kumasi Metropolitan"},
+    {"name": "Mampong", "region": "Ashanti Region"},
+    {"name": "Juaben", "region": "Ashanti Region"},
+    {"name": "Bekwai", "region": "Ashanti Region"},
+    {"name": "Offinso", "region": "Ashanti Region"}
+  ],
+  "cultural_highlights": [
+    "Golden Stool (Sika Dwa) — the sacred symbol of Ashanti nationhood, believed to contain the sunsum (spirit) of the entire Ashanti nation; never sat upon",
+    "Kente cloth — hand-woven silk and cotton fabric with specific patterns reserved for royalty and ceremony; a global symbol of African identity",
+    "Gold-weight (abrammoo) — brass weights used to measure gold dust, each depicting proverbs and social wisdom",
+    "Odwira festival — annual festival of purification and harvest, featuring the Asantehene (king) in full regalia",
+    "Adinkra symbols — a visual language of 90+ symbols encoding philosophical and spiritual concepts, printed on cloth and carved in architecture"
+  ],
+  "food_traditions": [
+    {"name": "Fufu and light soup", "description": "Pounded cassava/plantain with clear palm-based soup — the Ashanti national dish and a marker of hospitality"},
+    {"name": "Kontomire stew", "description": "Cocoyam leaf stew with eggs or smoked fish — a staple green vegetable dish of the forest zone"},
+    {"name": "Kelewele", "description": "Spiced fried ripe plantain — a street food snack and party appetiser beloved across Ghana"},
+    {"name": "Palm nut soup", "description": "Deeply flavoured palm nut cream soup with chicken or bushmeat — the richer cousin of light soup"}
+  ],
+  "music_traditions": [
+    "Fontomfrom royal drums — massive royal drums reserved for the Asantehene; their sound announces the king's presence",
+    "Kete court music — ensembles of flutes, horns, and drums performed exclusively for royal ceremonies",
+    "Highlife — the guitar-and-brass popular music style that spread from Ghana to all of West Africa in the 20th century"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A1A00",
+    "gradient_end": "#5A3A00"
+  },
+  "firestore_id": "community_ashanti",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

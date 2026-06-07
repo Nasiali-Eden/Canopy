@@ -1,0 +1,50 @@
+{
+  "id": "community_tswana",
+  "node_type": "community",
+  "country_id": "country_south_africa",
+  "region_id": "region_sotho_sa",
+  "name": "Tswana",
+  "name_in_own_language": "Batswana",
+  "name_variants": ["Setswana speakers", "Bechuana (colonial)"],
+  "flag_emoji": "🇿🇦",
+  "language_primary": "Setswana",
+  "language_iso": "tsn",
+  "language_family": "Bantu (Sotho-Tswana)",
+  "population_approx": "4.5 million (South Africa & Botswana)",
+  "description": "The Tswana are a Sotho-Tswana Bantu people whose heartland spans South Africa's North West Province and the Republic of Botswana (which takes its name from them). They live in large urban-like towns (unlike the dispersed homesteads of many African peoples) — some Tswana towns had populations exceeding 10,000 before colonialism. They are governed by hereditary chiefs (dikgosi) who rule through open-air assemblies (kgotla) where any community member can speak.",
+  "sub_groups": [
+    {"name": "Kwena (crocodile clan)", "region": "North West Province"},
+    {"name": "Rolong", "region": "Mafikeng / Mahikeng"},
+    {"name": "Tlhaping", "region": "Northern Cape"},
+    {"name": "Hurutshe", "region": "Zeerust area"},
+    {"name": "Kgatla", "region": "Rustenburg area"}
+  ],
+  "cultural_highlights": [
+    "Kgotla assembly — the open-air community court where all men have a right to speak; a democratic institution predating European parliaments",
+    "Dikgosi chieftaincy — hereditary chiefs govern through the kgotla; power is legitimated by consensus, not force alone",
+    "Large pre-colonial towns — Tswana towns like Dithakong and Kuruman had populations of 10,000–20,000 before European contact",
+    "Bogwera and bojale initiations — male and female initiations respectively involving circumcision, education, and preparation for adult responsibilities"
+  ],
+  "food_traditions": [
+    {"name": "Phaleche (samp)", "description": "Coarsely crushed maize kernels cooked to a thick porridge — eaten with dried meat or vegetables"},
+    {"name": "Motoho (fermented porridge)", "description": "Soured sorghum porridge drunk as a probiotic beverage and eaten as a breakfast food"},
+    {"name": "Setswana chicken (kgogo ya Setswana)", "description": "Free-range chicken cooked in a clay pot with minimal spicing; the flavour comes from the quality of the bird"}
+  ],
+  "music_traditions": [
+    "Setapa dance — a communal circle dance performed by women at weddings and community celebrations",
+    "Phala flute — a notched end-blown flute played by herd boys in the veld",
+    "Sax and jazz influence — the Tswana of the Rand mines contributed significantly to South African township jazz"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A1A2A",
+    "gradient_end": "#3A3A5A"
+  },
+  "firestore_id": "community_tswana",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

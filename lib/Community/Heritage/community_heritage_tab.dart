@@ -766,20 +766,37 @@ class _KenyaScreenState extends State<_KenyaScreen>
       ),
       body: Stack(
         children: [
-          // ── Full-screen kenya.png ──
+          // ── Kenya background — org-uploadable via heritage_hierarchy/country_kenya ──
           Positioned.fill(
-            child: Image.asset(
-              'images/kenya.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF0D2A1A), Color(0xFF1F5539)],
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('heritage_hierarchy')
+                  .doc('country_kenya')
+                  .snapshots(),
+              builder: (context, snap) {
+                final data = snap.data?.data() as Map<String, dynamic>?;
+                final bgUrl = data?['bg_image_url'] as String?;
+                if (bgUrl != null && bgUrl.isNotEmpty) {
+                  return CachedNetworkImage(
+                    imageUrl: bgUrl,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => Image.asset('images/kenya.png', fit: BoxFit.cover),
+                  );
+                }
+                return Image.asset(
+                  'images/kenya.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF0D2A1A), Color(0xFF1F5539)],
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
           // ── Scrim: darkens only the very top so white text is legible ──
@@ -1345,12 +1362,29 @@ class _LuhyaScreen extends StatelessWidget {
       ),
       body: Stack(
         children: [
-          // ── Full-screen K_FOREST.png ──
+          // ── Luhya background — org-uploadable via heritage_hierarchy/community_luhya ──
           Positioned.fill(
-            child: Image.asset(
-              'images/K_FOREST.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+            child: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('heritage_hierarchy')
+                  .doc('community_luhya')
+                  .snapshots(),
+              builder: (context, snap) {
+                final data = snap.data?.data() as Map<String, dynamic>?;
+                final bgUrl = data?['bg_image_url'] as String?;
+                if (bgUrl != null && bgUrl.isNotEmpty) {
+                  return CachedNetworkImage(
+                    imageUrl: bgUrl,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => Image.asset('images/K_FOREST.png', fit: BoxFit.cover),
+                  );
+                }
+                return Image.asset(
+                  'images/K_FOREST.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
+                );
+              },
             ),
           ),
           // ── Gradient overlay — darkens progressively downward ──

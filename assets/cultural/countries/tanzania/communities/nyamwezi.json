@@ -1,0 +1,50 @@
+{
+  "id": "community_nyamwezi",
+  "node_type": "community",
+  "country_id": "country_tanzania",
+  "region_id": "region_central_tz",
+  "name": "Nyamwezi",
+  "name_in_own_language": "Banyamwezi",
+  "name_variants": ["Wanyamwezi", "People of the Moon"],
+  "flag_emoji": "🇹🇿",
+  "language_primary": "Nyamwezi",
+  "language_iso": "nym",
+  "language_family": "Bantu",
+  "population_approx": "1.5 million",
+  "description": "The Nyamwezi ('People of the Moon') are the dominant ethnic group of Tanzania's central plateau, historically the greatest long-distance traders in East Africa. Their trading caravans connected the interior copper and ivory-producing regions to the Swahili coast at Bagamoyo and Zanzibar, covering thousands of kilometres on foot. Under Chief Mirambo (c.1840–84), they built a powerful military federation that rivalled the Arab trading empire of Tippu Tip and briefly threatened Arab commercial dominance in East Africa.",
+  "sub_groups": [
+    {"name": "Unyanyembe (Tabora)", "region": "Tabora Region"},
+    {"name": "Ukimbu", "region": "Sikonge District"},
+    {"name": "Urambo", "region": "Urambo District"},
+    {"name": "Uyowa", "region": "Nzega District"},
+    {"name": "Iramba", "region": "Singida Region"}
+  ],
+  "cultural_highlights": [
+    "Long-distance caravan trade — Nyamwezi porters and traders dominated the 19th-century interior-to-coast trade in ivory, copper, and slaves",
+    "Chief Mirambo's federation — 1860s–1884 military state that challenged Arab commercial dominance and impressed European explorers including H.M. Stanley",
+    "Ntemi chieftaincy system — village chiefs (ntemi) governed through consensus councils; the same system used by the Sukuma and related peoples",
+    "Vigango memorial posts — carved wooden posts erected in honour of deceased important community members"
+  ],
+  "food_traditions": [
+    {"name": "Ugali and dagaa", "description": "Maize ugali with dried lake sardines — the central plateau staple shared across Tanzania"},
+    {"name": "Kisamvu (cassava leaf stew)", "description": "Pounded cassava leaves cooked with groundnut paste and coconut milk"},
+    {"name": "Roasted maize (mahindi ya kuchoma)", "description": "Roadside roasted sweetcorn — a caravan-era travel food tradition that persists in modern Tanzania"}
+  ],
+  "music_traditions": [
+    "Ngoma ya uganga — healing drum ceremonies led by spirit medium practitioners to treat illness and resolve conflicts",
+    "Beni ngoma — a competitive military-style ngoma with uniforms and mock-military choreography; a colonial-era adaptation of Nyamwezi warrior culture",
+    "Litungu lyre — a 6-8 string box lyre used in personal music-making and small social gatherings"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A1A0A",
+    "gradient_end": "#3A3A1A"
+  },
+  "firestore_id": "community_nyamwezi",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

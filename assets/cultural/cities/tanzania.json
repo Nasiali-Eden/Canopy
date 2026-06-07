@@ -1,0 +1,42 @@
+{
+  "country": "Tanzania",
+  "country_id": "country_tanzania",
+  "cities": {
+    "Dar es Salaam": [
+      {"area": "Ilala", "type": "municipality"},
+      {"area": "Kinondoni", "type": "municipality"},
+      {"area": "Temeke", "type": "municipality"},
+      {"area": "Ubungo", "type": "municipality"},
+      {"area": "Kigamboni", "type": "municipality"}
+    ],
+    "Dodoma": [
+      {"area": "Dodoma Urban", "type": "district"}
+    ],
+    "Arusha": [
+      {"area": "Arusha City", "type": "district"},
+      {"area": "Arusha Urban", "type": "ward"}
+    ],
+    "Mwanza": [
+      {"area": "Ilemela", "type": "municipality"},
+      {"area": "Nyamagana", "type": "municipality"}
+    ],
+    "Zanzibar City": [
+      {"area": "Stone Town", "type": "area"},
+      {"area": "Ng'ambo", "type": "area"},
+      {"area": "Michenzani", "type": "area"}
+    ],
+    "Mbeya": [
+      {"area": "Mbeya City", "type": "district"}
+    ],
+    "Morogoro": [
+      {"area": "Morogoro Urban", "type": "district"}
+    ],
+    "Tanga": [
+      {"area": "Tanga City", "type": "district"}
+    ],
+    "Moshi": [
+      {"area": "Moshi Urban", "type": "district"},
+      {"area": "Moshi Rural", "type": "district"}
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "country_south_africa",
+  "node_type": "country",
+  "name": "South Africa",
+  "name_native": "South Africa",
+  "flag_emoji": "🇿🇦",
+  "iso_code": "ZA",
+  "continent": "Africa",
+  "languages_official": ["Zulu", "Xhosa", "Afrikaans", "English", "Northern Sotho", "Tswana", "Sotho", "Tsonga", "Swati", "Venda", "Ndebele"],
+  "capital": "Pretoria",
+  "description": "South Africa has 11 official languages, reflecting the remarkable cultural plurality of its people. The Zulu and Xhosa nations anchor the east and south, each with powerful traditions of beadwork, music, oral poetry, and ancestral ceremony. The Sotho, Tswana, and Venda peoples carry distinct architectural, musical, and governance traditions, while the Khoisan — the continent's oldest cultures — preserve the most ancient knowledge systems in the African archive.",
+  "region_count": 9,
+  "community_count": 11,
+  "is_live": false,
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "static_asset_fallback": null,
+    "gradient_start": "#1A0A0A",
+    "gradient_end": "#4A1515"
+  },
+  "firestore_id": "country_south_africa",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "last_updated": null
+}

@@ -1,0 +1,20 @@
+{
+  "_file": "communities/_index.json",
+  "_note": "Major community list for Ghana. Communities with full_data:true have a matching detail JSON in this folder.",
+  "country_id": "country_ghana",
+  "communities": [
+    {"id":"community_ashanti",      "name":"Ashanti (Asante)",   "region_id":"region_central_ghana",  "language":"Twi",         "full_data":true},
+    {"id":"community_fante",        "name":"Fante",              "region_id":"region_southern_ghana", "language":"Fante (Twi)", "full_data":true},
+    {"id":"community_ewe",          "name":"Ewe",                "region_id":"region_volta_ghana",    "language":"Ewe",         "full_data":true},
+    {"id":"community_ga_dangme",    "name":"Ga-Dangme",          "region_id":"region_southern_ghana", "language":"Ga / Dangme", "full_data":true},
+    {"id":"community_dagomba",      "name":"Dagomba (Dagbani)",  "region_id":"region_northern_ghana", "language":"Dagbani",     "full_data":true},
+    {"id":"community_bono",         "name":"Bono (Brong)",       "region_id":"region_central_ghana",  "language":"Bono (Twi)",  "full_data":false},
+    {"id":"community_akyem",        "name":"Akyem",              "region_id":"region_central_ghana",  "language":"Akyem (Twi)","full_data":false},
+    {"id":"community_kwahu",        "name":"Kwahu",              "region_id":"region_central_ghana",  "language":"Kwahu (Twi)","full_data":false},
+    {"id":"community_gonja",        "name":"Gonja",              "region_id":"region_northern_ghana", "language":"Gonja",       "full_data":false},
+    {"id":"community_mamprusi",     "name":"Mamprusi",           "region_id":"region_northern_ghana", "language":"Mampruli",    "full_data":false},
+    {"id":"community_nzema",        "name":"Nzema",              "region_id":"region_southern_ghana", "language":"Nzema",       "full_data":false},
+    {"id":"community_krobo",        "name":"Krobo",              "region_id":"region_volta_ghana",    "language":"Krobo",       "full_data":false},
+    {"id":"community_kusasi",       "name":"Kusasi",             "region_id":"region_northern_ghana", "language":"Kusaal",      "full_data":false}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "_file": "regions/_index.json",
+  "_note": "Ghana's four broad cultural zones used to group communities.",
+  "country_id": "country_ghana",
+  "regions": [
+    {"id": "region_southern_ghana",   "name": "Southern / Coastal",   "communities": ["community_ga_dangme","community_fante","community_nzema"]},
+    {"id": "region_central_ghana",    "name": "Central / Ashanti",     "communities": ["community_ashanti","community_bono","community_kwahu","community_akyem"]},
+    {"id": "region_volta_ghana",      "name": "Volta / Eastern",       "communities": ["community_ewe","community_krobo"]},
+    {"id": "region_northern_ghana",   "name": "Northern Savannah",     "communities": ["community_dagomba","community_gonja","community_mamprusi","community_kusasi"]}
+  ]
+}

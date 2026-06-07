@@ -1,0 +1,22 @@
+{
+  "_file": "communities/_index.json",
+  "_note": "Major community list for Nigeria. Only a representative selection — Nigeria has 250+ groups. Communities with full_data:true have a matching detail JSON in this folder.",
+  "country_id": "country_nigeria",
+  "communities": [
+    {"id":"community_yoruba",       "name":"Yoruba",           "region_id":"region_south_west_nigeria",  "language":"Yoruba",     "full_data":true},
+    {"id":"community_igbo",         "name":"Igbo",             "region_id":"region_south_east_nigeria",  "language":"Igbo",       "full_data":true},
+    {"id":"community_hausa_fulani", "name":"Hausa-Fulani",     "region_id":"region_north_west_nigeria",  "language":"Hausa",      "full_data":true},
+    {"id":"community_ijaw",         "name":"Ijaw",             "region_id":"region_south_south_nigeria", "language":"Ijaw",       "full_data":true},
+    {"id":"community_kanuri",       "name":"Kanuri",           "region_id":"region_north_east_nigeria",  "language":"Kanuri",     "full_data":true},
+    {"id":"community_tiv",          "name":"Tiv",              "region_id":"region_north_central_nigeria","language":"Tiv",       "full_data":false},
+    {"id":"community_ibibio",       "name":"Ibibio",           "region_id":"region_south_south_nigeria", "language":"Ibibio",     "full_data":false},
+    {"id":"community_efik",         "name":"Efik",             "region_id":"region_south_south_nigeria", "language":"Efik",       "full_data":false},
+    {"id":"community_urhobo",       "name":"Urhobo",           "region_id":"region_south_south_nigeria", "language":"Urhobo",     "full_data":false},
+    {"id":"community_igala",        "name":"Igala",            "region_id":"region_north_central_nigeria","language":"Igala",     "full_data":false},
+    {"id":"community_idoma",        "name":"Idoma",            "region_id":"region_north_central_nigeria","language":"Idoma",     "full_data":false},
+    {"id":"community_nupe",         "name":"Nupe",             "region_id":"region_north_west_nigeria",  "language":"Nupe",      "full_data":false},
+    {"id":"community_gwari",        "name":"Gwari (Gbagyi)",   "region_id":"region_north_central_nigeria","language":"Gbagyi",   "full_data":false},
+    {"id":"community_itsekiri",     "name":"Itsekiri",         "region_id":"region_south_south_nigeria", "language":"Itsekiri",   "full_data":false},
+    {"id":"community_ebira",        "name":"Ebira",            "region_id":"region_north_central_nigeria","language":"Ebira",    "full_data":false}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "_file": "regions/_index.json",
+  "_note": "South Africa's cultural groupings (not the 9 administrative provinces).",
+  "country_id": "country_south_africa",
+  "regions": [
+    {"id": "region_nguni_sa",      "name": "Nguni",           "communities": ["community_zulu","community_xhosa","community_ndebele_sa","community_swati"]},
+    {"id": "region_sotho_sa",      "name": "Sotho-Tswana",    "communities": ["community_sotho","community_tswana","community_pedi"]},
+    {"id": "region_venda_sa",      "name": "Venda",           "communities": ["community_venda"]},
+    {"id": "region_tsonga_sa",     "name": "Tsonga",          "communities": ["community_tsonga"]},
+    {"id": "region_khoisan_sa",    "name": "Khoisan",         "communities": ["community_san","community_khoi"]}
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "id": "community_chewa",
+  "node_type": "community",
+  "country_id": "country_zambia",
+  "region_id": "region_eastern_zambia",
+  "name": "Chewa",
+  "name_in_own_language": "Achewa",
+  "name_variants": ["Nyanja", "Chichewa speakers"],
+  "flag_emoji": "🇿🇲",
+  "language_primary": "Chewa (Nyanja)",
+  "language_iso": "nya",
+  "language_family": "Bantu",
+  "population_approx": "7 million (Zambia, Malawi, Mozambique)",
+  "description": "The Chewa are the dominant ethnic group in eastern Zambia and the majority ethnic group in Malawi (where their language Chichewa is a national language). The Nyau brotherhood — their secret masquerade society — is one of the most sophisticated and well-preserved secret societies in central Africa, recognised on UNESCO's Intangible Cultural Heritage list. The Gule Wamkulu (Great Dance) performed by the Nyau is a complete cosmological performance system connecting the living, the dead, and the spirit world.",
+  "sub_groups": [
+    {"name": "Nyanja (lake Chewa)", "region": "Lusaka area / Malawi"},
+    {"name": "Chipeta", "region": "Central Malawi"},
+    {"name": "Ntumba", "region": "Eastern Zambia"},
+    {"name": "Zimba", "region": "Eastern Zambia highlands"}
+  ],
+  "cultural_highlights": [
+    "Nyau secret society — male initiation brotherhood that maintains cosmological knowledge through the Gule Wamkulu masquerade; membership is obligatory for Chewa men",
+    "Gule Wamkulu (Great Dance) — UNESCO Intangible Heritage; masked dancers representing ancestral spirits, animals, and supernatural beings appear at initiations and funerals",
+    "Chieftaincy system — the Paramount Chief Kalonga Gawa Undi is recognised as the highest Chewa chief across Zambia, Malawi, and Mozambique",
+    "Female initiation (Chinamwali) — elaborate female coming-of-age ceremony lasting several days, teaching sexual and social knowledge"
+  ],
+  "food_traditions": [
+    {"name": "Nsima (maize ugali)", "description": "Thick maize flour porridge eaten with relish — virtually identical across Zambia, Malawi, and Mozambique, the pan-Chewa staple"},
+    {"name": "Nkhwani (pumpkin leaves)", "description": "Pumpkin leaf stew with groundnut paste — shared with Bemba and Tonga; a universal Zambian green vegetable"},
+    {"name": "Chimanga chophika (roasted maize)", "description": "Roasted sweetcorn on the cob — the definitive Zambian seasonal street food"}
+  ],
+  "music_traditions": [
+    "Gule Wamkulu dance music — specific drum patterns and songs that 'call' specific masquerade characters into appearance",
+    "Vimbuza — a healing dance and trance ceremony where spirit possession is used to diagnose and treat illness",
+    "Ingoma ya Nyau — rhythmic drumming ensemble accompanying all Nyau ceremonies"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A1A2A",
+    "gradient_end": "#1A3A5A"
+  },
+  "firestore_id": "community_chewa",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

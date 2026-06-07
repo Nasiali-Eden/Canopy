@@ -440,6 +440,17 @@ class _TypeCard extends StatelessWidget {
 
 // ─── Step 2: Locality ────────────────────────────────────────────────────────
 
+// Supported countries — Kenya is live; others show "coming soon" in community picker
+const _kSupportedCountries = [
+  (id: 'country_kenya',        label: 'Kenya',        flag: '🇰🇪', live: true),
+  (id: 'country_uganda',       label: 'Uganda',       flag: '🇺🇬', live: false),
+  (id: 'country_nigeria',      label: 'Nigeria',      flag: '🇳🇬', live: false),
+  (id: 'country_ghana',        label: 'Ghana',        flag: '🇬🇭', live: false),
+  (id: 'country_tanzania',     label: 'Tanzania',     flag: '🇹🇿', live: false),
+  (id: 'country_south_africa', label: 'South Africa', flag: '🇿🇦', live: false),
+  (id: 'country_zambia',       label: 'Zambia',       flag: '🇿🇲', live: false),
+];
+
 class _StepLocality extends StatelessWidget {
   const _StepLocality();
 
@@ -447,6 +458,12 @@ class _StepLocality extends StatelessWidget {
   Widget build(BuildContext context) {
     final prov = context.watch<CreateEntryProvider>();
     final loc = prov.locality;
+
+    final selectedCountry = _kSupportedCountries.firstWhere(
+      (c) => c.id == loc.countryId,
+      orElse: () => _kSupportedCountries.first,
+    );
+    final isKenyaSelected = selectedCountry.live;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -463,106 +480,248 @@ class _StepLocality extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Be as specific as you can. If the community is unknown, that is fine — select the option below.',
+            'Select the country and community. Be as specific as possible.',
             style: TextStyle(fontSize: 13, color: Colors.grey[600]),
           ),
           const SizedBox(height: 20),
 
-          // Community selector
-          GestureDetector(
-            onTap: loc.communityUnknown
-                ? null
-                : () async {
-                    final result = await showModalBottomSheet<CommunitySelection?>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => const LocalitySelectorSheet(),
-                    );
-                    if (result != null && context.mounted) {
-                      context.read<CreateEntryProvider>().setCommunity(result.id, result.name);
-                    } else if (result == null && context.mounted) {
-                      // User tapped "Community unknown" inside the sheet
-                      context.read<CreateEntryProvider>().setCommunityUnknown(true);
-                    }
-                  },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          // ── Country selector ────────────────────────────────────────────
+          Text(
+            'COUNTRY',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.tertiary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: loc.countryId,
+                isExpanded: true,
+                items: _kSupportedCountries.map((c) {
+                  return DropdownMenuItem<String>(
+                    value: c.id,
+                    child: Row(
+                      children: [
+                        Text(c.flag, style: const TextStyle(fontSize: 18)),
+                        const SizedBox(width: 10),
+                        Text(
+                          c.label,
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w500),
+                        ),
+                        if (!c.live) ...[
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Soon',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey[500],
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    context.read<CreateEntryProvider>().setCountryId(v);
+                  }
+                },
+              ),
+            ),
+          ),
+
+          // ── Coming-soon banner for non-Kenya countries ───────────────────
+          if (!isKenyaSelected) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: loc.communityUnknown ? Colors.grey[100] : Colors.white,
+                color: const Color(0xFFFFF8E1),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: loc.communityId != null
-                      ? AppTheme.tertiary
-                      : Colors.grey[300]!,
-                  width: loc.communityId != null ? 1.5 : 1,
-                ),
+                border: Border.all(color: const Color(0xFFFFE082)),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.people_outline,
-                    size: 20,
-                    color: loc.communityId != null
-                        ? AppTheme.tertiary
-                        : Colors.grey[500],
-                  ),
-                  const SizedBox(width: 12),
+                  const Text('🗺️', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      loc.communityId != null
-                          ? (loc.communityName ?? loc.communityId!)
-                          : 'Select community…',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: loc.communityId != null
-                            ? AppTheme.darkGreen
-                            : Colors.grey[500],
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${selectedCountry.label} community data coming soon',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF7B5800),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Cultural community data for ${selectedCountry.label} is being documented by knowledge holders and partner organisations. You can still add locality notes below.',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF9C6E00),
+                              height: 1.5),
+                        ),
+                      ],
                     ),
                   ),
-                  if (!loc.communityUnknown)
-                    Icon(Icons.chevron_right, color: Colors.grey[400]),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 12),
+          ],
 
-          // Community unknown toggle
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey[200]!),
-              color: Colors.white,
-            ),
-            child: SwitchListTile(
-              title: const Text(
-                'Community unknown',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              subtitle: Text(
-                "I can't identify which community this belongs to",
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-              value: loc.communityUnknown,
-              activeColor: AppTheme.tertiary,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              onChanged: (v) => context.read<CreateEntryProvider>().setCommunityUnknown(v),
-            ),
-          ),
           const SizedBox(height: 20),
 
-          // Locality notes
+          // ── Community selector (Kenya only) ──────────────────────────────
+          if (isKenyaSelected) ...[
+            Text(
+              'COMMUNITY',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.tertiary,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: loc.communityUnknown
+                  ? null
+                  : () async {
+                      final result =
+                          await showModalBottomSheet<CommunitySelection?>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => const LocalitySelectorSheet(),
+                      );
+                      if (result != null && context.mounted) {
+                        context
+                            .read<CreateEntryProvider>()
+                            .setCommunity(result.id, result.name);
+                      } else if (result == null && context.mounted) {
+                        context
+                            .read<CreateEntryProvider>()
+                            .setCommunityUnknown(true);
+                      }
+                    },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: loc.communityUnknown ? Colors.grey[100] : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: loc.communityId != null
+                        ? AppTheme.tertiary
+                        : Colors.grey[300]!,
+                    width: loc.communityId != null ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.people_outline,
+                      size: 20,
+                      color: loc.communityId != null
+                          ? AppTheme.tertiary
+                          : Colors.grey[500],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        loc.communityId != null
+                            ? (loc.communityName ?? loc.communityId!)
+                            : 'Select community…',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: loc.communityId != null
+                              ? AppTheme.darkGreen
+                              : Colors.grey[500],
+                        ),
+                      ),
+                    ),
+                    if (!loc.communityUnknown)
+                      Icon(Icons.chevron_right, color: Colors.grey[400]),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Community unknown toggle
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey[200]!),
+                color: Colors.white,
+              ),
+              child: SwitchListTile(
+                title: const Text(
+                  'Community unknown',
+                  style:
+                      TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                subtitle: Text(
+                  "I can't identify which community this belongs to",
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+                value: loc.communityUnknown,
+                activeColor: AppTheme.tertiary,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12),
+                onChanged: (v) => context
+                    .read<CreateEntryProvider>()
+                    .setCommunityUnknown(v),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+
+          // ── Locality notes ───────────────────────────────────────────────
+          Text(
+            'LOCALITY NOTES',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.tertiary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
           TextField(
             decoration: InputDecoration(
-              labelText: 'Locality notes',
-              hintText: 'e.g. Practiced in the Kibera Luo diaspora, not the Nyanza homeland',
+              hintText:
+                  'e.g. Practiced in the Kibera Luo diaspora, not the Nyanza homeland',
               border: const OutlineInputBorder(),
               alignLabelWithHint: true,
             ),
             maxLines: 3,
-            onChanged: (v) => context.read<CreateEntryProvider>().setLocalityNotes(v),
+            onChanged: (v) =>
+                context.read<CreateEntryProvider>().setLocalityNotes(v),
           ),
         ],
       ),
@@ -795,8 +954,15 @@ class _StepMedia extends StatelessWidget {
 
   static final _picker = ImagePicker();
 
+  // Image roles — the role describes how/where the image is used.
+  // story_background / community_background are stored against the entry but
+  // can be promoted to the hierarchy node (country/community) by the admin.
   static const _imageRoles = [
     'cover_image',
+    'story_background',
+    'community_background',
+    'food_image',
+    'ceremony_image',
     'documentation_image',
     'process_image',
     'artefact_image',
@@ -804,6 +970,20 @@ class _StepMedia extends StatelessWidget {
     'historical_image',
     'pattern_detail',
   ];
+
+  static const _imageRoleLabels = {
+    'cover_image':           'Cover — card thumbnail',
+    'story_background':      'Story background — full-bleed when reading entry',
+    'community_background':  'Community background — tribe/community page hero',
+    'food_image':            'Food — dish or ingredient photo',
+    'ceremony_image':        'Ceremony — ritual or event photo',
+    'documentation_image':   'Documentation — reference or archival image',
+    'process_image':         'Process — craft or technique step',
+    'artefact_image':        'Artefact — object or tool photo',
+    'context_image':         'Context — location or setting',
+    'historical_image':      'Historical — archival or old photograph',
+    'pattern_detail':        'Pattern / texture detail',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1047,13 +1227,10 @@ class _MediaCard extends StatelessWidget {
                           contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         ),
                         items: roles.map((r) {
-                          final label = r.replaceAll('_', ' ');
+                          final label = _StepMedia._imageRoleLabels[r] ?? r.replaceAll('_', ' ');
                           return DropdownMenuItem(
                             value: r,
-                            child: Text(
-                              '${label[0].toUpperCase()}${label.substring(1)}',
-                              style: const TextStyle(fontSize: 13),
-                            ),
+                            child: Text(label, style: const TextStyle(fontSize: 13)),
                           );
                         }).toList(),
                         onChanged: (r) { if (r != null) onSetRole(r); },

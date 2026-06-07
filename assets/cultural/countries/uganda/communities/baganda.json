@@ -1,0 +1,51 @@
+{
+  "id": "community_baganda",
+  "node_type": "community",
+  "country_id": "country_uganda",
+  "region_id": "region_central_uganda",
+  "name": "Baganda",
+  "name_in_own_language": "Buganda",
+  "name_variants": ["Ganda"],
+  "flag_emoji": "🇺🇬",
+  "language_primary": "Luganda",
+  "language_iso": "lug",
+  "language_family": "Bantu",
+  "population_approx": "5.5 million (Uganda, est.)",
+  "description": "The Baganda are the largest ethnic group in Uganda and the people of the Buganda Kingdom — one of the most politically sophisticated kingdoms in pre-colonial Africa. Founded in the 14th century, Buganda reached its height in the 19th century with a standing army, a complex bureaucracy, and a Kabaka (king) whose authority was supported by a parliament (Lukiiko). The Baganda were early adopters of literacy, Christianity, and formal governance, which gave them outsized influence in colonial and post-independence Uganda.",
+  "sub_groups": [
+    {"name": "Ssese Islands clans", "region": "Kalangala District"},
+    {"name": "Kyaggwe", "region": "Mukono District"},
+    {"name": "Busiro", "region": "Wakiso District"},
+    {"name": "Buddu", "region": "Masaka Region"},
+    {"name": "Kooki", "region": "Rakai District"}
+  ],
+  "cultural_highlights": [
+    "Buganda Kingdom — one of Africa's oldest and most complex kingdoms, with over 52 clans (ebika) each with specific totems and roles",
+    "Kabaka (king) institution — the Kabaka is the symbol of Buganda unity; the current Kabaka Ronald Muwenda Mutebi II was coronated in 1993",
+    "Ssekabaka tombs (Kasubi) — the royal tombs at Kasubi Hill are a UNESCO World Heritage Site, housing the remains of four kabakas",
+    "Barkcloth (olubugo) — the traditional fabric of Buganda, made from the Mutuba tree; a UNESCO Intangible Heritage",
+    "Nnankasa dance — a courtly dance traditionally performed for the Kabaka, now a cultural showpiece"
+  ],
+  "food_traditions": [
+    {"name": "Matoke (steamed banana)", "description": "East African highland cooking banana steamed in banana leaves — the soul food of Buganda and a Ugandan national dish"},
+    {"name": "Groundnut stew (Ebinyebwa)", "description": "Rich peanut sauce cooked with chicken, beef, or offal, served with matoke or sweet potato"},
+    {"name": "Nsenene (grasshoppers)", "description": "Seasonal flying grasshoppers fried with onion and salt — a prized Buganda delicacy, both a snack and a celebratory dish"}
+  ],
+  "music_traditions": [
+    "Amadinda xylophone — a large log xylophone central to royal court music, played by multiple performers simultaneously",
+    "Akadinda — a smaller xylophone with interlocking musical parts, requiring deep ensemble coordination",
+    "Baakisimba dance — the most widespread Baganda social dance, featuring hip-rolling movements and call-and-response drumming"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A1F3A",
+    "gradient_end": "#1A3A6A"
+  },
+  "firestore_id": "community_baganda",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

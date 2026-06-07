@@ -1,0 +1,46 @@
+{
+  "country": "Zambia",
+  "country_id": "country_zambia",
+  "cities": {
+    "Lusaka": [
+      {"area": "Lusaka Central", "type": "constituency"},
+      {"area": "Chilanga", "type": "district"},
+      {"area": "Chawama", "type": "constituency"},
+      {"area": "Mandevu", "type": "constituency"},
+      {"area": "Kanyama", "type": "constituency"},
+      {"area": "Kalingalinga", "type": "compound"},
+      {"area": "Mtendere", "type": "compound"}
+    ],
+    "Kitwe": [
+      {"area": "Kitwe Central", "type": "constituency"},
+      {"area": "Nkana", "type": "constituency"},
+      {"area": "Wusakile", "type": "constituency"}
+    ],
+    "Ndola": [
+      {"area": "Ndola Central", "type": "constituency"},
+      {"area": "Chifubu", "type": "constituency"},
+      {"area": "Kansenshi", "type": "constituency"}
+    ],
+    "Kabwe": [
+      {"area": "Kabwe Central", "type": "constituency"},
+      {"area": "Vubwi", "type": "constituency"}
+    ],
+    "Chingola": [
+      {"area": "Chingola Central", "type": "constituency"}
+    ],
+    "Livingstone": [
+      {"area": "Livingstone Central", "type": "constituency"},
+      {"area": "Maramba", "type": "area"}
+    ],
+    "Kasama": [
+      {"area": "Kasama Central", "type": "constituency"}
+    ],
+    "Mongu": [
+      {"area": "Mongu Central", "type": "constituency"}
+    ],
+    "Chipata": [
+      {"area": "Chipata Central", "type": "constituency"},
+      {"area": "Chipata East", "type": "constituency"}
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "_file": "subgroups/kikuyu/_index.json",
+  "_note": "Kikuyu regional sub-groups (by county/area). Add detail JSON per sub-group as content grows.",
+  "community_id": "community_kikuyu",
+  "country_id": "country_kenya",
+  "sub_groups": [
+    {"id":"subgroup_kiambu_kikuyu",    "name":"Kiambu Kikuyu",     "region":"Kiambu County",     "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_muranga_kikuyu",   "name":"Murang'a Kikuyu",   "region":"Murang'a County",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_nyeri_kikuyu",     "name":"Nyeri Kikuyu",      "region":"Nyeri County",      "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_kirinyaga_kikuyu", "name":"Kirinyaga Kikuyu",  "region":"Kirinyaga County",  "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_nyandarua_kikuyu", "name":"Nyandarua Kikuyu",  "region":"Nyandarua County",  "full_data":false, "bg_image_url":null}
+  ]
+}

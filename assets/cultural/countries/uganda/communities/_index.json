@@ -1,0 +1,27 @@
+{
+  "_file": "communities/_index.json",
+  "_note": "Full community list for Uganda. Communities with full_data:true have a matching detail JSON in this folder.",
+  "country_id": "country_uganda",
+  "communities": [
+    {"id":"community_baganda",     "name":"Baganda",          "region_id":"region_central_uganda",  "language":"Luganda",      "full_data":true},
+    {"id":"community_banyankole",  "name":"Banyankole",       "region_id":"region_western_uganda",  "language":"Runyankore",    "full_data":true},
+    {"id":"community_basoga",      "name":"Basoga",           "region_id":"region_eastern_uganda",  "language":"Lusoga",        "full_data":true},
+    {"id":"community_bakiga",      "name":"Bakiga",           "region_id":"region_western_uganda",  "language":"Rukiga",        "full_data":true},
+    {"id":"community_iteso",       "name":"Iteso",            "region_id":"region_eastern_uganda",  "language":"Ateso",         "full_data":true},
+    {"id":"community_acholi",      "name":"Acholi",           "region_id":"region_northern_uganda", "language":"Acholi",        "full_data":false},
+    {"id":"community_langi",       "name":"Langi",            "region_id":"region_northern_uganda", "language":"Lango",         "full_data":false},
+    {"id":"community_banyoro",     "name":"Banyoro",          "region_id":"region_western_uganda",  "language":"Runyoro",       "full_data":false},
+    {"id":"community_batooro",     "name":"Batooro",          "region_id":"region_western_uganda",  "language":"Rutooro",       "full_data":false},
+    {"id":"community_lugbara",     "name":"Lugbara",          "region_id":"region_northern_uganda", "language":"Lugbara",       "full_data":false},
+    {"id":"community_alur",        "name":"Alur",             "region_id":"region_northern_uganda", "language":"Alur",          "full_data":false},
+    {"id":"community_bagisu",      "name":"Bagisu (Bamasaba)", "region_id":"region_eastern_uganda", "language":"Lumasaba",      "full_data":false},
+    {"id":"community_madi",        "name":"Madi",             "region_id":"region_northern_uganda", "language":"Madi",          "full_data":false},
+    {"id":"community_bafumbira",   "name":"Bafumbira",        "region_id":"region_western_uganda",  "language":"Kinyarwanda",   "full_data":false},
+    {"id":"community_basamia",     "name":"Basamia",          "region_id":"region_eastern_uganda",  "language":"Lusamia",       "full_data":false},
+    {"id":"community_karimojong",  "name":"Karimojong",       "region_id":"region_eastern_uganda",  "language":"Karimojong",    "full_data":false},
+    {"id":"community_jopadhola",   "name":"Jopadhola",        "region_id":"region_eastern_uganda",  "language":"Adhola",        "full_data":false},
+    {"id":"community_bakonzo",     "name":"Bakonzo",          "region_id":"region_western_uganda",  "language":"Lhukonzo",      "full_data":false},
+    {"id":"community_bwamba",      "name":"Bwamba",           "region_id":"region_western_uganda",  "language":"Bwamba",        "full_data":false},
+    {"id":"community_bagwere",     "name":"Bagwere",          "region_id":"region_eastern_uganda",  "language":"Lugwere",       "full_data":false}
+  ]
+}

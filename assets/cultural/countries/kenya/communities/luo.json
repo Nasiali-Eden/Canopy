@@ -1,0 +1,56 @@
+{
+  "id": "community_luo",
+  "node_type": "community",
+  "country_id": "country_kenya",
+  "region_id": "region_western_kenya",
+  "name": "Luo",
+  "name_in_own_language": "Joluo",
+  "name_variants": ["Jo-Luo", "Kavirondo (colonial, deprecated)"],
+  "flag_emoji": "🇰🇪",
+  "language_primary": "Dholuo",
+  "language_iso": "luo",
+  "language_family": "Nilotic",
+  "population_approx": "6.1 million (Kenya, 2019 census)",
+  "description": "The Joluo are a Nilotic people of the Lake Victoria basin, renowned for their rich oral traditions, fishing culture, and deep connection to the lake they call Nam Lolwe. They migrated from present-day South Sudan via Uganda between the 15th and 16th centuries. The Luo practice patrilineal descent and their social structure revolves around the dala (homestead) and the extended family oganda. They are the source of Kenya's most celebrated music traditions including benga.",
+  "sub_groups": [
+    {"name": "Seme", "region": "Kisumu County"},
+    {"name": "Karachuonyo", "region": "Homa Bay County"},
+    {"name": "Asembo", "region": "Siaya County"},
+    {"name": "Kano", "region": "Kisumu County"},
+    {"name": "Uyoma", "region": "Siaya County"},
+    {"name": "Alego", "region": "Siaya County"},
+    {"name": "Gem", "region": "Siaya County"},
+    {"name": "Ugenya", "region": "Siaya County"}
+  ],
+  "cultural_highlights": [
+    "Nam Lolwe (Lake Victoria) — the Luo world centres on the lake; fishing, boat-building, and lake lore form a core cultural identity",
+    "Duol — the open-air communal meeting place where elders deliberate and stories are shared",
+    "Nyatiti — an 8-stringed lyre, the defining instrument of Luo music, traditionally played at funerals and ceremonies",
+    "Sagwati — male initiation practice involving removal of the lower incisor teeth as a rite of passage",
+    "Tero buru — funeral rites that can last weeks, involving communal cooking, music, and cattle sacrifice"
+  ],
+  "food_traditions": [
+    {"name": "Ugali with Tilapia", "description": "Sima (ugali) with fresh tilapia from Lake Victoria — the defining meal of Luo cuisine"},
+    {"name": "Aliya (dried fish)", "description": "Sun-dried tilapia or Nile perch, a preserved protein staple traded across the region"},
+    {"name": "Ochuoga (simsim soup)", "description": "Sesame seed soup served with fermented vegetables — a traditional midday meal"},
+    {"name": "Kuon Kal (millet ugali)", "description": "Finger millet ugali — darker and denser, considered the traditional staple before maize became dominant"}
+  ],
+  "music_traditions": [
+    "Nyatiti lyre — played by a solo performer who sings, plays, and keeps rhythm with ankle bells simultaneously",
+    "Orutu — a one-stringed fiddle used in ritual contexts and storytelling performances",
+    "Benga — the guitar style pioneered by D.O. Misiani originating in Luo rhythms, now a national genre",
+    "Ohangla — a high-energy percussion and dance form central to modern Luo cultural celebration"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A1F3A",
+    "gradient_end": "#1A4A7A"
+  },
+  "firestore_id": "community_luo",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

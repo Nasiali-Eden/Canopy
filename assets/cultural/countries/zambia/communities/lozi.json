@@ -1,0 +1,50 @@
+{
+  "id": "community_lozi",
+  "node_type": "community",
+  "country_id": "country_zambia",
+  "region_id": "region_western_zambia",
+  "name": "Lozi",
+  "name_in_own_language": "Barotse / Lozi",
+  "name_variants": ["Barotse", "Luyana"],
+  "flag_emoji": "🇿🇲",
+  "language_primary": "Silozi",
+  "language_iso": "loz",
+  "language_family": "Bantu",
+  "population_approx": "600,000",
+  "description": "The Lozi are the people of Barotseland in western Zambia, whose Litunga (king) rules one of Africa's most impressive flood-plain kingdoms. The Barotse Flood Plain is a vast seasonal floodplain that covers 15,000 square kilometres; each year the Lozi move their capital between the high ground (winter capital Limulunga) and the flood plain (summer capital Lealui). This annual migration — the Kuomboka ceremony — is one of Africa's most celebrated living cultural events, featuring the royal barge Nalikwanda, decorated as a black and white elephant.",
+  "sub_groups": [
+    {"name": "Luyana (original Lozi)", "region": "Flood plain centre"},
+    {"name": "Kwangwa", "region": "Northern Barotseland"},
+    {"name": "Mbowe", "region": "Western Barotseland"},
+    {"name": "Simaa", "region": "Southern Barotseland"},
+    {"name": "Imilangu", "region": "Flood plain east"}
+  ],
+  "cultural_highlights": [
+    "Kuomboka ceremony — the annual royal migration from flooded Lealui to high-ground Limulunga; the Litunga sails the royal barge Nalikwanda across a flooded plain; one of Africa's most spectacular ceremonies",
+    "Nalikwanda royal barge — decorated with a painted elephant, this ceremonial boat is the symbol of the Litunga's power",
+    "Kuta (royal court) system — a formal court with hereditary officials (indunas) who govern different aspects of Barotse life",
+    "Barotse flood plain ecology — a unique adaptive culture built entirely around seasonal flooding; agriculture, architecture, and calendar are all shaped by the annual flood"
+  ],
+  "food_traditions": [
+    {"name": "Nshima with fish", "description": "Thick maize porridge with fresh or smoked fish from the Zambezi and flood plain — the Lozi daily staple"},
+    {"name": "Mukoyo (maize drink)", "description": "A sweet fermented drink made from dried roasted maize; served at ceremonies and as a cooling everyday drink"},
+    {"name": "Flood plain vegetables", "description": "A variety of indigenous vegetables grown on the seasonally flooded plains; plant diversity is central to Lozi ecological knowledge"}
+  ],
+  "music_traditions": [
+    "Silozi ngoma — ceremonial drumming accompanying the Kuomboka and other royal events",
+    "Makishi masquerade — masked ancestral figures performing during male initiation (mukanda) ceremonies across Barotseland",
+    "Sioma (royal drums) — enormous royal drums kept at the Kuta, struck only on specific ceremonial occasions"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A2A1A",
+    "gradient_end": "#1A5A3A"
+  },
+  "firestore_id": "community_lozi",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

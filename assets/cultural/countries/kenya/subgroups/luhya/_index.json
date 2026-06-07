@@ -1,0 +1,28 @@
+{
+  "_file": "subgroups/luhya/_index.json",
+  "_note": "All 18 Luhya sub-groups. Each can have its own detail JSON file as org content is uploaded. The luhya_seed_data.json in /hierarchy/ is the org-uploadable reference for org content.",
+  "community_id": "community_luhya",
+  "country_id": "country_kenya",
+  "region_id": "region_western_kenya",
+  "total_sub_groups": 18,
+  "sub_groups": [
+    {"id":"subgroup_bukusu",     "name":"Bukusu",     "region":"Trans-Nzoia, Bungoma",     "language":"Lubukusu",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_maragoli",   "name":"Maragoli",   "region":"Vihiga County",             "language":"Luragoli",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_tiriki",     "name":"Tiriki",     "region":"Hamisi, Vihiga County",     "language":"Lutsotso",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_wanga",      "name":"Wanga",      "region":"Mumias, Kakamega County",   "language":"Luwanga",    "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_kisa",       "name":"Kisa",       "region":"Khwisero, Kakamega County", "language":"Lukisa",     "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_kabras",     "name":"Kabras",     "region":"Malava, Kakamega County",   "language":"Lukabras",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_idakho",     "name":"Idakho",     "region":"Shinyalu, Kakamega County", "language":"Luidakho",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_isukha",     "name":"Isukha",     "region":"Ikolomani, Kakamega County","language":"Luisukha",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_nyala",      "name":"Nyala",      "region":"Navakholo, Kakamega County","language":"Lunyala",    "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_tachoni",    "name":"Tachoni",    "region":"Lugari, Kakamega County",   "language":"Lutachoni",  "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_khayo",      "name":"Khayo",      "region":"Butula, Busia County",      "language":"Lukhayo",    "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_marama",     "name":"Marama",     "region":"Butere, Kakamega County",   "language":"Lumarama",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_banyala",    "name":"Banyala",    "region":"Ugenya / Siaya County",     "language":"Lunyala",    "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_samia",      "name":"Samia",      "region":"Funyula, Busia County",     "language":"Lusamia",    "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_tura",       "name":"Tura",       "region":"Ikolomani, Kakamega County","language":"Lutura",     "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_kayo",       "name":"Kayo",       "region":"Mumias East",               "language":"Lukayo",     "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_tsotso",     "name":"Tsotso",     "region":"Kakamega County",           "language":"Lutsotso",   "full_data":false, "bg_image_url":null},
+    {"id":"subgroup_gisu",       "name":"Gisu (Masaaba)", "region":"Bungoma County / Uganda border","language":"Lumasaba", "full_data":false, "bg_image_url":null}
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "_file": "_index.json",
+  "_note": "Master country registry. Each entry has a matching country.json under countries/{country_id}/. Add new countries by creating a folder and adding an entry here.",
+  "_schema_version": "1.0",
+
+  "countries": [
+    {
+      "id": "country_kenya",
+      "name": "Kenya",
+      "name_native": "Kenya",
+      "flag_emoji": "🇰🇪",
+      "iso_code": "KE",
+      "continent": "Africa",
+      "is_live": true,
+      "community_count": 45,
+      "folder": "countries/kenya"
+    },
+    {
+      "id": "country_uganda",
+      "name": "Uganda",
+      "name_native": "Uganda",
+      "flag_emoji": "🇺🇬",
+      "iso_code": "UG",
+      "continent": "Africa",
+      "is_live": false,
+      "community_count": 65,
+      "folder": "countries/uganda"
+    },
+    {
+      "id": "country_nigeria",
+      "name": "Nigeria",
+      "name_native": "Naìjíríà",
+      "flag_emoji": "🇳🇬",
+      "iso_code": "NG",
+      "continent": "Africa",
+      "is_live": false,
+      "community_count": 250,
+      "folder": "countries/nigeria"
+    },
+    {
+      "id": "country_ghana",
+      "name": "Ghana",
+      "name_native": "Ghana",
+      "flag_emoji": "🇬🇭",
+      "iso_code": "GH",
+      "continent": "Africa",
+      "is_live": false,
+      "community_count": 100,
+      "folder": "countries/ghana"
+    },
+    {
+      "id": "country_tanzania",
+      "name": "Tanzania",
+      "name_native": "Tanzania",
+      "flag_emoji": "🇹🇿",
+      "iso_code": "TZ",
+      "continent": "Africa",
+      "is_live": false,
+      "community_count": 130,
+      "folder": "countries/tanzania"
+    },
+    {
+      "id": "country_south_africa",
+      "name": "South Africa",
+      "name_native": "South Africa",
+      "flag_emoji": "🇿🇦",
+      "iso_code": "ZA",
+      "continent": "Africa",
+      "is_live": false,
+      "community_count": 11,
+      "folder": "countries/south_africa"
+    },
+    {
+      "id": "country_zambia",
+      "name": "Zambia",
+      "name_native": "Zambia",
+      "flag_emoji": "🇿🇲",
+      "iso_code": "ZM",
+      "continent": "Africa",
+      "is_live": false,
+      "community_count": 73,
+      "folder": "countries/zambia"
+    }
+  ]
+}

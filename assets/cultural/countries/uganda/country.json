@@ -1,0 +1,27 @@
+{
+  "id": "country_uganda",
+  "node_type": "country",
+  "name": "Uganda",
+  "name_native": "Uganda",
+  "flag_emoji": "🇺🇬",
+  "iso_code": "UG",
+  "continent": "Africa",
+  "languages_official": ["English", "Swahili"],
+  "capital": "Kampala",
+  "description": "Uganda is the Pearl of Africa, home to over 65 ethnic groups spread across the Great Lakes region. From the Buganda kingdom of the central plateau to the Acholi of the north and the Banyankole of the south-west highlands, each community carries deep traditions of music, governance, agriculture, and oral history.",
+  "region_count": 4,
+  "community_count": 65,
+  "is_live": false,
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "static_asset_fallback": null,
+    "gradient_start": "#0A1F3A",
+    "gradient_end": "#1A4A8A"
+  },
+  "firestore_id": "country_uganda",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "last_updated": null
+}

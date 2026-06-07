@@ -1,0 +1,52 @@
+{
+  "country": "South Africa",
+  "country_id": "country_south_africa",
+  "cities": {
+    "Johannesburg": [
+      {"area": "Sandton", "type": "suburb"},
+      {"area": "Soweto", "type": "township"},
+      {"area": "Randburg", "type": "suburb"},
+      {"area": "Roodepoort", "type": "suburb"},
+      {"area": "Midrand", "type": "suburb"},
+      {"area": "Alexandra", "type": "township"}
+    ],
+    "Cape Town": [
+      {"area": "City Bowl", "type": "area"},
+      {"area": "Atlantic Seaboard", "type": "area"},
+      {"area": "Langa", "type": "township"},
+      {"area": "Gugulethu", "type": "township"},
+      {"area": "Khayelitsha", "type": "township"},
+      {"area": "Mitchells Plain", "type": "suburb"}
+    ],
+    "Durban": [
+      {"area": "Durban Central", "type": "area"},
+      {"area": "Umlazi", "type": "township"},
+      {"area": "KwaMashu", "type": "township"},
+      {"area": "Pinetown", "type": "suburb"}
+    ],
+    "Pretoria": [
+      {"area": "Pretoria Central", "type": "area"},
+      {"area": "Hatfield", "type": "suburb"},
+      {"area": "Sunnyside", "type": "suburb"},
+      {"area": "Atteridgeville", "type": "township"}
+    ],
+    "Port Elizabeth (Gqeberha)": [
+      {"area": "Gqeberha Central", "type": "area"},
+      {"area": "New Brighton", "type": "township"},
+      {"area": "Motherwell", "type": "township"}
+    ],
+    "Bloemfontein": [
+      {"area": "Bloemfontein Central", "type": "area"},
+      {"area": "Mangaung", "type": "township"},
+      {"area": "Botshabelo", "type": "township"}
+    ],
+    "East London (Bhisho area)": [
+      {"area": "East London", "type": "area"},
+      {"area": "Mdantsane", "type": "township"}
+    ],
+    "Pietermaritzburg": [
+      {"area": "Pietermaritzburg Central", "type": "area"},
+      {"area": "Edendale", "type": "township"}
+    ]
+  }
+}

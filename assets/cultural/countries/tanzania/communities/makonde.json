@@ -1,0 +1,48 @@
+{
+  "id": "community_makonde",
+  "node_type": "community",
+  "country_id": "country_tanzania",
+  "region_id": "region_coastal_tz",
+  "name": "Makonde",
+  "name_in_own_language": "Wakonde",
+  "name_variants": ["Makonde carvers"],
+  "flag_emoji": "🇹🇿",
+  "language_primary": "Makonde",
+  "language_iso": "kde",
+  "language_family": "Bantu",
+  "population_approx": "1.5 million (Tanzania & Mozambique)",
+  "description": "The Makonde inhabit the Mtwara Region of south-east Tanzania (and northern Mozambique), isolated on a high plateau that historically protected them from slavers. They are most famous globally for their ebony wood sculpture — intricate, multi-figure carvings depicting the Ujamaa (family tree) concept and the supernatural. Their woodcarving tradition, recognised by UNESCO, is a living artistic heritage that has influenced contemporary African art worldwide. Matrilineal and matrilocal, they represent one of Africa's most intact matrilineal societies.",
+  "sub_groups": [
+    {"name": "Mtwara Makonde", "region": "Mtwara Region"},
+    {"name": "Mozambique Makonde", "region": "Cabo Delgado, Mozambique"},
+    {"name": "Newala Makonde", "region": "Newala District"}
+  ],
+  "cultural_highlights": [
+    "Ujamaa sculpture — interconnected multi-figure ebony carvings depicting family, community, and the unity of generations; a UNESCO-recognised art form",
+    "Shetani carvings — abstract spirit figures with elongated, distorted forms representing the Makonde spirit world; groundbreaking in African contemporary art",
+    "Mapiko masquerade — a male initiation masquerade featuring elaborate wooden masks; strictly secret and performed only during male circumcision ceremonies",
+    "Matrilineal society — children inherit clan identity through the mother; residency after marriage is with the wife's family (matrilocal)"
+  ],
+  "food_traditions": [
+    {"name": "Ugali with cassava leaves", "description": "Cassava leaf stew (mchuzi wa kisamvu) with ugali — the standard Makonde plateau meal"},
+    {"name": "Dried fish and coconut rice", "description": "Coastal influence in Makonde cooking; coconut-based rice dishes reflect Indian Ocean trade connections"},
+    {"name": "Maharagwe (kidney beans)", "description": "Slow-cooked red kidney beans with coconut milk — a filling daily meal in the dry plateau"}
+  ],
+  "music_traditions": [
+    "Lipala dance — a social dance performed at celebrations with call-and-response singing and polyrhythmic drumming",
+    "Sindimba — a traditional Makonde dance performed during festivals, known for the deep back-bending of dancers",
+    "Mapiko drum ensemble — ceremonial drums that announce the masquerade spirits during initiation ceremonies"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A0A0A",
+    "gradient_end": "#3A1A1A"
+  },
+  "firestore_id": "community_makonde",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

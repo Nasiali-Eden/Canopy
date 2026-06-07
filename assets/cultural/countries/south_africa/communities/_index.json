@@ -1,0 +1,18 @@
+{
+  "_file": "communities/_index.json",
+  "_note": "Major community list for South Africa. Grouped by the 11 official language/cultural communities. Communities with full_data:true have a matching detail JSON in this folder.",
+  "country_id": "country_south_africa",
+  "communities": [
+    {"id":"community_zulu",        "name":"Zulu",               "region_id":"region_nguni_sa",   "language":"isiZulu",          "full_data":true},
+    {"id":"community_xhosa",       "name":"Xhosa",              "region_id":"region_nguni_sa",   "language":"isiXhosa",         "full_data":true},
+    {"id":"community_sotho",       "name":"Sotho (Sesotho)",    "region_id":"region_sotho_sa",   "language":"Sesotho",          "full_data":true},
+    {"id":"community_tswana",      "name":"Tswana (Setswana)",  "region_id":"region_sotho_sa",   "language":"Setswana",         "full_data":true},
+    {"id":"community_tsonga",      "name":"Tsonga (Xitsonga)",  "region_id":"region_tsonga_sa",  "language":"Xitsonga",         "full_data":true},
+    {"id":"community_venda",       "name":"Venda (Tshivenda)",  "region_id":"region_venda_sa",   "language":"Tshivenda",        "full_data":false},
+    {"id":"community_ndebele_sa",  "name":"Ndebele",            "region_id":"region_nguni_sa",   "language":"isiNdebele",       "full_data":false},
+    {"id":"community_swati",       "name":"Swati (Swazi)",      "region_id":"region_nguni_sa",   "language":"siSwati",          "full_data":false},
+    {"id":"community_pedi",        "name":"Pedi (Sepedi)",      "region_id":"region_sotho_sa",   "language":"Sepedi",           "full_data":false},
+    {"id":"community_san",         "name":"San (Bushmen)",      "region_id":"region_khoisan_sa", "language":"San languages",    "full_data":false},
+    {"id":"community_khoi",        "name":"Khoikhoi",           "region_id":"region_khoisan_sa", "language":"Khoekhoe",         "full_data":false}
+  ]
+}

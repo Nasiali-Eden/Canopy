@@ -1,0 +1,52 @@
+{
+  "id": "community_zulu",
+  "node_type": "community",
+  "country_id": "country_south_africa",
+  "region_id": "region_nguni_sa",
+  "name": "Zulu",
+  "name_in_own_language": "amaZulu",
+  "name_variants": ["Zulu nation"],
+  "flag_emoji": "🇿🇦",
+  "language_primary": "isiZulu",
+  "language_iso": "zul",
+  "language_family": "Bantu (Nguni)",
+  "population_approx": "12 million (South Africa)",
+  "description": "The Zulu are the largest South African ethnic group, concentrated in KwaZulu-Natal. Under King Shaka (c.1787–1828), the Zulu Kingdom rose from a small clan to a military superpower that dominated southern Africa through the Mfecane (the 'crushing' — a period of widespread warfare and migration). Shaka's military innovations — the short stabbing spear (assegai), the chest-and-horns battle formation, and rigorous warrior training — produced an army that defeated British imperial forces at the Battle of Isandlwana (1879).",
+  "sub_groups": [
+    {"name": "Usuthu (royal Zulu)", "region": "KwaZulu-Natal"},
+    {"name": "Mthethwa", "region": "KwaZulu-Natal coast"},
+    {"name": "Ndwandwe", "region": "Northern KwaZulu-Natal"},
+    {"name": "Cube", "region": "Central KwaZulu-Natal"},
+    {"name": "Ntungwa (Zulu highlands)", "region": "Midlands KwaZulu-Natal"}
+  ],
+  "cultural_highlights": [
+    "Shaka's military revolution — the bull-horn battle formation, the stabbing assegai (iklwa), and the impi (regiment) system transformed southern African warfare",
+    "Reed Dance (Umkhosi Womhlanga) — annual ceremony where thousands of young women present reeds to the king, celebrating female purity and royal prestige",
+    "Beadwork language — Zulu beadwork uses colour combinations to send specific messages about love, status, and relationship; a complete non-verbal communication system",
+    "Ubuntu philosophy — 'umuntu ngumuntu ngabantu' ('a person is a person through other persons'); a foundational social ethics of interconnectedness",
+    "Isicathamiya music — a cappella close-harmony singing popularised globally by Ladysmith Black Mambazo"
+  ],
+  "food_traditions": [
+    {"name": "Umngqusho (samp and beans)", "description": "Crushed maize kernels cooked with sugar beans — a slow-cooked staple eaten daily across South Africa; Nelson Mandela's favourite dish"},
+    {"name": "Amasi (fermented milk)", "description": "Naturally fermented milk with a thick yogurt-like consistency — the everyday Zulu beverage and accompaniment to cooked maize"},
+    {"name": "Uphuthu (crumbled maize)", "description": "Crumbled dry ugali-like maize eaten with amasi — a lighter alternative to solid ugali"},
+    {"name": "Braai (grilled meat)", "description": "Communal grilling of beef, lamb, and wors (boerewors sausage) — a shared South African tradition with Zulu ceremonial roots"}
+  ],
+  "music_traditions": [
+    "Isicathamiya — close-harmony a cappella singing performed in midnight competitions; made global by Ladysmith Black Mambazo",
+    "Ingoma (warrior dance songs) — sung by male groups in unison with foot-stamping; recreating military ceremonies",
+    "Maskanda — traditional Zulu guitar and concertina music blending Western instruments with Zulu compositional techniques"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A0A0A",
+    "gradient_end": "#3A1A1A"
+  },
+  "firestore_id": "community_zulu",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

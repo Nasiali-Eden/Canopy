@@ -1,0 +1,49 @@
+{
+  "id": "community_kanuri",
+  "node_type": "community",
+  "country_id": "country_nigeria",
+  "region_id": "region_north_east_nigeria",
+  "name": "Kanuri",
+  "name_in_own_language": "Kānūrī",
+  "name_variants": ["Bornu", "Beriberi"],
+  "flag_emoji": "🇳🇬",
+  "language_primary": "Kanuri",
+  "language_iso": "kau",
+  "language_family": "Nilo-Saharan",
+  "population_approx": "4 million (Nigeria, Niger, Chad)",
+  "description": "The Kanuri are the descendants of the Kanem-Bornu Empire, one of the longest-lived empires in African history (9th–19th century CE). At its height, Bornu controlled the central Saharan trade routes, accumulating immense wealth from the trans-Saharan gold, salt, and slave trades. Kanuri identity is intertwined with Islamic scholarship, court culture, and the Mais (kings) of Bornu whose lineage continued for over a thousand years. Their heritage is now centred in Borno State, north-eastern Nigeria.",
+  "sub_groups": [
+    {"name": "Yerwa Kanuri", "region": "Borno State"},
+    {"name": "Manga Kanuri", "region": "Yobe State"},
+    {"name": "Shuwa Arab", "region": "Borno State"},
+    {"name": "Kanembu", "region": "Lake Chad region"}
+  ],
+  "cultural_highlights": [
+    "Kanem-Bornu Empire — one of Africa's longest-lasting empires; the 9th-19th century CE state controlled trans-Saharan trade",
+    "Islamic court culture — Arabic learning, Quranic schools, and sophisticated royal ceremonial traditions spanning 1000+ years",
+    "Mai (king) institution — the constitutional monarchy of Bornu, whose current lineage traces back over 1,000 years",
+    "Geidam salt trade — Kanuri merchants controlled ancient salt trade routes from Lake Chad to the Mediterranean"
+  ],
+  "food_traditions": [
+    {"name": "Biriyani (Borno variant)", "description": "Fragrant spiced rice with meat — a Saharan trade-route influence blending Arab, Hausa, and local flavours"},
+    {"name": "Kilishi", "description": "Spiced dried meat jerky unique to northern Nigeria; Kanuri and Hausa traders spread this preservation technique across the Sahel"},
+    {"name": "Lake Chad fish (Nile perch, tilapia)", "description": "Fresh and dried fish from Lake Chad remain staples of Kanuri cuisine, traded across the region"}
+  ],
+  "music_traditions": [
+    "Goje (court fiddle) — used in royal panegyric music to praise the Mai and noble lineages",
+    "Kakaki (royal trumpet) — shared with the Hausa court tradition, played at state occasions",
+    "Dalilo praise singing — professional praise singers who recite lineage histories and court epics"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#1A0A2A",
+    "gradient_end": "#3A1A5A"
+  },
+  "firestore_id": "community_kanuri",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

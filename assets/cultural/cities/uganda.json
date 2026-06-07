@@ -1,0 +1,48 @@
+{
+  "country": "Uganda",
+  "country_id": "country_uganda",
+  "cities": {
+    "Kampala": [
+      {"area": "Nakawa", "type": "division"},
+      {"area": "Kawempe", "type": "division"},
+      {"area": "Makindye", "type": "division"},
+      {"area": "Rubaga", "type": "division"},
+      {"area": "Central Division", "type": "division"}
+    ],
+    "Entebbe": [
+      {"area": "Entebbe Central", "type": "town"},
+      {"area": "Katabi", "type": "subcounty"}
+    ],
+    "Jinja": [
+      {"area": "Jinja Central", "type": "division"},
+      {"area": "Walukuba-Masese", "type": "division"}
+    ],
+    "Mbarara": [
+      {"area": "Mbarara Central", "type": "division"},
+      {"area": "Kakoba", "type": "division"},
+      {"area": "Nyamitanga", "type": "division"}
+    ],
+    "Gulu": [
+      {"area": "Bardege-Layibi", "type": "division"},
+      {"area": "Gulu Central", "type": "division"},
+      {"area": "Pece-Laroo", "type": "division"}
+    ],
+    "Mbale": [
+      {"area": "Mbale Central", "type": "division"},
+      {"area": "Wanale", "type": "division"}
+    ],
+    "Lira": [
+      {"area": "Lira Central", "type": "division"},
+      {"area": "Adyel", "type": "division"}
+    ],
+    "Soroti": [
+      {"area": "Soroti Central", "type": "town"}
+    ],
+    "Fort Portal": [
+      {"area": "Fort Portal Central", "type": "division"}
+    ],
+    "Kabale": [
+      {"area": "Kabale Central", "type": "division"}
+    ]
+  }
+}

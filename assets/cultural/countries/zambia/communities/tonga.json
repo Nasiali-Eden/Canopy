@@ -1,0 +1,50 @@
+{
+  "id": "community_tonga",
+  "node_type": "community",
+  "country_id": "country_zambia",
+  "region_id": "region_southern_zambia",
+  "name": "Tonga",
+  "name_in_own_language": "Batonga",
+  "name_variants": ["Valley Tonga", "Plateau Tonga"],
+  "flag_emoji": "🇿🇲",
+  "language_primary": "Tonga",
+  "language_iso": "toi",
+  "language_family": "Bantu",
+  "population_approx": "1.5 million",
+  "description": "The Tonga are Zambia's most disrupted people in the 20th century — the Kariba Dam (1958) forcibly displaced over 57,000 Tonga from their ancestral Gwembe Valley, submerging their burial grounds and homeland under Lake Kariba. Despite this, the Tonga have maintained their cultural identity and are one of Zambia's most historically studied communities (due to the displacement). They are matrilineal, egalitarian, and known for their 'bull-roarer' (ngoma buntibe) rain ceremonies.",
+  "sub_groups": [
+    {"name": "Valley Tonga (Gwembe)", "region": "Southern Province (displaced, Siavonga)"},
+    {"name": "Plateau Tonga", "region": "Monze, Choma"},
+    {"name": "Ila", "region": "Namwala District"},
+    {"name": "Leya", "region": "Livingstone area"},
+    {"name": "Toka", "region": "Kazungula District"}
+  ],
+  "cultural_highlights": [
+    "Kariba displacement — 57,000 Tonga were removed from the Gwembe Valley in 1958 for the Kariba Dam; their story is one of Africa's most documented forced displacements",
+    "Ngoma buntibe (bull-roarer rain ceremony) — a rain-calling ceremony involving sacred musical instruments and collective prayer for agricultural rains",
+    "Bashanjo cattle ceremony — the Tonga relationship with cattle is central to identity; cattle are used in bridewealth, sacrifice, and social ceremonies",
+    "Egalitarian society — no centralised chief; authority vested in village headmen and neighbourhood councils of elders"
+  ],
+  "food_traditions": [
+    {"name": "Nshima with game", "description": "Maize nshima with dried or fresh game meat from the Zambezi Valley floor — the Valley Tonga's traditional protein source"},
+    {"name": "Mukoyo (maize drink)", "description": "Sweet fermented maize drink shared with the Lozi and other southern peoples"},
+    {"name": "Bream (lake fish)", "description": "Fresh and dried bream from Lake Kariba and the Zambezi — the dominant fish protein since the dam's creation"}
+  ],
+  "music_traditions": [
+    "Ngoma buntibe ceremony — bull-roarer instruments spun above the head to produce the sound of ancestral rain spirits",
+    "Sanza thumb piano — a small lamellophone played privately for personal music and meditation",
+    "Wedding drums — specific drum patterns and songs for different phases of Tonga wedding ceremonies"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#2A1A0A",
+    "gradient_end": "#5A3A1A"
+  },
+  "firestore_id": "community_tonga",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}

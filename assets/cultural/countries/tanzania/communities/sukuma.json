@@ -1,0 +1,49 @@
+{
+  "id": "community_sukuma",
+  "node_type": "community",
+  "country_id": "country_tanzania",
+  "region_id": "region_lake_zone_tz",
+  "name": "Sukuma",
+  "name_in_own_language": "Basukuma",
+  "name_variants": ["Wasukuma"],
+  "flag_emoji": "🇹🇿",
+  "language_primary": "Sukuma",
+  "language_iso": "suk",
+  "language_family": "Bantu",
+  "population_approx": "9 million (largest ethnic group in Tanzania)",
+  "description": "The Sukuma are Tanzania's largest ethnic group, inhabiting the south-eastern shores of Lake Victoria in Shinyanga and Mwanza regions. They are primarily agro-pastoralists, growing cotton and keeping cattle. The Sukuma Federation — a loose confederation of chiefdoms — maintained considerable autonomy through the colonial period. They are famous for the Bugobogobo and Bugobela competitive dance societies, whose performances rival professional entertainment in sophistication and spectacle.",
+  "sub_groups": [
+    {"name": "Zinza", "region": "Geita Region"},
+    {"name": "Kiya", "region": "Kwimba District"},
+    {"name": "Nyamhangha", "region": "Misungwi District"},
+    {"name": "Ntuzu", "region": "Maswa District"}
+  ],
+  "cultural_highlights": [
+    "Bugobogobo & Bugobela dance societies — two rival competitive dance societies whose annual festivals involve elaborate costumes, acrobatics, and snake-handling performances",
+    "Sungusungu vigilante system — community self-defence groups that emerged in the 1980s, rooted in ancient Sukuma communal protection traditions",
+    "Chief-and-council system — each chiefdom governed by a ntemi (chief) advised by a council; many chiefdoms unified under the Sukuma Federation",
+    "Agricultural calendar rituals — planting and harvest ceremonies tied to rain-calling and ancestral propitiation"
+  ],
+  "food_traditions": [
+    {"name": "Ugali (stiff maize porridge)", "description": "Maize ugali served with fish from Lake Victoria or vegetable stew — the Sukuma daily staple"},
+    {"name": "Dagaa (dried sardines)", "description": "Small dried lake sardines (omena) cooked into stews or eaten dry — a protein staple from Lake Victoria"},
+    {"name": "Mtori (banana beef stew)", "description": "A coastal-influenced stew of unripe banana and beef — popular in Sukuma villages near the lake coast"}
+  ],
+  "music_traditions": [
+    "Bugobogobo dance music — fast-paced drum and horn ensemble driving competitive dance performances with acrobatic elements",
+    "Isanzu harp — a traditional harp-lute found among the Sukuma's eastern neighbours, sometimes adopted in ceremonial contexts",
+    "Rain-calling songs (imba) — sung by women's groups during droughts to petition the ancestors for rain"
+  ],
+  "images": {
+    "bg_image_url": null,
+    "bg_image_credit": null,
+    "cover_image_url": null,
+    "gradient_start": "#0A2A1A",
+    "gradient_end": "#1A5A3A"
+  },
+  "firestore_id": "community_sukuma",
+  "firestore_collection": "heritage_hierarchy",
+  "entry_count": 0,
+  "is_live": false,
+  "last_updated": null
+}
