@@ -635,6 +635,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: InkWell(
             borderRadius: BorderRadius.circular(16),
             onTap: () async {
+              // Capture the root navigator BEFORE any async gap. Signing out
+              // triggers the global auth listener, which tears down this
+              // ProfileScreen subtree — leaving the local `context` defunct
+              // (its State becomes null) by the time we'd navigate.
+              final navigator = Navigator.of(context, rootNavigator: true);
               final shouldSignOut = await showDialog<bool>(
                 context: context,
                 builder: (context) => AlertDialog(
@@ -671,10 +676,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               if (shouldSignOut == true) {
                 await _authService.signOut();
-                if (!mounted) return;
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
+                navigator.pushReplacement(
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
                 );
               }
             },

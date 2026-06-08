@@ -69,8 +69,11 @@ class SellerFeedPage extends StatelessWidget {
               .doc(uid)
               .snapshots(),
           builder: (context, snapshot) {
-            final shopName = snapshot.data?['shop_name'] ?? 'Seller';
-            final role = snapshot.data?['marketplace_role'] ?? 'Seller';
+            // Use .data() (null for a missing doc) — indexing a non-existent
+            // DocumentSnapshot with ['field'] throws a StateError.
+            final data = snapshot.data?.data() as Map<String, dynamic>?;
+            final shopName = data?['shop_name'] ?? 'Seller';
+            final role = data?['marketplace_role'] ?? 'Seller';
 
             return Column(
               mainAxisSize: MainAxisSize.min,

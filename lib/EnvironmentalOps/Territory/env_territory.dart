@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../Shared/theme/app_theme.dart';
 import '../Shared/zone_drawing_controller.dart';
+import '../Shared/zone_walk_capture.dart';
 
 // ─── Firestore zone model ─────────────────────────────────────────────────────
 class CollectionZone {
@@ -184,7 +185,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   }
 
   void _onZoneClosed(ZoneDrawingResult result) async {
-    if (result.vertices.length < 3) return; // cancelled / insufficient
+    if (result.vertices.length < 10) return; // need at least 10 captured points
     setState(() => _isDrawingMode = false);
     final name = await _showNameDialog(result);
     if (name != null && name.isNotEmpty) {
@@ -276,8 +277,10 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
       body: Stack(
         children: [
           if (_isDrawingMode)
-            ZoneDrawingController(
-              config: ZoneDrawingConfig.collectionDefault,
+            ZoneWalkCaptureController(
+              zoneType: ZoneType.collectionZone,
+              overlayColor: AppTheme.primary,
+              minPoints: 10,
               onZoneClosed: _onZoneClosed,
               onCancel: () => setState(() => _isDrawingMode = false),
               initialPosition: _initialCamera,

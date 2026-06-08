@@ -10,6 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../Shared/theme/app_theme.dart';
 import '../Shared/widgets/role_context_switcher.dart';
 import 'Market/env_market.dart';
+import 'Market/create_listing_screen.dart';
 import 'Territory/env_territory.dart';
 import 'Trees/env_trees.dart';
 import 'Fleet/env_fleet.dart';
@@ -438,7 +439,14 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
         label: 'Post Order',
         description: 'Buy or sell recyclable materials',
         color: const Color(0xFFE65100),
-        onTap: () {},
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CreateListingScreen(
+              orgId: _orgId,
+              orgData: _orgData,
+            ),
+          ),
+        ),
       ),
     ];
 
