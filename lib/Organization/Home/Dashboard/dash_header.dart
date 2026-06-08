@@ -16,6 +16,7 @@ class DashHeader extends StatelessWidget {
   final void Function({required String fieldName, required String storagePath})
       onUploadImage;
   final VoidCallback onNotifications;
+  final VoidCallback? onEdit;
 
   const DashHeader({
     super.key,
@@ -24,6 +25,7 @@ class DashHeader extends StatelessWidget {
     required this.firestore,
     required this.onUploadImage,
     required this.onNotifications,
+    this.onEdit,
   });
 
   static String _initials(String? name) {
@@ -180,6 +182,11 @@ class DashHeader extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
+                          if (onEdit != null) ...[
+                            _HeaderIconButton(
+                                icon: Icons.edit_outlined, onTap: onEdit!),
+                            const SizedBox(width: 8),
+                          ],
                           _NotifButton(onTap: onNotifications),
                         ],
                       ),
@@ -406,6 +413,30 @@ class _NotifButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _HeaderIconButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(12),
+          border:
+              Border.all(color: Colors.white.withOpacity(0.18), width: 0.5),
+        ),
+        child: Icon(icon, color: Colors.white, size: 19),
       ),
     );
   }

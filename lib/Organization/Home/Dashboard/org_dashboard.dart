@@ -13,6 +13,7 @@ import '../../../Shared/Activities/create_article.dart';
 import '../../../Community/Contributions/log_contribution.dart';
 import '../Programmes/programme_editor.dart';
 
+import 'edit_org_details_screen.dart';
 import 'dash_constants.dart';
 import 'dash_header.dart';
 import 'dash_attention_strip.dart';
@@ -210,6 +211,19 @@ class _DashboardContentState extends State<_DashboardContent>
     }
   }
 
+  Future<void> _openEditDetails() async {
+    if (_orgId == null) return;
+    final saved = await Navigator.of(context, rootNavigator: true).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => EditOrgDetailsScreen(orgId: _orgId!),
+      ),
+    );
+    if (saved == true && mounted) {
+      setState(() => _loading = true);
+      await _loadData();
+    }
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -266,6 +280,7 @@ class _DashboardContentState extends State<_DashboardContent>
           onUploadImage: _uploadImage,
           onNotifications: () =>
               Navigator.of(context).pushNamed('/notifications'),
+          onEdit: _orgId == null ? null : _openEditDetails,
         ),
         const SizedBox(height: 16),
         if (_orgId != null && _org != null) ...[
