@@ -146,6 +146,27 @@ class _OrgRegisterWizardState extends State<OrgRegisterWizard>
     ));
   }
 
+  /// Resolve lat/lng for the selected city/area from the loaded cities data.
+  /// Falls back to the city's first area, then null.
+  ({double? lat, double? lng}) _resolveCoordinates() {
+    final entries = _selectedCity != null ? _kenyaCities[_selectedCity!] : null;
+    if (entries == null || entries.isEmpty) return (lat: null, lng: null);
+    Map<String, dynamic>? match;
+    if (_selectedArea != null) {
+      for (final e in entries) {
+        if ((e['area'] ?? e['name']).toString() == _selectedArea) {
+          match = e;
+          break;
+        }
+      }
+    }
+    match ??= entries.first;
+    final coords = match['coordinates'] as Map<String, dynamic>?;
+    final lat = (coords?['lat'] as num?)?.toDouble();
+    final lng = (coords?['lng'] as num?)?.toDouble();
+    return (lat: lat, lng: lng);
+  }
+
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
@@ -154,6 +175,7 @@ class _OrgRegisterWizardState extends State<OrgRegisterWizard>
           .map((c) => c.text.trim())
           .where((f) => f.isNotEmpty)
           .toList();
+      final coords = _resolveCoordinates();
       final user = await auth.registerAsOrganization(
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
@@ -162,6 +184,16 @@ class _OrgRegisterWizardState extends State<OrgRegisterWizard>
         background: _backgroundCtrl.text.trim(),
         mainFunctions: funcs,
         orgDesignation: _designation?.acronym ?? '',
+        sectorId: _sector?.id ?? '',
+        orgTypeId: _orgType?.id ?? '',
+        subTypeIds: _subTypeIds,
+        beneficiaryGroupIds: _beneficiaryIds.toList(),
+        facilityTypeIds: _orgType?.facilityIds ?? const [],
+        country: 'Kenya',
+        city: _selectedCity ?? '',
+        area: _selectedArea ?? '',
+        lat: coords.lat,
+        lng: coords.lng,
         profilePhoto: _logo,
       );
       if (!mounted) return;

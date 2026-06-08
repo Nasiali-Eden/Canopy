@@ -1,8 +1,12 @@
 // lib/Community/Map/map.dart
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +14,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../Shared/theme/app_theme.dart';
 import '../../Organization/Explorer/org_explorer_screen.dart';
+import '../../Organization/Explorer/org_view_screen.dart';
 import '../../Organization/Map/org_map_ops.dart';
 import 'map_style.dart' as map_style
     hide kPlaceholderOrgs, kPlaceholderAmenities;
@@ -127,6 +132,7 @@ class MapOrganization {
   final List<String> facilityTypeIds;
   final List<String> subFacilityIds;
   final String? logoUrl;
+  final String? coverImageUrl;
   final String legalDesignation;
   final String country;
   final String city;
@@ -147,6 +153,7 @@ class MapOrganization {
     required this.facilityTypeIds,
     this.subFacilityIds = const [],
     this.logoUrl,
+    this.coverImageUrl,
     required this.legalDesignation,
     required this.country,
     required this.city,
@@ -213,7 +220,7 @@ const List<_ChipCategory> _chipCategories = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({Key? key}) : super(key: key);
+  const MapScreen({super.key});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -222,7 +229,6 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
-  bool _iconsLoaded = false;
 
   // Active filter chip
   String _activeChipId = 'all';
@@ -236,9 +242,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   late AnimationController _subSheetController;
   bool _subSheetOpen = false;
 
-  // Icon caches
-  final Map<String, BitmapDescriptor> _orgIconsNormal = {};
-  final Map<String, BitmapDescriptor> _orgIconsHero = {};
+  // Marker caches — keyed by org.id (not typeId)
+  final Map<String, BitmapDescriptor> _orgMarkersNormal = {};
+  final Map<String, BitmapDescriptor> _orgMarkersHero = {};
   final Map<AmenityType, BitmapDescriptor> _amenityIcons = {};
 
   // Firestore live data
@@ -487,11 +493,25 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       final lng = gp?.longitude ??
           (data['lng'] as num?)?.toDouble() ??
           36.8219;
+      // Field reality (see CommunityAuthService.registerAsOrganization):
+      //   description  → 'background'
+      //   logo         → 'profilePhoto'  (logoUrl is never written)
+      //   designation  → 'orgDesignation'
+      final description =
+          (data['background'] ?? data['description'] ?? data['bio'] ?? '') as String;
+      final logoUrl = (data['logoUrl'] ?? data['profilePhoto']) as String?;
+      if (kDebugMode) {
+        debugPrint('[Map._orgFromFirestore] id=$id '
+            'name=${data['org_name'] ?? data['name']} '
+            'background.len=${description.length} '
+            'logoUrl=$logoUrl '
+            'designation=${data['orgDesignation'] ?? data['designation']} '
+            'keys=${data.keys.toList()}');
+      }
       return MapOrganization(
         id: id,
         name: (data['org_name'] ?? data['name'] ?? 'Unknown Org') as String,
-        description:
-            (data['description'] ?? data['bio'] ?? '') as String,
+        description: description,
         location: LatLng(lat, lng),
         sectorId: data['sectorId'] as String? ?? 'sector_community',
         orgTypeId: data['orgTypeId'] as String? ?? 'ot_neighbourhood_assoc',
@@ -500,8 +520,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             List<String>.from(data['beneficiaryGroupIds'] ?? []),
         facilityTypeIds: List<String>.from(data['facilityTypeIds'] ?? []),
         subFacilityIds: List<String>.from(data['subFacilityIds'] ?? []),
-        logoUrl: data['logoUrl'] as String?,
-        legalDesignation: data['designation'] as String? ?? '',
+        logoUrl: logoUrl,
+        coverImageUrl: (data['coverImageUrl'] ?? data['profilePhoto']) as String?,
+        legalDesignation: (data['orgDesignation'] ?? data['designation'] ?? '') as String,
         country: data['country'] as String? ?? 'Kenya',
         city: data['city'] as String? ?? '',
         area: data['area'] as String? ?? '',
@@ -509,7 +530,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         phone: data['phone'] as String?,
         website: data['website'] as String?,
       );
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) debugPrint('[Map._orgFromFirestore] parse error for $id: $e');
       return null;
     }
   }
@@ -643,27 +665,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   // ── Icon generation ──────────────────────────────────────────────────────
 
   Future<void> _loadIconsAndBuildMarkers() async {
-    // Org icons
-    final typeIds = _allOrgs.map((o) => o.orgTypeId).toSet();
-    for (final typeId in typeIds) {
-      final org = _allOrgs.firstWhere((o) => o.orgTypeId == typeId);
+    // Per-org markers: use logo image when available, fall back to type icon
+    for (final org in _allOrgs) {
+      if (_orgMarkersNormal.containsKey(org.id)) continue;
       final color = _sectorColor(org.sectorId);
-      final icon = _orgTypeIcon(typeId);
-      _orgIconsNormal[typeId] =
-          await _makeOrgIcon(icon, color, 80.0, hero: false);
-      _orgIconsHero[typeId] =
-          await _makeOrgIcon(icon, color, 140.0, hero: true);
+      final icon = _orgTypeIcon(org.orgTypeId);
+      if (org.logoUrl != null && org.logoUrl!.isNotEmpty) {
+        _orgMarkersNormal[org.id] =
+            await _makeLogoMarker(org.logoUrl!, color, 80.0, hero: false);
+        _orgMarkersHero[org.id] =
+            await _makeLogoMarker(org.logoUrl!, color, 140.0, hero: true);
+      } else {
+        _orgMarkersNormal[org.id] =
+            await _makeOrgIcon(icon, color, 80.0, hero: false);
+        _orgMarkersHero[org.id] =
+            await _makeOrgIcon(icon, color, 140.0, hero: true);
+      }
     }
-    // Amenity icons
+    // Amenity icons (cached by type)
     for (final type in AmenityType.values) {
-      _amenityIcons[type] = await _makeAmenityIcon(type);
+      if (!_amenityIcons.containsKey(type)) {
+        _amenityIcons[type] = await _makeAmenityIcon(type);
+      }
     }
-    if (mounted) {
-      setState(() {
-        _iconsLoaded = true;
-        _rebuildMarkers();
-      });
-    }
+    if (mounted) setState(_rebuildMarkers);
   }
 
   Future<BitmapDescriptor> _makeOrgIcon(
@@ -786,6 +811,99 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
+  // Download a network image and render it as a circular marker.
+  Future<BitmapDescriptor> _makeLogoMarker(
+      String url, Color borderColor, double size, {required bool hero}) async {
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 8);
+      final req = await client.getUrl(Uri.parse(url));
+      final resp = await req.close().timeout(const Duration(seconds: 10));
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        throw Exception('HTTP ${resp.statusCode}');
+      }
+      final bytes = Uint8List.fromList(
+        await resp.fold<List<int>>([], (acc, chunk) => acc..addAll(chunk)),
+      );
+      client.close(force: true);
+      final codec = await ui.instantiateImageCodec(
+        bytes,
+        targetWidth: size.toInt(),
+        targetHeight: size.toInt(),
+      );
+      final frame = await codec.getNextFrame();
+      return _drawCircleImageMarker(frame.image, borderColor, size, hero: hero);
+    } catch (_) {
+      return _makeOrgIcon(Icons.business, borderColor, size, hero: hero);
+    }
+  }
+
+  Future<BitmapDescriptor> _drawCircleImageMarker(
+      ui.Image image, Color borderColor, double size,
+      {required bool hero}) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final cx = size / 2, cy = size / 2;
+
+    if (hero) {
+      canvas.drawCircle(
+        Offset(cx, cy),
+        size / 2 - 2,
+        Paint()
+          ..color = borderColor.withOpacity(0.22)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
+      );
+    }
+
+    // Shadow
+    canvas.drawCircle(
+      Offset(cx, cy + (hero ? 5 : 3)),
+      size / 2 - (hero ? 18 : 8),
+      Paint()
+        ..color = Colors.black.withOpacity(hero ? 0.28 : 0.15)
+        ..maskFilter =
+            MaskFilter.blur(BlurStyle.normal, hero ? 10 : 6),
+    );
+
+    final circleR = size / 2 - (hero ? 16 : 8);
+
+    // White border disc
+    canvas.drawCircle(
+      Offset(cx, cy),
+      circleR + (hero ? 3.5 : 2.5),
+      Paint()..color = Colors.white,
+    );
+
+    // Clip to circle and paint image
+    canvas.save();
+    canvas.clipPath(Path()
+      ..addOval(
+          Rect.fromCircle(center: Offset(cx, cy), radius: circleR)));
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(
+          0, 0, image.width.toDouble(), image.height.toDouble()),
+      Rect.fromCircle(center: Offset(cx, cy), radius: circleR),
+      Paint()..filterQuality = FilterQuality.medium,
+    );
+    canvas.restore();
+
+    // Coloured border ring
+    canvas.drawCircle(
+      Offset(cx, cy),
+      circleR,
+      Paint()
+        ..color = borderColor.withOpacity(hero ? 0.80 : 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = hero ? 3.5 : 2.0,
+    );
+
+    final img =
+        await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+  }
+
   // Uses ui.ParagraphBuilder for reliable icon-font rendering on canvas.
   void _paintIcon(Canvas canvas, IconData icon, double fontSize, Color color,
       Offset center) {
@@ -853,11 +971,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     final markers = <Marker>{};
     final isFiltered = _activeChipId != 'all';
 
-    // Org markers
+    // Org markers — keyed by org.id
     for (final org in _visibleOrgs) {
       final icon = isFiltered
-          ? (_orgIconsHero[org.orgTypeId] ?? BitmapDescriptor.defaultMarker)
-          : (_orgIconsNormal[org.orgTypeId] ?? BitmapDescriptor.defaultMarker);
+          ? (_orgMarkersHero[org.id] ?? BitmapDescriptor.defaultMarker)
+          : (_orgMarkersNormal[org.id] ?? BitmapDescriptor.defaultMarker);
       markers.add(Marker(
         markerId: MarkerId(org.id),
         position: org.location,
@@ -1123,7 +1241,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   sectorColor: _sectorColor(_selectedOrg!.sectorId),
                   orgTypeIcon: _orgTypeIcon(_selectedOrg!.orgTypeId),
                   facilityLabel: _facilityLabel,
-                  bottomPad: bottomPad + navBarH,
+                  bottomPad: bottomPad + 8,
                   onClose: _clearSelection,
                 ),
               ),
@@ -1661,7 +1779,7 @@ class _OrgDetailSheet extends StatelessWidget {
           // Drag handle
           Center(
             child: Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 0),
+              margin: const EdgeInsets.only(top: 10),
               width: 36,
               height: 4,
               decoration: BoxDecoration(
@@ -1671,177 +1789,221 @@ class _OrgDetailSheet extends StatelessWidget {
             ),
           ),
 
-          // ── Full-width header strip ──────────────────────────────────
-          SizedBox(
-            height: 140,
-            width: double.infinity,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Background: logo image or gradient
-                ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(24)),
-                  child: org.logoUrl != null
-                      ? Image.network(
-                          org.logoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _HeaderGradient(
-                              color: sectorColor, icon: orgTypeIcon),
-                        )
-                      : _HeaderGradient(color: sectorColor, icon: orgTypeIcon),
-                ),
-                // Bottom gradient overlay for text
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: 90,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.65),
-                          Colors.transparent,
-                        ],
+          // ── Cover image + floating logo ───────────────────────────────
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Cover image
+              SizedBox(
+                height: 150,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    org.coverImageUrl != null &&
+                            org.coverImageUrl!.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: org.coverImageUrl!,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, __, ___) => _HeaderGradient(
+                                color: sectorColor, icon: orgTypeIcon),
+                          )
+                        : _HeaderGradient(
+                            color: sectorColor, icon: orgTypeIcon),
+                    // Gradient overlay
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.62),
+                            ],
+                            stops: const [0.35, 1.0],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                // Org name + badges bottom-left
-                Positioned(
-                  bottom: 12,
-                  left: 16,
-                  right: 50,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
+                    // Name + badges (offset right of logo)
+                    Positioned(
+                      bottom: 12,
+                      left: 16 + 62 + 10,
+                      right: 48,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (org.verified)
-                            Container(
-                              margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.85),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.verified,
-                                      size: 10, color: Colors.white),
-                                  const SizedBox(width: 3),
-                                  const Text('Verified',
-                                      style: TextStyle(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.white)),
-                                ],
-                              ),
+                          Row(
+                            children: [
+                              if (org.verified)
+                                _OverlayBadge(
+                                  label: 'Verified',
+                                  icon: Icons.verified,
+                                  color: const Color(0xFF2E7D32),
+                                ),
+                              if (org.verified) const SizedBox(width: 5),
+                              if (org.legalDesignation.isNotEmpty)
+                                _OverlayBadge(label: org.legalDesignation),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            org.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 17,
+                              height: 1.2,
+                              shadows: [
+                                Shadow(color: Colors.black54, blurRadius: 6)
+                              ],
                             ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.20),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: Colors.white.withOpacity(0.40)),
-                            ),
-                            child: Text(
-                              org.legalDesignation,
-                              style: const TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white),
-                            ),
+                            maxLines: 2,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        org.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 17,
-                          height: 1.2,
-                          shadows: [
-                            Shadow(color: Colors.black45, blurRadius: 4)
-                          ],
+                    ),
+                    // Close button top-right
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: GestureDetector(
+                        onTap: onClose,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.close,
+                              size: 16, color: Colors.white),
                         ),
-                        maxLines: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Logo circle overlapping the cover bottom
+              Positioned(
+                bottom: -31,
+                left: 16,
+                child: Container(
+                  width: 62,
+                  height: 62,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: Colors.white, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.18),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: org.logoUrl != null && org.logoUrl!.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: org.logoUrl!,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Container(
+                            color: sectorColor.withOpacity(0.12),
+                            alignment: Alignment.center,
+                            child: Icon(orgTypeIcon,
+                                color: sectorColor, size: 26),
+                          ),
+                        )
+                      : Container(
+                          color: sectorColor.withOpacity(0.12),
+                          alignment: Alignment.center,
+                          child:
+                              Icon(orgTypeIcon, color: sectorColor, size: 26),
+                        ),
+                ),
+              ),
+            ],
+          ),
+
+          // Space for logo overlap (31 px overlap + small gap)
+          const SizedBox(height: 38),
+
+          // ── Sector chip + location ────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: sectorColor.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(orgTypeIcon, size: 11, color: sectorColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        _sectorLabelFromId(org.sectorId),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: sectorColor,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                // Close button top-right
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: GestureDetector(
-                    onTap: onClose,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.35),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.close,
-                          size: 16, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Location line ────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Row(
-              children: [
-                Icon(Icons.location_on_outlined, size: 13, color: sectorColor),
-                const SizedBox(width: 4),
-                Text(
-                  '${org.area}, ${org.city}',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500),
-                ),
-                if (org.phone != null) ...[
+                if (org.area.isNotEmpty || org.city.isNotEmpty) ...[
                   const SizedBox(width: 10),
-                  Icon(Icons.phone_outlined,
+                  Icon(Icons.place_outlined,
                       size: 12, color: Colors.grey.shade400),
                   const SizedBox(width: 3),
+                  Expanded(
+                    child: Text(
+                      '${org.area}, ${org.city}'.replaceAll(', ,', ',').trim().replaceAll(RegExp(r'^,|,$'), ''),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+                if (org.phone != null) ...[
+                  const SizedBox(width: 8),
+                  Icon(Icons.phone_outlined,
+                      size: 12, color: Colors.grey.shade400),
+                  const SizedBox(width: 2),
                   Text(org.phone!,
-                      style:
-                          TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.grey.shade500)),
                 ],
               ],
             ),
           ),
 
           // ── Description ───────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            child: Text(
-              org.description,
-              style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.darkGreen.withOpacity(0.70),
-                  height: 1.5),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+          if (org.description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Text(
+                org.description,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.darkGreen.withOpacity(0.68),
+                    height: 1.5),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
 
           // ── Facility chips ─────────────────────────────────────────────
           if (org.facilityTypeIds.isNotEmpty) ...[
@@ -1883,12 +2045,31 @@ class _OrgDetailSheet extends StatelessWidget {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Organisation profiles coming soon')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => OrgViewScreen(
+                            orgId: org.id,
+                            orgData: {
+                              'org_name': org.name,
+                              'background': org.description,
+                              'logoUrl': org.logoUrl,
+                              'coverImageUrl': org.coverImageUrl,
+                              'sectorId': org.sectorId,
+                              'orgTypeId': org.orgTypeId,
+                              'orgDesignation': org.legalDesignation,
+                              'city': org.city,
+                              'area': org.area,
+                              'verified': org.verified,
+                              'phone': org.phone,
+                              'website': org.website,
+                              'facilityTypeIds': org.facilityTypeIds,
+                            },
+                          ),
+                        ),
                       );
                     },
-                    icon: const Icon(Icons.info_outline, size: 16),
+                    icon: const Icon(Icons.arrow_outward_rounded, size: 16),
                     label: const Text('View Profile'),
                     style: FilledButton.styleFrom(
                       backgroundColor: sectorColor,
@@ -1914,6 +2095,56 @@ class _OrgDetailSheet extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  static String _sectorLabelFromId(String sectorId) {
+    const map = {
+      'sector_env': 'Environmental',
+      'sector_social': 'Social Services',
+      'sector_health': 'Health & Medical',
+      'sector_education': 'Education',
+      'sector_economic': 'Economic',
+      'sector_legal': 'Legal Aid',
+      'sector_faith': 'Faith-Based',
+      'sector_community': 'Community',
+    };
+    return map[sectorId] ?? sectorId;
+  }
+}
+
+class _OverlayBadge extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final Color color;
+  const _OverlayBadge({
+    required this.label,
+    this.icon,
+    this.color = const Color(0x55FFFFFF),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 9, color: Colors.white),
+            const SizedBox(width: 3),
+          ],
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white)),
         ],
       ),
     );

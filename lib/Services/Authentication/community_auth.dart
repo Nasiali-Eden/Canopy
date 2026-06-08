@@ -161,6 +161,18 @@ class CommunityAuthService {
     required String background,
     required List<String> mainFunctions,
     required String orgDesignation,
+    // Classification
+    String sectorId = '',
+    String orgTypeId = '',
+    List<String> subTypeIds = const [],
+    List<String> beneficiaryGroupIds = const [],
+    List<String> facilityTypeIds = const [],
+    // Location
+    String country = 'Kenya',
+    String city = '',
+    String area = '',
+    double? lat,
+    double? lng,
     XFile? profilePhoto,
   }) async {
     try {
@@ -214,6 +226,21 @@ class CommunityAuthService {
         'mainFunctions': mainFunctions,
         'orgDesignation': orgDesignation,
         'profilePhoto': profilePhotoUrl,
+        // Mirror the logo under logoUrl so the map/explorer can read it directly.
+        'logoUrl': profilePhotoUrl,
+        // Classification — used for filtering & map markers.
+        'sectorId': sectorId,
+        'orgTypeId': orgTypeId,
+        'subTypeIds': subTypeIds,
+        'beneficiaryGroupIds': beneficiaryGroupIds,
+        'facilityTypeIds': facilityTypeIds,
+        // Location.
+        'country': country,
+        'city': city,
+        'area': area,
+        if (lat != null && lng != null) 'location': GeoPoint(lat, lng),
+        if (lat != null) 'lat': lat,
+        if (lng != null) 'lng': lng,
         'createdAt': FieldValue.serverTimestamp(),
         'guidelinesAcceptedAt': null,
         'type': 'Org Rep',
