@@ -16,6 +16,7 @@ import '../../Shared/theme/app_theme.dart';
 import '../../Organization/Explorer/org_explorer_screen.dart';
 import '../../Organization/Explorer/org_view_screen.dart';
 import '../../Organization/Map/org_map_ops.dart';
+import 'env_ops_map_screen.dart';
 import 'map_style.dart' as map_style
     hide kPlaceholderOrgs, kPlaceholderAmenities;
 import 'map_placeholders.dart';
@@ -1110,38 +1111,49 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             mapToolbarEnabled: false,
           ),
 
-          // ── Search bar ─────────────────────────────────────────────────
+          // ── Top stack: search · org-view card · categories ─────────────
           Positioned(
             top: topPad + 12,
-            left: 16,
-            right: 16,
-            child: _SearchBar(
-              onTap: () {
-                // TODO: open MapSearchOverlay
-              },
-            ),
-          ),
-
-          // ── Filter chip row ────────────────────────────────────────────
-          Positioned(
-            top: topPad + 12 + 50, // below search bar
             left: 0,
             right: 0,
-            child: _FilterChipRow(
-              categories: _chipCategories,
-              activeId: _activeChipId,
-              activeSubCount: _activeSubFilters.length,
-              onTap: _onChipTap,
-            ),
-          ),
-
-          // ── Org count pill ─────────────────────────────────────────────
-          Positioned(
-            top: topPad + 12 + 50 + 48,
-            right: 16,
-            child: _CountPill(
-              orgCount: _visibleOrgs.length,
-              amenityCount: _visibleAmenities.length,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _SearchBar(
+                    onTap: () {
+                      // TODO: open MapSearchOverlay
+                    },
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Org-view card — sits ABOVE the categories
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _MapDiscoverCard(
+                    orgCount: _visibleOrgs.length,
+                    onBrowseOrgs: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const OrgExplorerScreen()),
+                    ),
+                    onEnvOps: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const EnvOpsMapScreen()),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Categories
+                _FilterChipRow(
+                  categories: _chipCategories,
+                  activeId: _activeChipId,
+                  activeSubCount: _activeSubFilters.length,
+                  onTap: _onChipTap,
+                ),
+              ],
             ),
           ),
 
@@ -1157,24 +1169,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // ── Org Explorer button ────────────────────────────────────────
-          Positioned(
-            bottom: bottomPad + navBarH + 70,
-            right: 16,
-            child: _MapIconButton(
-              icon: Icons.grid_view_rounded,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const OrgExplorerScreen()),
-              ),
-            ),
-          ),
-
           // ── Add Pin button (org reps only) ─────────────────────────────
           if (_currentOrgData != null)
             Positioned(
-              bottom: bottomPad + navBarH + 124,
+              bottom: bottomPad + navBarH + 70,
               right: 16,
               child: _MapIconButton(
                 icon: Icons.add_location_alt_outlined,
@@ -1426,49 +1424,142 @@ class _FilterChipRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COUNT PILL
+// MAP DISCOVER CARD — sits above the category chips; two entry points
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CountPill extends StatelessWidget {
+class _MapDiscoverCard extends StatelessWidget {
   final int orgCount;
-  final int amenityCount;
-  const _CountPill({required this.orgCount, required this.amenityCount});
+  final VoidCallback onBrowseOrgs;
+  final VoidCallback onEnvOps;
+
+  const _MapDiscoverCard({
+    required this.orgCount,
+    required this.onBrowseOrgs,
+    required this.onEnvOps,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.10),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.business_outlined, size: 11, color: AppTheme.primary),
-          const SizedBox(width: 3),
-          Text('$orgCount',
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.darkGreen)),
-          const SizedBox(width: 6),
-          Container(
-              width: 1,
-              height: 10,
-              color: AppTheme.lightGreen.withOpacity(0.5)),
-          const SizedBox(width: 6),
-          Icon(Icons.place_outlined, size: 11, color: AppTheme.accent),
-          const SizedBox(width: 3),
-          Text('$amenityCount',
-              style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.darkGreen)),
+          Row(
+            children: [
+              const Text(
+                'Explore the map',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.darkGreen,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$orgCount nearby',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _DiscoverButton(
+                  icon: Icons.grid_view_rounded,
+                  label: 'Browse Orgs',
+                  filled: true,
+                  onTap: onBrowseOrgs,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DiscoverButton(
+                  icon: Icons.recycling_rounded,
+                  label: 'Environmental Ops',
+                  filled: false,
+                  onTap: onEnvOps,
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _DiscoverButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool filled;
+  final VoidCallback onTap;
+
+  const _DiscoverButton({
+    required this.icon,
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: filled ? AppTheme.primary : AppTheme.primary.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: filled
+              ? null
+              : Border.all(color: AppTheme.primary.withOpacity(0.25)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon,
+                size: 16,
+                color: filled ? Colors.white : AppTheme.primary),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: filled ? Colors.white : AppTheme.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

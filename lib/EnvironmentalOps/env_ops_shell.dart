@@ -9,11 +9,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../Shared/theme/app_theme.dart';
 import '../Shared/widgets/role_context_switcher.dart';
+import '../Shared/widgets/floating_nav_bar.dart';
 import 'Market/env_market.dart';
 import 'Market/create_listing_screen.dart';
 import 'Territory/env_territory.dart';
 import 'Trees/env_trees.dart';
 import 'Fleet/env_fleet.dart';
+import '../Organization/Map/org_map_ops.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHELL
@@ -61,7 +63,9 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
           hasCultural: widget.hasCultural,
         );
       default:
-        return const _EnvOpsOverviewTab();
+        return _EnvOpsOverviewTab(
+          onSelectTab: (i) => setState(() => _selectedIndex = i),
+        );
     }
   }
 
@@ -110,79 +114,18 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
           ),
           centerTitle: true,
         ),
+        extendBody: true,
         body: _buildCurrentPage(),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.07),
-                blurRadius: 12,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            child: SizedBox(
-              height: 68,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(_tabs.length, (i) {
-                  final tab = _tabs[i];
-                  final isActive = _selectedIndex == i;
-                  return Expanded(
-                    child: InkWell(
-                      onTap: () => setState(() => _selectedIndex = i),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? _accentGreen
-                                  : _accentGreen.withOpacity(0.08),
-                              shape: BoxShape.circle,
-                              boxShadow: isActive
-                                  ? [
-                                      BoxShadow(
-                                        color: _accentGreen.withOpacity(0.28),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 3),
-                                      )
-                                    ]
-                                  : null,
-                            ),
-                            child: Icon(
-                              isActive ? tab.selectedIcon : tab.icon,
-                              size: 18,
-                              color: isActive
-                                  ? Colors.white
-                                  : AppTheme.darkGreen.withOpacity(0.55),
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            tab.label,
-                            style: TextStyle(
-                              fontSize: 9.5,
-                              fontWeight: isActive
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: isActive
-                                  ? _accentGreen
-                                  : AppTheme.darkGreen.withOpacity(0.55),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
+        bottomNavigationBar: FloatingNavBar(
+          currentIndex: _selectedIndex,
+          onTap: (i) => setState(() => _selectedIndex = i),
+          destinations: _tabs
+              .map((t) => FloatingNavDestination(
+                    icon: t.icon,
+                    activeIcon: t.selectedIcon,
+                    label: t.label,
+                  ))
+              .toList(),
         ),
       ),
     );
@@ -194,7 +137,8 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _EnvOpsOverviewTab extends StatefulWidget {
-  const _EnvOpsOverviewTab();
+  final void Function(int index)? onSelectTab;
+  const _EnvOpsOverviewTab({this.onSelectTab});
 
   @override
   State<_EnvOpsOverviewTab> createState() => _EnvOpsOverviewTabState();
@@ -408,31 +352,32 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
       _ActionItem(
         icon: Icons.edit_location_alt_outlined,
         label: 'Define Zone',
-        description: 'Draw a collection zone on the map',
+        description: 'Walk & trace a collection zone',
         color: const Color(0xFF2D7A4F),
-        onTap: () {
-          // Switch to Territory tab (parent will handle)
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Open Territory tab to define zones'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
+        onTap: () => widget.onSelectTab?.call(1), // → Territory tab
       ),
       _ActionItem(
         icon: Icons.add_location_alt_outlined,
         label: 'Add Map Pin',
         description: 'Mark a community location on the map',
         color: const Color(0xFF1565C0),
-        onTap: () {},
+        onTap: () {
+          if (_orgData == null) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => OrgMapOpsScreen(orgData: _orgData!),
+            ),
+          );
+        },
       ),
       _ActionItem(
         icon: Icons.park_outlined,
         label: 'Log Trees',
         description: 'Record trees planted or monitored',
         color: const Color(0xFF388E3C),
-        onTap: () {},
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const EnvTreesScreen()),
+        ),
       ),
       _ActionItem(
         icon: Icons.storefront_outlined,

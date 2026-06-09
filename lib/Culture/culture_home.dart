@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../Shared/theme/app_theme.dart';
+import '../Shared/widgets/floating_nav_bar.dart';
 import 'Heritage/Archive/heritage_archive_screen.dart';
 import 'Heritage/Create/create_entry_screen.dart';
 import 'Heritage/Feedback/heritage_feedback_screen.dart';
@@ -108,74 +109,29 @@ class _CultureHomeScreenState extends State<CultureHomeScreen> {
             ],
           ),
         ),
+        extendBody: true,
         body: _buildCurrentPage(),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 12,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            child: NavigationBar(
-              backgroundColor: Colors.transparent,
-              surfaceTintColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              selectedIndex: _selectedNavIndex,
-              onDestinationSelected: _handleNavTap,
-              indicatorColor: AppTheme.tertiary.withOpacity(0.15),
-              height: 70,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              destinations: [
-                NavigationDestination(
-                  icon: Icon(Icons.archive_outlined,
-                      color: AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.archive, color: AppTheme.tertiary),
-                  label: 'Archive',
-                ),
-                NavigationDestination(
-                  icon: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.tertiary.withOpacity(0.12),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                          color: AppTheme.tertiary.withOpacity(0.35)),
-                    ),
-                    child: Icon(Icons.add,
-                        color: AppTheme.tertiary, size: 20),
-                  ),
-                  selectedIcon: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppTheme.tertiary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.add,
-                        color: Colors.white, size: 20),
-                  ),
-                  label: 'Add Entry',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.forum_outlined,
-                      color: AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon: Icon(Icons.forum, color: AppTheme.tertiary),
-                  label: 'Feedback',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.person_outline,
-                      color: AppTheme.darkGreen.withOpacity(0.50)),
-                  selectedIcon:
-                      Icon(Icons.person, color: AppTheme.tertiary),
-                  label: 'Profile',
-                ),
-              ],
-            ),
-          ),
+        bottomNavigationBar: FloatingNavBar(
+          currentIndex: _selectedNavIndex,
+          onTap: _handleNavTap,
+          destinations: const [
+            FloatingNavDestination(
+                icon: Icons.archive_outlined,
+                activeIcon: Icons.archive,
+                label: 'Archive'),
+            FloatingNavDestination(
+                icon: Icons.add_circle_outline,
+                activeIcon: Icons.add_circle,
+                label: 'Add Entry'),
+            FloatingNavDestination(
+                icon: Icons.forum_outlined,
+                activeIcon: Icons.forum,
+                label: 'Feedback'),
+            FloatingNavDestination(
+                icon: Icons.person_outline,
+                activeIcon: Icons.person,
+                label: 'Profile'),
+          ],
         ),
       ),
     );

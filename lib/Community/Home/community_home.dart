@@ -324,10 +324,9 @@ class _FloatingNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       minimum: const EdgeInsets.only(bottom: 16),
-      child: Align(
-        alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
             color: isDark

@@ -1,107 +1,46 @@
+// lib/Shared/widgets/floating_nav_bar.dart
+//
+// Shared floating "pill" bottom navigation — the same design used by the
+// Organization home shell. Reused across Env-Ops and Cultural shells so the
+// app has one consistent bottom bar.
+
 import 'package:flutter/material.dart';
-import '../../Shared/theme/app_theme.dart';
-import 'Dashboard/org_dashboard.dart';
-import 'People/org_people.dart';
-import 'Operations/org_operations.dart';
-import 'Programmes/org_programmes.dart';
-import 'Profile/org_profile.dart';
+import '../theme/app_theme.dart';
 
-class OrganizationHome extends StatefulWidget {
-  const OrganizationHome({super.key});
-
-  @override
-  State<OrganizationHome> createState() => _OrganizationHomeState();
-}
-
-class _OrganizationHomeState extends State<OrganizationHome> {
-  int _index = 0;
-
-  static const _destinations = [
-    _NavDestination(
-      icon: Icons.dashboard_outlined,
-      activeIcon: Icons.dashboard_rounded,
-      label: 'Dashboard',
-    ),
-    _NavDestination(
-      icon: Icons.people_outline,
-      activeIcon: Icons.people_rounded,
-      label: 'People',
-    ),
-    _NavDestination(
-      icon: Icons.bolt_outlined,
-      activeIcon: Icons.bolt_rounded,
-      label: 'Operations',
-    ),
-    _NavDestination(
-      icon: Icons.pending_actions,
-      activeIcon: Icons.pending_actions_rounded,
-      label: 'Programmes',
-    ),
-    _NavDestination(
-      icon: Icons.business_outlined,
-      activeIcon: Icons.business_rounded,
-      label: 'Profile',
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      const OrgDashboard(),
-      const OrgPeopleScreen(),
-      const OrgOperations(),
-      const OrgProgrammes(),
-      OrgProfile(orgHomeBuilder: (_) => const OrganizationHome()),
-    ];
-
-    return WillPopScope(
-      onWillPop: () async => false,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        extendBody: true,
-        body: IndexedStack(
-          index: _index,
-          children: pages,
-        ),
-        bottomNavigationBar: _FloatingNavBar(
-          currentIndex: _index,
-          destinations: _destinations,
-          onTap: (i) => setState(() => _index = i),
-        ),
-      ),
-    );
-  }
-}
-
-// NAV DESTINATION MODEL
 @immutable
-class _NavDestination {
+class FloatingNavDestination {
   final IconData icon;
   final IconData activeIcon;
   final String label;
-
-  const _NavDestination({
+  const FloatingNavDestination({
     required this.icon,
     required this.activeIcon,
     required this.label,
   });
 }
 
-// FLOATING NAV BAR - Elegant & Minimal
-// FLOATING NAV BAR - Clean White / Glass Style
-class _FloatingNavBar extends StatelessWidget {
+class FloatingNavBar extends StatelessWidget {
   final int currentIndex;
-  final List<_NavDestination> destinations;
+  final List<FloatingNavDestination> destinations;
   final ValueChanged<int> onTap;
 
-  const _FloatingNavBar({
+  /// Colour of the selected icon. Defaults to the brand gold accent so it
+  /// matches the Organization home bar.
+  final Color selectedColor;
+
+  const FloatingNavBar({
+    super.key,
     required this.currentIndex,
     required this.destinations,
     required this.onTap,
+    this.selectedColor = AppTheme.tertiary,
   });
 
   @override
   Widget build(BuildContext context) {
+    // NOTE: no Align/Expanded wrapper here — in the Scaffold.bottomNavigationBar
+    // slot that would stretch the bar to full height, pushing floating
+    // SnackBars off screen. This sizes to its own content instead.
     return SafeArea(
       minimum: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -109,8 +48,8 @@ class _FloatingNavBar extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(999), // Fully pill shape
+            color: Colors.white.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: Colors.white.withOpacity(0.6),
               width: 0.5,
@@ -138,6 +77,7 @@ class _FloatingNavBar extends StatelessWidget {
                   activeIcon: dest.activeIcon,
                   label: dest.label,
                   isSelected: i == currentIndex,
+                  selectedColor: selectedColor,
                   onTap: () => onTap(i),
                 ),
               );
@@ -149,12 +89,12 @@ class _FloatingNavBar extends StatelessWidget {
   }
 }
 
-// NAV ITEM - Elegant & Sharp
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final IconData activeIcon;
   final String label;
   final bool isSelected;
+  final Color selectedColor;
   final VoidCallback onTap;
 
   const _NavItem({
@@ -162,6 +102,7 @@ class _NavItem extends StatelessWidget {
     required this.activeIcon,
     required this.label,
     required this.isSelected,
+    required this.selectedColor,
     required this.onTap,
   });
 
@@ -177,18 +118,14 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Icon
             Icon(
               isSelected ? activeIcon : icon,
               size: 26,
               color: isSelected
-                  ? AppTheme.tertiary
+                  ? selectedColor
                   : AppTheme.darkGreen.withOpacity(0.65),
             ),
-
             const SizedBox(height: 3),
-
-            // Label — only visible on selected item
             if (isSelected)
               Text(
                 label,
