@@ -5,6 +5,7 @@ import '../Components/index.dart';
 import '../Models/index.dart';
 import '../Services/heritage_providers.dart';
 import '../heritage_theme.dart';
+import '../Create/country_completeness_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  HeritageArchiveScreen
@@ -112,6 +113,11 @@ class _HeritageArchiveScreenState extends State<HeritageArchiveScreen> {
         // Stats strip
         SliverToBoxAdapter(
           child: _buildStatsStrip(entries),
+        ),
+
+        // Per-country "missing features" checklist (Phase 5.3)
+        SliverToBoxAdapter(
+          child: CountryCompletenessCard(orgId: widget.orgId),
         ),
 
         // Search bar

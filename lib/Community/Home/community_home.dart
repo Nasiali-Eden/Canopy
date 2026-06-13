@@ -14,9 +14,7 @@ import '../../Shared/Activities/activity_filter_sheet.dart';
 import '../Heritage/community_heritage_tab.dart';
 import '../Profile/profile_screen.dart';
 import '../Map/map.dart';
-import '../Contributions/log_contribution.dart';
 import '../Contributions/contribution_card.dart';
-import '../Contributions/contribution_placeholders.dart';
 import '../Contributions/contribution_detail_sheet.dart';
 import '../Contributions/all_contributions_screen.dart';
 import '../Communication/notification_center.dart';
@@ -93,21 +91,7 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
             ),
       ),
       actions: [
-        IconButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const EcoShopScreen()),
-          ),
-          icon: Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: AppTheme.lightGreen.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.shopping_bag_outlined,
-                color: AppTheme.primary, size: 20),
-          ),
-        ),
+        // Marketplace moved to a full-width Quick Action below (Phase 6).
         IconButton(
           onPressed: () => Navigator.push(
             context,
@@ -654,6 +638,14 @@ class _HomeTab extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                // Marketplace — full-width (relocated from the app bar).
+                _MarketplaceAction(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EcoShopScreen()),
+                  ),
                 ),
               ],
             ),
@@ -1419,6 +1411,75 @@ class _QuickActionCard extends StatelessWidget {
                             )),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Marketplace full-width action (relocated from app bar) ─────────────────────
+
+class _MarketplaceAction extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MarketplaceAction({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        height: 84,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppTheme.darkGreen, AppTheme.primary],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primary.withOpacity(0.25),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.storefront_outlined,
+                  color: Colors.white, size: 26),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Marketplace',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 2),
+                  Text('Shop recycled goods & eco products',
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 12.5)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_rounded,
+                color: Colors.white.withOpacity(0.9), size: 20),
+          ],
         ),
       ),
     );

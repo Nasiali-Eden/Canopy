@@ -17,9 +17,7 @@ import '../../Organization/Explorer/org_explorer_screen.dart';
 import '../../Organization/Explorer/org_view_screen.dart';
 import '../../Organization/Map/org_map_ops.dart';
 import 'env_ops_map_screen.dart';
-import 'map_style.dart' as map_style
-    hide kPlaceholderOrgs, kPlaceholderAmenities;
-import 'map_placeholders.dart';
+import 'map_style.dart' as map_style;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AMENITY TYPE ENUM
@@ -257,10 +255,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   // Org data for current user (for Add Pin button)
   Map<String, dynamic>? _currentOrgData;
 
-  List<MapOrganization> get _allOrgs =>
-      _firestoreOrgs.isNotEmpty ? _firestoreOrgs : kPlaceholderOrgs;
-  List<MapAmenity> get _allAmenities =>
-      _firestorePins.isNotEmpty ? _firestorePins : kPlaceholderAmenities;
+  // Backend ⇄ frontend parity: the map shows ONLY real Firestore data — no
+  // placeholder orgs/amenities. Empty collections → an empty map.
+  List<MapOrganization> get _allOrgs => _firestoreOrgs;
+  List<MapAmenity> get _allAmenities => _firestorePins;
 
   final CameraPosition _initialPosition = const CameraPosition(
     target: LatLng(-1.2921, 36.8219),

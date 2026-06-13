@@ -62,7 +62,40 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen> {
 
                 final list = snapshot.data ?? const [];
                 if (list.isEmpty) {
-                  return const Center(child: Text('No notifications'));
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            color: AppTheme.lightGreen.withOpacity(0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.notifications_none_rounded,
+                              size: 34,
+                              color: AppTheme.primary.withOpacity(0.7)),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          unreadOnly ? 'No unread notifications' : 'You\'re all caught up',
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.darkGreen),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Notifications will appear here when there\'s something new.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.darkGreen.withOpacity(0.5)),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 return ListView.separated(

@@ -11,9 +11,11 @@
 // Images are picked locally and only uploaded on Save, so cancelling leaves
 // the org untouched. Returns `true` via Navigator.pop when changes are saved.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -44,6 +46,11 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
   String? _coverUrl;
   File? _newLogo;
   File? _newCover;
+
+  // Heritage: country + per-country background image (cultural Country screen).
+  String? _country;
+  String? _countryBgUrl;
+  File? _newCountryBg;
 
   bool _loading = true;
   bool _saving = false;
@@ -87,6 +94,9 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
       if (members is num) _membersCtrl.text = '${members.toInt()}';
       _logoUrl = (d['logoUrl'] ?? d['profilePhoto']) as String?;
       _coverUrl = d['coverImageUrl'] as String?;
+      _country = (d['country'] as String?)?.trim();
+      if (_country != null && _country!.isEmpty) _country = null;
+      _countryBgUrl = (d['country_bg_image_url'] as String?);
     } catch (e) {
       debugPrint('EditOrgDetails load error: $e');
     } finally {
@@ -110,6 +120,47 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
     });
   }
 
+  Future<void> _pickCountryBg() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (file == null || !mounted) return;
+    setState(() => _newCountryBg = File(file.path));
+  }
+
+  Future<void> _openCountryPicker() async {
+    List<String> names;
+    try {
+      final raw = await rootBundle.loadString('assets/WorldCountries.json');
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final list = (decoded['countries'] as List?) ?? const [];
+      names = list
+          .map((e) => (e as Map<String, dynamic>)['name'] as String?)
+          .whereType<String>()
+          .toList()
+        ..sort();
+    } catch (e) {
+      debugPrint('Country list load error: $e');
+      return;
+    }
+    if (!mounted) return;
+
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => _CountryPickerSheet(countries: names),
+    );
+    if (selected != null && mounted) {
+      setState(() => _country = selected);
+    }
+  }
+
   Future<String> _upload(File file, String name) async {
     final ref = FirebaseStorage.instance.ref().child(
         'organizations/${widget.orgId}/${name}_${DateTime.now().millisecondsSinceEpoch}.jpg');
@@ -123,8 +174,12 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
     try {
       String? logoUrl = _logoUrl;
       String? coverUrl = _coverUrl;
+      String? countryBgUrl = _countryBgUrl;
       if (_newLogo != null) logoUrl = await _upload(_newLogo!, 'logo');
       if (_newCover != null) coverUrl = await _upload(_newCover!, 'cover');
+      if (_newCountryBg != null) {
+        countryBgUrl = await _upload(_newCountryBg!, 'country_bg');
+      }
 
       final foundedYear = int.tryParse(_foundedCtrl.text.trim());
       final members = int.tryParse(_membersCtrl.text.trim());
@@ -146,6 +201,9 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
         if (foundedYear != null)
           'foundedAt': Timestamp.fromDate(DateTime(foundedYear)),
         if (members != null) 'memberCount': members,
+        // Heritage fields.
+        if (_country != null && _country!.isNotEmpty) 'country': _country,
+        if (countryBgUrl != null) 'country_bg_image_url': countryBgUrl,
       };
 
       await FirebaseFirestore.instance
@@ -273,6 +331,11 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        _sectionLabel('Heritage'),
+                        _countryPickerField(),
+                        const SizedBox(height: 12),
+                        _countryBgUploader(),
                       ],
                     ),
                   ),
@@ -453,6 +516,122 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
     );
   }
 
+  // Tappable field that opens the country picker.
+  Widget _countryPickerField() {
+    final hasCountry = _country != null && _country!.isNotEmpty;
+    return InkWell(
+      onTap: _openCountryPicker,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Country',
+          labelStyle: TextStyle(
+              fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.6)),
+          filled: true,
+          fillColor: Colors.white,
+          prefixIcon:
+              const Icon(Icons.public_outlined, size: 19, color: AppTheme.primary),
+          suffixIcon:
+              Icon(Icons.expand_more, size: 20, color: AppTheme.darkGreen.withOpacity(0.5)),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+        ),
+        child: Text(
+          hasCountry ? _country! : 'Select country',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: hasCountry
+                ? AppTheme.darkGreen
+                : AppTheme.darkGreen.withOpacity(0.45),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Country background uploader. Emphasised when the background is missing
+  // (the cultural Country screen needs it); compact "replace" affordance when
+  // one is already set.
+  Widget _countryBgUploader() {
+    final hasBg = _newCountryBg != null ||
+        (_countryBgUrl != null && _countryBgUrl!.isNotEmpty);
+    return GestureDetector(
+      onTap: _pickCountryBg,
+      child: Container(
+        height: 150,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          color: AppTheme.lightGreen.withOpacity(0.12),
+          border: Border.all(
+            color: hasBg ? Colors.grey.shade200 : AppTheme.tertiary.withOpacity(0.6),
+            width: hasBg ? 1 : 1.4,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_newCountryBg != null)
+              Image.file(_newCountryBg!, fit: BoxFit.cover)
+            else if (_countryBgUrl != null && _countryBgUrl!.isNotEmpty)
+              Image.network(_countryBgUrl!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _countryBgPrompt(false))
+            else
+              _countryBgPrompt(true),
+            if (hasBg)
+              Positioned(
+                right: 12,
+                top: 12,
+                child: _editChip(
+                    Icons.add_photo_alternate_outlined, 'Replace background'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _countryBgPrompt(bool missing) {
+    return Container(
+      color: AppTheme.lightGreen.withOpacity(0.12),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.wallpaper_outlined,
+              size: 32, color: AppTheme.primary.withOpacity(0.7)),
+          const SizedBox(height: 8),
+          Text(
+            missing ? 'Add a country background' : 'Country background',
+            style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.darkGreen),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Used as the backdrop on the cultural Country screen.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 11.5,
+                color: AppTheme.darkGreen.withOpacity(0.55)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _field({
     required TextEditingController controller,
     required String label,
@@ -493,6 +672,115 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTRY PICKER SHEET — searchable list backed by assets/WorldCountries.json
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountryPickerSheet extends StatefulWidget {
+  final List<String> countries;
+  const _CountryPickerSheet({required this.countries});
+
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  late List<String> _filtered;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.countries;
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearch(String q) {
+    final query = q.trim().toLowerCase();
+    setState(() {
+      _filtered = query.isEmpty
+          ? widget.countries
+          : widget.countries
+              .where((c) => c.toLowerCase().contains(query))
+              .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: _onSearch,
+                autofocus: false,
+                decoration: InputDecoration(
+                  hintText: 'Search countries',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _filtered.isEmpty
+                  ? Center(
+                      child: Text('No matches',
+                          style: TextStyle(color: Colors.grey.shade500)),
+                    )
+                  : ListView.separated(
+                      itemCount: _filtered.length,
+                      separatorBuilder: (_, __) => Divider(
+                          height: 1, color: Colors.grey.shade100),
+                      itemBuilder: (_, i) {
+                        final name = _filtered[i];
+                        return ListTile(
+                          title: Text(name,
+                              style: const TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.darkGreen)),
+                          onTap: () => Navigator.of(context).pop(name),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
     );

@@ -236,6 +236,9 @@ class CommunityAuthService {
         'facilityTypeIds': facilityTypeIds,
         // Location.
         'country': country,
+        // Heritage: per-country background image for the cultural Country screen.
+        // Null at registration — the org fills it in from the org edit screen.
+        'country_bg_image_url': null,
         'city': city,
         'area': area,
         if (lat != null && lng != null) 'location': GeoPoint(lat, lng),
