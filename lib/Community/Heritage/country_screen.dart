@@ -48,33 +48,14 @@ class CountryScreen extends StatelessWidget {
             child: StreamBuilder<List<HeritageItem>>(
               stream: service.streamItems(countryId: _countryId),
               builder: (context, snap) {
-                final loading =
-                    snap.connectionState == ConnectionState.waiting &&
-                        !snap.hasData;
+                // Always render every category — real cards where entries exist,
+                // glassy placeholder cards where they don't — so the design is
+                // represented even before content is added.
                 final items = snap.data ?? const <HeritageItem>[];
                 return CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(child: _header()),
-                    if (loading)
-                      const SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.only(top: 12),
-                          child: HeritageLoadingRail(),
-                        ),
-                      )
-                    else if (items.isEmpty)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: GlassEmptyState(
-                          icon: Icons.travel_explore_outlined,
-                          title: 'Nothing here yet',
-                          message:
-                              '${country.name}\'s cultural archive is being built. '
-                              'Check back later.',
-                        ),
-                      )
-                    else
-                      ..._sections(context, items),
+                    ..._sections(context, items),
                     SliverToBoxAdapter(child: SizedBox(height: bottomPad + 90)),
                   ],
                 );
@@ -154,37 +135,34 @@ class CountryScreen extends StatelessWidget {
 
     final widgets = <Widget>[];
 
-    // Communities first.
-    if (communities.isNotEmpty) {
-      final list = communities.values.toList()
-        ..sort((a, b) => b.count.compareTo(a.count));
-      widgets.add(SliverToBoxAdapter(
-        child: GlassSectionTitle(
-          icon: Icons.groups_outlined,
-          title: 'Communities',
-          count: '${list.length}',
-          accent: HeritageContentTypes.communitiesAccent,
-          onSeeAll: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CommunitiesListScreen(
-                  countryId: _countryId, countryName: country.name),
-            ),
+    // Communities — always shown (placeholder chips when empty).
+    final commList = communities.values.toList()
+      ..sort((a, b) => b.count.compareTo(a.count));
+    widgets.add(SliverToBoxAdapter(
+      child: GlassSectionTitle(
+        icon: Icons.groups_outlined,
+        title: 'Communities',
+        count: commList.isEmpty ? null : '${commList.length}',
+        accent: HeritageContentTypes.communitiesAccent,
+        onSeeAll: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CommunitiesListScreen(
+                countryId: _countryId, countryName: country.name),
           ),
         ),
-      ));
-      widgets.add(SliverToBoxAdapter(child: _communitiesRail(context, list)));
-    }
+      ),
+    ));
+    widgets.add(SliverToBoxAdapter(child: _communitiesRail(context, commList)));
 
-    // One section per present content type, in canonical order.
+    // Every content type, in canonical order — real cards or placeholders.
     for (final type in HeritageContentTypes.ordered) {
-      final list = byType[type.key];
-      if (list == null || list.isEmpty) continue;
+      final list = byType[type.key] ?? const <HeritageItem>[];
       widgets.add(SliverToBoxAdapter(
         child: GlassSectionTitle(
           icon: type.icon,
           title: type.label,
-          count: '${list.length}',
+          count: list.isEmpty ? null : '${list.length}',
           accent: type.accent,
           onSeeAll: () => Navigator.push(
             context,
@@ -207,10 +185,11 @@ class CountryScreen extends StatelessWidget {
     return widgets;
   }
 
-  // Per-shape preview rail.
+  // Per-shape preview rail — at most 4 real cards; glassy placeholders if empty.
   Widget _itemRail(
       BuildContext context, HeritageContentType type, List<HeritageItem> all) {
-    final items = all.take(6).toList();
+    final has = all.isNotEmpty;
+    final items = all.take(4).toList();
     double w, h;
     var compact = false;
     switch (type.shape) {
@@ -232,25 +211,29 @@ class CountryScreen extends StatelessWidget {
         h = 162;
         break;
     }
+    final count = has ? items.length : 3;
     return SizedBox(
       height: h,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: items.length,
+        itemCount: count,
         separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, i) => SizedBox(
           width: w,
-          child: HeritageItemCard(
-            item: items[i],
-            compact: compact,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => HeritageItemScreen(item: items[i]),
-              ),
-            ),
-          ),
+          child: has
+              ? HeritageItemCard(
+                  item: items[i],
+                  compact: compact,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => HeritageItemScreen(item: items[i]),
+                    ),
+                  ),
+                )
+              : HeritagePlaceholderCard(
+                  icon: type.icon, accent: type.accent, compact: compact),
         ),
       ),
     );
@@ -258,6 +241,22 @@ class CountryScreen extends StatelessWidget {
 
   Widget _communitiesRail(BuildContext context, List<_Comm> list) {
     const accent = HeritageContentTypes.communitiesAccent;
+    if (list.isEmpty) {
+      return SizedBox(
+        height: 104,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: 3,
+          separatorBuilder: (_, __) => const SizedBox(width: 12),
+          itemBuilder: (_, __) => const SizedBox(
+            width: 150,
+            child: HeritagePlaceholderCard(
+                icon: Icons.groups_outlined, accent: accent),
+          ),
+        ),
+      );
+    }
     return SizedBox(
       height: 104,
       child: ListView.separated(

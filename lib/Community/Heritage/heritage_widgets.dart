@@ -188,6 +188,95 @@ class HeritageItemCard extends StatelessWidget {
   }
 }
 
+/// A representative "design" placeholder card — glassy, translucent, showing the
+/// content-type icon over skeleton bars. Used to convey how a category's cards
+/// will look before any real entry exists (abstract skeleton, NOT fake content).
+class HeritagePlaceholderCard extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
+  final bool compact;
+
+  const HeritagePlaceholderCard({
+    super.key,
+    required this.icon,
+    required this.accent,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(0.10)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                color: accent.withOpacity(0.14),
+                child: Icon(icon, color: Colors.white.withOpacity(0.35), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [_bar(70), const SizedBox(height: 7), _bar(44)],
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.10)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Container(
+                color: accent.withOpacity(0.12),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 32, color: Colors.white.withOpacity(0.3)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 9, 10, 11),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [_bar(double.infinity), const SizedBox(height: 7), _bar(60)],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bar(double width) => Container(
+        width: width,
+        height: 8,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(4),
+        ),
+      );
+}
+
 /// Loading shimmer placeholder (a glass skeleton) — shown while a stream
 /// resolves. This is a loading state, not invented content.
 class HeritageLoadingRail extends StatelessWidget {

@@ -108,31 +108,32 @@ class CommunityHeritageTab extends StatelessWidget {
             slivers: [
               SliverToBoxAdapter(child: SizedBox(height: topInset + 60 + 4)),
 
-              // Quote
+              // Quote — enlarged, the hero line of the Heritage home.
               const SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
+                  padding: EdgeInsets.fromLTRB(24, 4, 24, 26),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       SizedBox(
-                          width: 28,
-                          child: Divider(color: _gold, thickness: 2)),
+                          width: 36,
+                          child: Divider(color: _gold, thickness: 3)),
+                      SizedBox(height: 14),
                       Text(
-                        '"Every culture has its own logic,\nits own reason for being."',
+                        'Every culture has its own logic,\nits own reason for being.',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 24,
                           fontStyle: FontStyle.italic,
-                          color: _textDim,
-                          height: 1.6,
+                          fontWeight: FontWeight.w600,
+                          color: _textColor,
+                          height: 1.4,
+                          letterSpacing: -0.3,
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-              const SliverToBoxAdapter(child: _SectionLabel('Choose a country')),
 
               // Country grid (registry-driven).
               SliverToBoxAdapter(
