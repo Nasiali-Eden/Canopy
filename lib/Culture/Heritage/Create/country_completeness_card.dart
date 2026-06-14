@@ -138,7 +138,14 @@ class _CountryCompletenessCardState extends State<CountryCompletenessCard> {
             const SizedBox(height: 12),
             if (missingBg)
               _row(Icons.image_outlined, 'Add a country background image',
-                  'Shown behind the country\'s Heritage page'),
+                  'Shown behind the country\'s Heritage page',
+                  onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              HeritageBackgroundsScreen(orgId: widget.orgId),
+                        ),
+                      )),
             ...missingCats.take(missingBg ? 4 : 5).map(
                   (t) => _row(t.icon, 'Add ${t.label}',
                       'No ${t.plural} entries yet'),
@@ -224,10 +231,14 @@ class _CountryCompletenessCardState extends State<CountryCompletenessCard> {
     );
   }
 
-  Widget _row(IconData icon, String title, String subtitle) {
+  Widget _row(IconData icon, String title, String subtitle,
+      {VoidCallback? onTap}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Row(
         children: [
           Container(
             width: 32,
@@ -258,6 +269,7 @@ class _CountryCompletenessCardState extends State<CountryCompletenessCard> {
           Icon(Icons.chevron_right,
               size: 18, color: AppTheme.darkGreen.withOpacity(0.3)),
         ],
+        ),
       ),
     );
   }

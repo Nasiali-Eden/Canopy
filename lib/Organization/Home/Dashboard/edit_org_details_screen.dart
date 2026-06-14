@@ -48,10 +48,8 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
   File? _newLogo;
   File? _newCover;
 
-  // Heritage: country + per-country background image (cultural Country screen).
+  // Heritage: the org's country. Backgrounds are set in HeritageBackgroundsScreen.
   String? _country;
-  String? _countryBgUrl;
-  File? _newCountryBg;
 
   bool _loading = true;
   bool _saving = false;
@@ -97,7 +95,6 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
       _coverUrl = d['coverImageUrl'] as String?;
       _country = (d['country'] as String?)?.trim();
       if (_country != null && _country!.isEmpty) _country = null;
-      _countryBgUrl = (d['country_bg_image_url'] as String?);
     } catch (e) {
       debugPrint('EditOrgDetails load error: $e');
     } finally {
@@ -119,16 +116,6 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
         _newCover = File(file.path);
       }
     });
-  }
-
-  Future<void> _pickCountryBg() async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (file == null || !mounted) return;
-    setState(() => _newCountryBg = File(file.path));
   }
 
   Future<void> _openCountryPicker() async {
@@ -162,18 +149,6 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
     }
   }
 
-  /// Maps a country display name to the heritage hierarchy node id used by the
-  /// Country screen / registry (e.g. "Kenya" → "country_kenya",
-  /// "South Africa" → "country_south_africa").
-  String _heritageCountryNodeId(String name) {
-    final slug = name
-        .toLowerCase()
-        .trim()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
-        .replaceAll(RegExp(r'^_+|_+$'), '');
-    return 'country_$slug';
-  }
-
   Future<String> _upload(File file, String name) async {
     final ref = FirebaseStorage.instance.ref().child(
         'organizations/${widget.orgId}/${name}_${DateTime.now().millisecondsSinceEpoch}.jpg');
@@ -187,12 +162,8 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
     try {
       String? logoUrl = _logoUrl;
       String? coverUrl = _coverUrl;
-      String? countryBgUrl = _countryBgUrl;
       if (_newLogo != null) logoUrl = await _upload(_newLogo!, 'logo');
       if (_newCover != null) coverUrl = await _upload(_newCover!, 'cover');
-      if (_newCountryBg != null) {
-        countryBgUrl = await _upload(_newCountryBg!, 'country_bg');
-      }
 
       final foundedYear = int.tryParse(_foundedCtrl.text.trim());
       final members = int.tryParse(_membersCtrl.text.trim());
@@ -214,29 +185,15 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
         if (foundedYear != null)
           'foundedAt': Timestamp.fromDate(DateTime(foundedYear)),
         if (members != null) 'memberCount': members,
-        // Heritage fields.
+        // Heritage: the org's country. Backgrounds (country + categories +
+        // communities) are managed in HeritageBackgroundsScreen.
         if (_country != null && _country!.isNotEmpty) 'country': _country,
-        if (countryBgUrl != null) 'country_bg_image_url': countryBgUrl,
       };
 
       await FirebaseFirestore.instance
           .collection('organizations')
           .doc(widget.orgId)
           .update(update);
-
-      // The public Country screen reads its backdrop from
-      // heritage_hierarchy/{country_node}.bg_image_url — mirror the uploaded
-      // country background there so it actually appears.
-      if (_country != null &&
-          _country!.isNotEmpty &&
-          countryBgUrl != null &&
-          countryBgUrl.isNotEmpty) {
-        final nodeId = _heritageCountryNodeId(_country!);
-        await FirebaseFirestore.instance
-            .collection('heritage_hierarchy')
-            .doc(nodeId)
-            .set({'bg_image_url': countryBgUrl}, SetOptions(merge: true));
-      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -361,8 +318,6 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
                         const SizedBox(height: 8),
                         _sectionLabel('Heritage'),
                         _countryPickerField(),
-                        const SizedBox(height: 12),
-                        _countryBgUploader(),
                         const SizedBox(height: 12),
                         _manageBackgroundsTile(),
                       ],
@@ -583,80 +538,6 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
                 : AppTheme.darkGreen.withOpacity(0.45),
           ),
         ),
-      ),
-    );
-  }
-
-  // Country background uploader. Emphasised when the background is missing
-  // (the cultural Country screen needs it); compact "replace" affordance when
-  // one is already set.
-  Widget _countryBgUploader() {
-    final hasBg = _newCountryBg != null ||
-        (_countryBgUrl != null && _countryBgUrl!.isNotEmpty);
-    return GestureDetector(
-      onTap: _pickCountryBg,
-      child: Container(
-        height: 150,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          color: AppTheme.lightGreen.withOpacity(0.12),
-          border: Border.all(
-            color: hasBg ? Colors.grey.shade200 : AppTheme.tertiary.withOpacity(0.6),
-            width: hasBg ? 1 : 1.4,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (_newCountryBg != null)
-              Image.file(_newCountryBg!, fit: BoxFit.cover)
-            else if (_countryBgUrl != null && _countryBgUrl!.isNotEmpty)
-              Image.network(_countryBgUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _countryBgPrompt(false))
-            else
-              _countryBgPrompt(true),
-            if (hasBg)
-              Positioned(
-                right: 12,
-                top: 12,
-                child: _editChip(
-                    Icons.add_photo_alternate_outlined, 'Replace background'),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _countryBgPrompt(bool missing) {
-    return Container(
-      color: AppTheme.lightGreen.withOpacity(0.12),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.wallpaper_outlined,
-              size: 32, color: AppTheme.primary.withOpacity(0.7)),
-          const SizedBox(height: 8),
-          Text(
-            missing ? 'Add a country background' : 'Country background',
-            style: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.darkGreen),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Used as the backdrop on the cultural Country screen.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 11.5,
-                color: AppTheme.darkGreen.withOpacity(0.55)),
-          ),
-        ],
       ),
     );
   }

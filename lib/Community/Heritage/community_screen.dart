@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import '../../Culture/Heritage/Services/heritage_content_types.dart';
 import '../../Culture/Heritage/Services/heritage_data_service.dart';
 import '../../Shared/theme/glass.dart';
+import 'category_browse_screen.dart';
 import 'heritage_item_screen.dart';
 import 'heritage_widgets.dart';
 
@@ -252,39 +253,11 @@ class CommunityDetailScreen extends StatelessWidget {
                   countryId: countryId, communityId: communityId),
               builder: (context, snap) {
                 final items = snap.data ?? const <HeritageItem>[];
-                final has = items.isNotEmpty;
                 return CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(child: _hero(items.length)),
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPad + 28),
-                      sliver: SliverGrid(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.8,
-                        ),
-                        delegate: SliverChildBuilderDelegate(
-                          (_, i) => has
-                              ? HeritageItemCard(
-                                  item: items[i],
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          HeritageItemScreen(item: items[i]),
-                                    ),
-                                  ),
-                                )
-                              : HeritagePlaceholderCard(
-                                  icon: Icons.auto_stories_outlined,
-                                  accent: _accent),
-                          childCount: has ? items.length : 4,
-                        ),
-                      ),
-                    ),
+                    ..._sections(context, items),
+                    SliverToBoxAdapter(child: SizedBox(height: bottomPad + 28)),
                   ],
                 );
               },
@@ -355,6 +328,95 @@ class CommunityDetailScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // One rail per content type present in this community (real cards, ≤4, +
+  // "Show all"); placeholder rails for absent types so the design reads.
+  List<Widget> _sections(BuildContext context, List<HeritageItem> items) {
+    final byType = <String, List<HeritageItem>>{};
+    for (final it in items) {
+      byType.putIfAbsent(it.contentType, () => []).add(it);
+    }
+    final widgets = <Widget>[];
+    for (final type in HeritageContentTypes.ordered) {
+      final list = byType[type.key] ?? const <HeritageItem>[];
+      widgets.add(SliverToBoxAdapter(
+        child: GlassSectionTitle(
+          icon: type.icon,
+          title: type.label,
+          count: list.isEmpty ? null : '${list.length}',
+          accent: type.accent,
+          onSeeAll: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => HeritageBrowseScreen(
+                countryId: countryId,
+                contentType: type.key,
+                communityId: communityId,
+                title: '${type.label} · $communityName',
+                subtitle: 'in $countryName',
+                accent: type.accent,
+                icon: type.icon,
+              ),
+            ),
+          ),
+        ),
+      ));
+      widgets.add(SliverToBoxAdapter(child: _itemRail(context, type, list)));
+    }
+    return widgets;
+  }
+
+  Widget _itemRail(
+      BuildContext context, HeritageContentType type, List<HeritageItem> all) {
+    final has = all.isNotEmpty;
+    final list = all.take(4).toList();
+    double w, h;
+    var compact = false;
+    switch (type.shape) {
+      case HeritageCardShape.poster:
+        w = 150;
+        h = 210;
+        break;
+      case HeritageCardShape.banner:
+        w = 280;
+        h = 160;
+        break;
+      case HeritageCardShape.row:
+        w = 240;
+        h = 72;
+        compact = true;
+        break;
+      case HeritageCardShape.tile:
+        w = 150;
+        h = 162;
+        break;
+    }
+    return SizedBox(
+      height: h,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: has ? list.length : 3,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (_, i) => SizedBox(
+          width: w,
+          child: has
+              ? HeritageItemCard(
+                  item: list[i],
+                  compact: compact,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => HeritageItemScreen(item: list[i]),
+                    ),
+                  ),
+                )
+              : HeritagePlaceholderCard(
+                  icon: type.icon, accent: type.accent, compact: compact),
+        ),
       ),
     );
   }
