@@ -279,7 +279,7 @@ class _TypeDataFormBuilderState extends State<TypeDataFormBuilder> {
     final value = (widget.typeData[field.key] as bool?) ?? false;
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: SwitchListTile(
@@ -322,7 +322,7 @@ class _TypeDataFormBuilderState extends State<TypeDataFormBuilder> {
               selectedColor: AppTheme.tertiary,
               checkmarkColor: Colors.white,
               backgroundColor: HeritageTheme.heritageBackground,
-              side: BorderSide(color: active ? AppTheme.tertiary : Colors.grey[300]!),
+              side: BorderSide(color: active ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.22)),
               onSelected: (v) {
                 final next = Set<String>.from(selected);
                 if (v) next.add(o); else next.remove(o);
@@ -379,7 +379,7 @@ class _TypeDataFormBuilderState extends State<TypeDataFormBuilder> {
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
+                    borderSide: BorderSide(color: AppTheme.tertiary.withOpacity(0.22)),
                   ),
                 ),
                 onSubmitted: (v) {

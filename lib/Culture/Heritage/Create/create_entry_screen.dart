@@ -313,7 +313,7 @@ class _BottomBar extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withOpacity(0.82),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.07),
@@ -471,10 +471,12 @@ class _TypeCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
-          color: selected ? AppTheme.tertiary.withOpacity(0.12) : Colors.white,
+          color: selected
+              ? AppTheme.tertiary.withOpacity(0.16)
+              : Colors.white.withOpacity(0.66),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected ? AppTheme.tertiary : Colors.grey[200]!,
+            color: selected ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.22),
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -567,9 +569,9 @@ class _StepLocality extends StatelessWidget {
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.white.withOpacity(0.66),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey[300]!),
+              border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: DropdownButtonHideUnderline(
@@ -745,8 +747,8 @@ class _StepLocality extends StatelessWidget {
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.grey[200]!),
-                color: Colors.white,
+                border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
+                color: Colors.white.withOpacity(0.66),
               ),
               child: SwitchListTile(
                 title: const Text(
@@ -1102,10 +1104,10 @@ class _StepMedia extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 28),
               decoration: BoxDecoration(
-                color: HeritageTheme.heritageCardBackground,
+                color: HeritageTheme.heritageCardBackground.withOpacity(0.74),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: Colors.grey[200]!,
+                  color: AppTheme.tertiary.withOpacity(0.22),
                   style: BorderStyle.solid,
                 ),
               ),
@@ -1167,7 +1169,7 @@ class _StepMedia extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.grey[50],
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey[200]!),
+              border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
             ),
             child: Text(
               'Audio upload requires additional package configuration',
@@ -1217,10 +1219,10 @@ class _MediaCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withOpacity(0.66),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: item.isPrimary ? AppTheme.tertiary : Colors.grey[200]!,
+          color: item.isPrimary ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.22),
           width: item.isPrimary ? 1.5 : 1,
         ),
       ),
@@ -1381,7 +1383,7 @@ class _StepVisibility extends StatelessWidget {
                   color: selected ? AppTheme.tertiary.withOpacity(0.08) : Colors.white,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: selected ? AppTheme.tertiary : Colors.grey[200]!,
+                    color: selected ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.22),
                     width: selected ? 1.5 : 1,
                   ),
                 ),
@@ -1435,8 +1437,8 @@ class _StepVisibility extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.grey[200]!),
-              color: Colors.white,
+              border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
+              color: Colors.white.withOpacity(0.66),
             ),
             child: SwitchListTile(
               title: const Text('Seeking contributors', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
@@ -1498,9 +1500,9 @@ class _ReviewSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: HeritageTheme.heritageCardBackground,
+        color: HeritageTheme.heritageCardBackground.withOpacity(0.74),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
