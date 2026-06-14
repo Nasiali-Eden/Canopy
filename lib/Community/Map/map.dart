@@ -1,9 +1,7 @@
 // lib/Community/Map/map.dart
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:cached_network_image/cached_network_image.dart';
@@ -17,6 +15,7 @@ import '../../Organization/Explorer/org_explorer_screen.dart';
 import '../../Organization/Explorer/org_view_screen.dart';
 import '../../Organization/Map/org_map_ops.dart';
 import 'env_ops_map_screen.dart';
+import 'org_logo_cache.dart';
 import 'map_style.dart' as map_style;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -810,21 +809,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
-  // Download a network image and render it as a circular marker.
+  // Render a circular logo marker from cached bytes (warmed up at app start via
+  // OrgLogoCache.warmUp), so markers appear immediately on map open.
   Future<BitmapDescriptor> _makeLogoMarker(
       String url, Color borderColor, double size, {required bool hero}) async {
     try {
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 8);
-      final req = await client.getUrl(Uri.parse(url));
-      final resp = await req.close().timeout(const Duration(seconds: 10));
-      if (resp.statusCode < 200 || resp.statusCode >= 300) {
-        throw Exception('HTTP ${resp.statusCode}');
+      final bytes = await OrgLogoCache.instance.bytes(url);
+      if (bytes == null) {
+        return _makeOrgIcon(Icons.business, borderColor, size, hero: hero);
       }
-      final bytes = Uint8List.fromList(
-        await resp.fold<List<int>>([], (acc, chunk) => acc..addAll(chunk)),
-      );
-      client.close(force: true);
       final codec = await ui.instantiateImageCodec(
         bytes,
         targetWidth: size.toInt(),

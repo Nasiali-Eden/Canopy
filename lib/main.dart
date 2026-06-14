@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'dart:async';
 import 'dart:io';
 import 'Services/storage/user_persistence.dart';
+import 'Community/Map/org_logo_cache.dart';
 
 import 'Models/user.dart';
 import 'Providers/theme_provider.dart';
@@ -179,6 +180,10 @@ void main() async {
     // Then initialize Firebase
     await initializeFirebase();
     debugPrint('[App] ✅ Firebase initialized');
+
+    // Warm up org logo images in the background so map markers render
+    // instantly when the map opens (fire-and-forget — never block startup).
+    OrgLogoCache.instance.warmUp();
 
     debugPrint('[App] ✅ App initialization completed successfully');
     runApp(const MyApp());
