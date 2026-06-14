@@ -15,6 +15,7 @@ import '../Heritage/community_heritage_tab.dart';
 import '../Profile/profile_screen.dart';
 import '../Map/map.dart';
 import '../Map/org_logo_cache.dart';
+import '../../Shared/widgets/floating_nav_bar.dart';
 import '../Contributions/contribution_card.dart';
 import '../Contributions/contribution_detail_sheet.dart';
 import '../Contributions/all_contributions_screen.dart';
@@ -52,8 +53,6 @@ class CommunityHomeScreen extends StatefulWidget {
 class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
   int _index = 0;
   ActivityFilter _activityFilter = const ActivityFilter();
-
-  bool get _isDarkTab => _index == 2 || _index == 3;
 
   @override
   void initState() {
@@ -254,169 +253,30 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
         floatingActionButton: _index == 1
             ? ActivityHomeLogic.buildFloatingActionButton(context, user)
             : null,
-        bottomNavigationBar: _FloatingNavBar(
+        bottomNavigationBar: FloatingNavBar(
           currentIndex: _index,
-          isDark: _isDarkTab,
           onTap: (i) => setState(() => _index = i),
           destinations: const [
-            _NavDestination(
+            FloatingNavDestination(
                 icon: Icons.home_outlined,
                 activeIcon: Icons.home_rounded,
                 label: 'Home'),
-            _NavDestination(
+            FloatingNavDestination(
                 icon: Icons.event_note_outlined,
                 activeIcon: Icons.event_note_rounded,
                 label: 'Activities'),
-            _NavDestination(
+            FloatingNavDestination(
                 icon: Icons.map_outlined,
                 activeIcon: Icons.map_rounded,
                 label: 'Map'),
-            _NavDestination(
+            FloatingNavDestination(
                 icon: Icons.auto_stories_outlined,
                 activeIcon: Icons.auto_stories_rounded,
                 label: 'Heritage'),
-            _NavDestination(
+            FloatingNavDestination(
                 icon: Icons.person_outline,
                 activeIcon: Icons.person_rounded,
                 label: 'Profile'),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FLOATING NAV BAR — pill / glass style (mirrors org_home), theme-aware so it
-// reads cleanly over the dark Map & Heritage tabs.
-// ─────────────────────────────────────────────────────────────────────────────
-
-@immutable
-class _NavDestination {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  const _NavDestination(
-      {required this.icon, required this.activeIcon, required this.label});
-}
-
-class _FloatingNavBar extends StatelessWidget {
-  final int currentIndex;
-  final bool isDark;
-  final List<_NavDestination> destinations;
-  final ValueChanged<int> onTap;
-
-  const _FloatingNavBar({
-    required this.currentIndex,
-    required this.isDark,
-    required this.destinations,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      minimum: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isDark
-                ? const Color(0xFF14201A).withOpacity(0.92)
-                : Colors.white.withOpacity(0.92),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withOpacity(0.12)
-                  : Colors.white.withOpacity(0.6),
-              width: 0.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
-                blurRadius: 30,
-                offset: const Offset(0, 12),
-              ),
-              BoxShadow(
-                color: AppTheme.darkGreen.withOpacity(0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(destinations.length, (i) {
-              final dest = destinations[i];
-              return Expanded(
-                child: _NavItem(
-                  icon: dest.icon,
-                  activeIcon: dest.activeIcon,
-                  label: dest.label,
-                  isSelected: i == currentIndex,
-                  isDark: isDark,
-                  onTap: () => onTap(i),
-                ),
-              );
-            }),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool isSelected;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.isSelected,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final unselected =
-        isDark ? Colors.white.withOpacity(0.6) : AppTheme.darkGreen.withOpacity(0.65);
-    final labelColor = isDark ? Colors.white : AppTheme.darkGreen;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSelected ? activeIcon : icon,
-              size: 26,
-              color: isSelected ? AppTheme.tertiary : unselected,
-            ),
-            const SizedBox(height: 3),
-            if (isSelected)
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: labelColor,
-                  letterSpacing: -0.1,
-                ),
-              )
-            else
-              const SizedBox(height: 14),
           ],
         ),
       ),
