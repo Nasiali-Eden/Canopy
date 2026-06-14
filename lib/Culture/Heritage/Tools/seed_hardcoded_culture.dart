@@ -24,7 +24,7 @@
 // ⚠ Does NOT touch Firebase security rules or composite indexes.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 const String _kSeedKey = 'seed_hardcoded_culture_v1';
 const String _kCountryId = 'country_kenya';
@@ -244,6 +244,97 @@ Future<String> runHeritageSeed({FirebaseFirestore? firestore}) async {
       '[heritage-seed] done — org=$orgId nodes=$nodes entries=$entries skipped=$skipped';
   debugPrint(summary);
   return summary;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEBUG-ONLY trigger widget — drop into a screen behind `if (kDebugMode)`.
+// One tap runs the idempotent seed and reports the summary. Safe to re-tap.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class HeritageSeedDebugButton extends StatefulWidget {
+  const HeritageSeedDebugButton({super.key});
+
+  @override
+  State<HeritageSeedDebugButton> createState() =>
+      _HeritageSeedDebugButtonState();
+}
+
+class _HeritageSeedDebugButtonState extends State<HeritageSeedDebugButton> {
+  bool _running = false;
+  String? _result;
+
+  Future<void> _run() async {
+    setState(() {
+      _running = true;
+      _result = null;
+    });
+    String summary;
+    try {
+      summary = await runHeritageSeed();
+    } catch (e) {
+      summary = '[heritage-seed] ERROR: $e';
+    }
+    if (!mounted) return;
+    setState(() {
+      _running = false;
+      _result = summary;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(summary), duration: const Duration(seconds: 6)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.deepPurple.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.bug_report_outlined,
+                  size: 18, color: Colors.deepPurple),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('Seed sample data (debug)',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.deepPurple)),
+              ),
+              FilledButton(
+                onPressed: _running ? null : _run,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: _running
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Run'),
+              ),
+            ],
+          ),
+          if (_result != null) ...[
+            const SizedBox(height: 8),
+            Text(_result!,
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.black54, height: 1.4)),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

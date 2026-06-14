@@ -3,9 +3,12 @@ import 'package:provider/provider.dart';
 import '../../../Shared/theme/app_theme.dart';
 import '../Components/index.dart';
 import '../Models/index.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
+
 import '../Services/heritage_providers.dart';
 import '../heritage_theme.dart';
 import '../Create/country_completeness_card.dart';
+import '../Tools/seed_hardcoded_culture.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  HeritageArchiveScreen
@@ -119,6 +122,10 @@ class _HeritageArchiveScreenState extends State<HeritageArchiveScreen> {
         SliverToBoxAdapter(
           child: CountryCompletenessCard(orgId: widget.orgId),
         ),
+
+        // Debug-only: one-tap migration of the old hardcoded culture data.
+        if (kDebugMode)
+          const SliverToBoxAdapter(child: HeritageSeedDebugButton()),
 
         // Search bar
         SliverToBoxAdapter(
