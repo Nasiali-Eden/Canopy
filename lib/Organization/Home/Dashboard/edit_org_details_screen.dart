@@ -21,6 +21,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../Shared/theme/app_theme.dart';
+import '../../../Culture/Heritage/Create/heritage_backgrounds_screen.dart';
 
 class EditOrgDetailsScreen extends StatefulWidget {
   final String orgId;
@@ -362,6 +363,8 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
                         _countryPickerField(),
                         const SizedBox(height: 12),
                         _countryBgUploader(),
+                        const SizedBox(height: 12),
+                        _manageBackgroundsTile(),
                       ],
                     ),
                   ),
@@ -654,6 +657,59 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
                 color: AppTheme.darkGreen.withOpacity(0.55)),
           ),
         ],
+      ),
+    );
+  }
+
+  // Single rich entry point to set a background for every category & community.
+  Widget _manageBackgroundsTile() {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HeritageBackgroundsScreen(orgId: widget.orgId),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.tertiary.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.tertiary.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppTheme.tertiary.withOpacity(0.16),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.photo_library_outlined,
+                  size: 19, color: AppTheme.tertiary),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Manage Heritage backgrounds',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.darkGreen)),
+                  SizedBox(height: 2),
+                  Text('Set a background for each category & community',
+                      style: TextStyle(fontSize: 11.5, color: Colors.black54)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right,
+                color: AppTheme.darkGreen.withOpacity(0.4)),
+          ],
+        ),
       ),
     );
   }
