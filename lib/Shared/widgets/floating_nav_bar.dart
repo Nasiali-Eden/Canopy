@@ -82,29 +82,33 @@ class FloatingNavBar extends StatelessWidget {
   }
 
   Widget _solidShell(Widget child) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.6),
-          width: 0.5,
+    // Transparent frosted glass — no solid fill, just a blur of whatever is
+    // behind plus a faint tint so dark icons stay legible over both light and
+    // dark backgrounds.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.45),
+              width: 0.6,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: child,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
-          ),
-          BoxShadow(
-            color: AppTheme.darkGreen.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
-      child: child,
     );
   }
 

@@ -90,11 +90,11 @@ class GlassBackground extends StatelessWidget {
             CachedNetworkImage(
               imageUrl: imageUrl!,
               fit: BoxFit.cover,
-              errorWidget: (_, __, ___) => _GradientFill(tint: tint),
-              placeholder: (_, __) => _GradientFill(tint: tint),
+              errorWidget: (_, __, ___) => _AssetFallback(tint: tint),
+              placeholder: (_, __) => _AssetFallback(tint: tint),
             )
           else
-            _GradientFill(tint: tint),
+            _AssetFallback(tint: tint),
           if (blur > 0)
             BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
@@ -123,14 +123,21 @@ class GlassBackground extends StatelessWidget {
   }
 }
 
-class _GradientFill extends StatelessWidget {
+/// Fallback ambient when no network image is set: the bundled heritage
+/// landscape (so cards frost over a real photo, like the Heritage home),
+/// then a tinted gradient only if the asset is missing.
+class _AssetFallback extends StatelessWidget {
   final Color tint;
-  const _GradientFill({required this.tint});
+  const _AssetFallback({required this.tint});
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(gradient: GlassPalette.tintedGradient(tint)),
+    return Image.asset(
+      'images/BG.png',
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => DecoratedBox(
+        decoration: BoxDecoration(gradient: GlassPalette.tintedGradient(tint)),
+      ),
     );
   }
 }
