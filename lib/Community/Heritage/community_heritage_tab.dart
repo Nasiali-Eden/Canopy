@@ -99,12 +99,12 @@ class CommunityHeritageTab extends StatelessWidget {
           ),
           CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: SizedBox(height: topInset + 60 + 4)),
+              SliverToBoxAdapter(child: SizedBox(height: topInset + 52)),
 
               // Quote — enlarged, the hero line of the Heritage home.
               const SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(24, 4, 24, 26),
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -152,67 +152,96 @@ class CommunityHeritageTab extends StatelessWidget {
                         ),
                       );
                     }
+                    final shown = countries.take(4).toList();
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.92,
-                        ),
-                        itemCount: countries.length,
-                        itemBuilder: (_, i) => _CountryCard(
-                          country: countries[i],
-                          service: service,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  CountryScreen(country: countries[i]),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 0.92,
+                            ),
+                            itemCount: shown.length,
+                            itemBuilder: (_, i) => _CountryCard(
+                              country: shown[i],
+                              service: service,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      CountryScreen(country: shown[i]),
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          if (countries.length > 4) ...[
+                            const SizedBox(height: 12),
+                            _ShowAllButton(
+                              label: 'Show all ${countries.length} countries',
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      AllCountriesScreen(countries: countries),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     );
                   },
                 ),
               ),
 
-              // Featured (Firestore-driven; omitted entirely when empty).
+              // Featured items below the countries — real entries when present,
+              // glassy placeholder cards otherwise (represents the design).
               SliverToBoxAdapter(
                 child: StreamBuilder<List<HeritageItem>>(
                   stream: service.streamFeatured(limit: 8),
                   builder: (context, snap) {
                     final items = snap.data ?? const <HeritageItem>[];
-                    if (items.isEmpty) return const SizedBox.shrink();
+                    final has = items.isNotEmpty;
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const _SectionLabel('Featured stories'),
+                        const _SectionLabel('Featured'),
                         SizedBox(
                           height: 190,
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             padding: const EdgeInsets.symmetric(horizontal: 20),
-                            itemCount: items.length,
+                            itemCount: has ? items.length : 4,
                             separatorBuilder: (_, __) =>
                                 const SizedBox(width: 12),
                             itemBuilder: (_, i) => SizedBox(
                               width: 240,
-                              child: HeritageItemCard(
-                                item: items[i],
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        HeritageItemScreen(item: items[i]),
-                                  ),
-                                ),
-                              ),
+                              child: has
+                                  ? HeritageItemCard(
+                                      item: items[i],
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => HeritageItemScreen(
+                                              item: items[i]),
+                                        ),
+                                      ),
+                                    )
+                                  : HeritagePlaceholderCard(
+                                      icon: i.isEven
+                                          ? Icons.auto_stories_outlined
+                                          : Icons.restaurant_outlined,
+                                      accent: i.isEven
+                                          ? const Color(0xFFB87333)
+                                          : const Color(0xFFD4873A),
+                                    ),
                             ),
                           ),
                         ),
@@ -224,6 +253,113 @@ class CommunityHeritageTab extends StatelessWidget {
 
               SliverToBoxAdapter(child: SizedBox(height: 80 + bottomInset)),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Show-all button ──────────────────────────────────────────────────────────
+class _ShowAllButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _ShowAllButton({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 46,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _gold.withOpacity(0.33)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(label,
+                style: const TextStyle(
+                    color: _gold,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right, color: _gold, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── All countries (show-all) screen ──────────────────────────────────────────
+class AllCountriesScreen extends StatelessWidget {
+  final List<HeritageCountry> countries;
+  const AllCountriesScreen({super.key, required this.countries});
+
+  @override
+  Widget build(BuildContext context) {
+    final service = HeritageDataService();
+    final topInset = MediaQuery.of(context).padding.top;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: _textColor),
+        title: const Text('All Countries',
+            style: TextStyle(
+                color: _textColor,
+                fontSize: 18,
+                fontWeight: FontWeight.w700)),
+      ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset('images/BG.png',
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    const ColoredBox(color: Colors.black)),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.55),
+                    Colors.black.withOpacity(0.82),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          GridView.builder(
+            padding: EdgeInsets.fromLTRB(
+                20, topInset + 64, 20, bottomInset + 24),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.92,
+            ),
+            itemCount: countries.length,
+            itemBuilder: (_, i) => _CountryCard(
+              country: countries[i],
+              service: service,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CountryScreen(country: countries[i]),
+                ),
+              ),
+            ),
           ),
         ],
       ),

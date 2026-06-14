@@ -209,6 +209,12 @@ class HeritageDataService {
   static const String entriesCollection = 'cultural_entries';
   static const String hierarchyCollection = 'heritage_hierarchy';
 
+  /// Hierarchy node id for a country's category background (e.g. the Music
+  /// background for Kenya). Kept here so the org backgrounds editor and the
+  /// public Category browse screen agree on the same node.
+  static String categoryNodeId(String countryId, String contentTypeKey) =>
+      '${countryId}__cat_$contentTypeKey';
+
   CollectionReference<Map<String, dynamic>> get _entries =>
       _db.collection(entriesCollection);
 

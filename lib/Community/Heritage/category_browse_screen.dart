@@ -48,10 +48,14 @@ class HeritageBrowseScreen extends StatelessWidget {
       backgroundColor: GlassPalette.base,
       body: Stack(
         children: [
-          StreamBuilder<String?>(
-            stream: service.streamNodeBg(bgNodeId ?? countryId),
-            builder: (_, snap) =>
-                GlassBackground(imageUrl: snap.data, tint: accent),
+          // Category-specific background when browsing a content type, falling
+          // back to the country background, then to a glass gradient.
+          _Backdrop(
+            service: service,
+            countryId: countryId,
+            contentType: contentType,
+            explicitNodeId: bgNodeId,
+            accent: accent,
           ),
           SafeArea(
             bottom: false,
@@ -123,6 +127,7 @@ class HeritageBrowseScreen extends StatelessWidget {
     );
   }
 
+  // (header below)
   Widget _header(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 14),
@@ -167,6 +172,51 @@ class HeritageBrowseScreen extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Resolves the backdrop: explicit node → category node → country node →
+/// glass gradient. Lets orgs set a distinct background per category.
+class _Backdrop extends StatelessWidget {
+  final HeritageDataService service;
+  final String countryId;
+  final String? contentType;
+  final String? explicitNodeId;
+  final Color accent;
+
+  const _Backdrop({
+    required this.service,
+    required this.countryId,
+    required this.contentType,
+    required this.explicitNodeId,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryNode = explicitNodeId ??
+        (contentType != null
+            ? HeritageDataService.categoryNodeId(countryId, contentType!)
+            : countryId);
+
+    return StreamBuilder<String?>(
+      stream: service.streamNodeBg(primaryNode),
+      builder: (_, primarySnap) {
+        final primaryBg = primarySnap.data;
+        if (primaryBg != null && primaryBg.isNotEmpty) {
+          return GlassBackground(imageUrl: primaryBg, tint: accent);
+        }
+        if (primaryNode == countryId) {
+          return GlassBackground(imageUrl: null, tint: accent);
+        }
+        // Fall back to the country background.
+        return StreamBuilder<String?>(
+          stream: service.streamNodeBg(countryId),
+          builder: (_, cSnap) =>
+              GlassBackground(imageUrl: cSnap.data, tint: accent),
+        );
+      },
     );
   }
 }

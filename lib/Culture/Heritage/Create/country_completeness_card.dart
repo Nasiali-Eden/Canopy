@@ -14,6 +14,7 @@ import '../../../Shared/theme/app_theme.dart';
 import '../Services/heritage_content_types.dart';
 import '../Services/heritage_data_service.dart';
 import 'create_entry_screen.dart';
+import 'heritage_backgrounds_screen.dart';
 
 class CountryCompletenessCard extends StatefulWidget {
   final String orgId;
@@ -153,22 +154,67 @@ class _CountryCompletenessCardState extends State<CountryCompletenessCard> {
                 ),
               ),
             const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CreateEntryScreen(orgId: widget.orgId),
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Add an entry',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          HeritageBackgroundsScreen(orgId: widget.orgId),
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.darkGreen,
+                    side: BorderSide(color: AppTheme.tertiary.withOpacity(0.5)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.image_outlined, size: 18),
+                  label: const Text('Backgrounds',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: FilledButton.icon(
+              child: OutlinedButton.icon(
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => CreateEntryScreen(orgId: widget.orgId),
+                    builder: (_) =>
+                        HeritageBackgroundsScreen(orgId: widget.orgId),
                   ),
                 ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.darkGreen,
+                  side: BorderSide(color: AppTheme.tertiary.withOpacity(0.5)),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add an entry',
+                icon: const Icon(Icons.image_outlined, size: 18),
+                label: const Text('Manage backgrounds',
                     style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
