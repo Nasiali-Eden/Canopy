@@ -63,7 +63,10 @@ class GlassBackground extends StatelessWidget {
   final String? imageUrl;
   final Color tint;
 
-  /// How strongly the lower portion is darkened (0..1). Higher = darker floor.
+  /// Max darkness of the veil at the very bottom (0..1). Kept gentle so the
+  /// background image stays visible behind the glass cards the whole way down
+  /// (rather than fading to a solid dark floor), giving every card that
+  /// almost-transparent frosted look.
   final double scrim;
 
   /// Ambient blur applied over the whole image layer.
@@ -73,7 +76,7 @@ class GlassBackground extends StatelessWidget {
     super.key,
     this.imageUrl,
     this.tint = GlassPalette.accent,
-    this.scrim = 0.92,
+    this.scrim = 0.5,
     this.blur = 2,
   });
 
@@ -102,13 +105,15 @@ class GlassBackground extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
+                // A gentle, near-even veil (never a solid floor) so the image
+                // shows through the glass cards top to bottom.
                 colors: [
-                  Colors.black.withOpacity(0.15),
-                  Colors.black.withOpacity(0.55),
-                  GlassPalette.base.withOpacity(scrim),
-                  GlassPalette.base,
+                  Colors.black.withOpacity(scrim * 0.42),
+                  Colors.black.withOpacity(scrim * 0.66),
+                  Colors.black.withOpacity(scrim * 0.9),
+                  Colors.black.withOpacity(scrim),
                 ],
-                stops: const [0.0, 0.32, 0.66, 1.0],
+                stops: const [0.0, 0.4, 0.75, 1.0],
               ),
             ),
           ),
