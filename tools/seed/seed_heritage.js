@@ -58,6 +58,10 @@ try {
 console.log(`[heritage-seed] using key: ${keyPath}`);
 
 const db = admin.firestore();
+// Force the REST transport — firebase-admin's default gRPC connection commonly
+// stalls behind Windows/corporate networks & proxies (symptom: reads work, then
+// writes hang). Must be set before any Firestore operation.
+db.settings({ preferRest: true });
 const Timestamp = admin.firestore.Timestamp;
 
 const SEED_KEY = 'seed_hardcoded_culture_v1';
