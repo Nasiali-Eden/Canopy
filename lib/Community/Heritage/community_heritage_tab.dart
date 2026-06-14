@@ -9,7 +9,10 @@
 // + featured come from `cultural_entries`. No hardcoded cultural content, no
 // orphan `heritage_entries` read. The ONLY static image is `images/BG.png`.
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../Culture/Heritage/Services/heritage_data_service.dart';
 import 'country_screen.dart';
@@ -22,16 +25,6 @@ const _textDim = Color(0x80E8F0E9);
 const _textFaint = Color(0x47E8F0E9);
 const _gold = Color(0xFFC4A961);
 const _border = Color(0x1F86BC9E);
-
-// Decorative card gradients (UI styling, cycled by index — not data/placeholder).
-const _cardGradients = <List<Color>>[
-  [Color(0xFF0D2A1A), Color(0xFF2D7A4F)],
-  [Color(0xFF2A1A0A), Color(0xFF5C3810)],
-  [Color(0xFF0A1A2A), Color(0xFF0E3D2E)],
-  [Color(0xFF1A0A00), Color(0xFF4A2800)],
-  [Color(0xFF0D1A0D), Color(0xFF1A3D2E)],
-  [Color(0xFF1A0D2A), Color(0xFF3D2A5C)],
-];
 
 class CommunityHeritageTab extends StatelessWidget {
   const CommunityHeritageTab({super.key});
@@ -174,7 +167,6 @@ class CommunityHeritageTab extends StatelessWidget {
                         itemCount: countries.length,
                         itemBuilder: (_, i) => _CountryCard(
                           country: countries[i],
-                          gradient: _cardGradients[i % _cardGradients.length],
                           service: service,
                           onTap: () => Navigator.push(
                             context,
@@ -242,13 +234,11 @@ class CommunityHeritageTab extends StatelessWidget {
 // ─── Country card ─────────────────────────────────────────────────────────────
 class _CountryCard extends StatelessWidget {
   final HeritageCountry country;
-  final List<Color> gradient;
   final HeritageDataService service;
   final VoidCallback onTap;
 
   const _CountryCard({
     required this.country,
-    required this.gradient,
     required this.service,
     required this.onTap,
   });
@@ -259,17 +249,34 @@ class _CountryCard extends StatelessWidget {
       onTap: onTap,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Container(
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: gradient,
-            ),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: _border),
           ),
           child: Stack(
+            fit: StackFit.expand,
             children: [
+              // Backdrop: org-uploaded country image, else one glassy translucent
+              // style (frosted over the Heritage background) — never a coloured
+              // per-country gradient.
+              Positioned.fill(
+                child: StreamBuilder<String?>(
+                  stream: service.streamNodeBg(country.id),
+                  builder: (_, snap) {
+                    final url = snap.data;
+                    if (url != null && url.isNotEmpty) {
+                      return CachedNetworkImage(
+                        imageUrl: url,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => _glass(),
+                        placeholder: (_, __) => _glass(),
+                      );
+                    }
+                    return _glass();
+                  },
+                ),
+              ),
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -349,6 +356,15 @@ class _CountryCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// One consistent glassy translucent fill (frosts the Heritage background)
+  /// used for every country without an uploaded image.
+  Widget _glass() {
+    return BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+      child: Container(color: Colors.white.withOpacity(0.07)),
     );
   }
 }

@@ -161,6 +161,18 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
     }
   }
 
+  /// Maps a country display name to the heritage hierarchy node id used by the
+  /// Country screen / registry (e.g. "Kenya" → "country_kenya",
+  /// "South Africa" → "country_south_africa").
+  String _heritageCountryNodeId(String name) {
+    final slug = name
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    return 'country_$slug';
+  }
+
   Future<String> _upload(File file, String name) async {
     final ref = FirebaseStorage.instance.ref().child(
         'organizations/${widget.orgId}/${name}_${DateTime.now().millisecondsSinceEpoch}.jpg');
@@ -210,6 +222,20 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
           .collection('organizations')
           .doc(widget.orgId)
           .update(update);
+
+      // The public Country screen reads its backdrop from
+      // heritage_hierarchy/{country_node}.bg_image_url — mirror the uploaded
+      // country background there so it actually appears.
+      if (_country != null &&
+          _country!.isNotEmpty &&
+          countryBgUrl != null &&
+          countryBgUrl.isNotEmpty) {
+        final nodeId = _heritageCountryNodeId(_country!);
+        await FirebaseFirestore.instance
+            .collection('heritage_hierarchy')
+            .doc(nodeId)
+            .set({'bg_image_url': countryBgUrl}, SetOptions(merge: true));
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

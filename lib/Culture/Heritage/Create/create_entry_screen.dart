@@ -116,7 +116,7 @@ class _CreateEntryViewState extends State<_CreateEntryView> {
         return Scaffold(
           backgroundColor: HeritageTheme.heritageBackground,
           appBar: AppBar(
-            backgroundColor: HeritageTheme.heritageBackground,
+            backgroundColor: Colors.transparent,
             elevation: 0,
             surfaceTintColor: Colors.transparent,
             foregroundColor: AppTheme.darkGreen,
@@ -150,22 +150,28 @@ class _CreateEntryViewState extends State<_CreateEntryView> {
               ],
             ),
           ),
-          body: Column(
+          body: Stack(
             children: [
-              _StepIndicator(currentStep: prov.currentStep),
-              Expanded(
-                child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _StepTypeSelector(onGoNext: () => _goToStep(1, prov)),
-                    const _StepLocality(),
-                    const _StepName(),
-                    const _StepKnowledge(),
-                    const _StepMedia(),
-                    _StepVisibility(onSubmit: () => _submit(prov)),
-                  ],
-                ),
+              // Elegant patterned backdrop — warm gradient + soft motif.
+              const Positioned.fill(child: _HeritagePatternBackdrop()),
+              Column(
+                children: [
+                  _StepIndicator(currentStep: prov.currentStep),
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        _StepTypeSelector(onGoNext: () => _goToStep(1, prov)),
+                        const _StepLocality(),
+                        const _StepName(),
+                        const _StepKnowledge(),
+                        const _StepMedia(),
+                        _StepVisibility(onSubmit: () => _submit(prov)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -182,6 +188,69 @@ class _CreateEntryViewState extends State<_CreateEntryView> {
       },
     );
   }
+}
+
+// ─── Decorative backdrop ─────────────────────────────────────────────────────
+
+class _HeritagePatternBackdrop extends StatelessWidget {
+  const _HeritagePatternBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFFF7F0E4), // light parchment
+            Color(0xFFF1E6D4), // warmer toward the bottom
+          ],
+        ),
+      ),
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _MotifPainter(),
+      ),
+    );
+  }
+}
+
+class _MotifPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Soft colour blooms (gold / green / terracotta) — low opacity.
+    final blooms = [
+      (Offset(size.width * 0.85, size.height * 0.08), 150.0,
+          const Color(0xFFC4A961)), // gold
+      (Offset(size.width * 0.05, size.height * 0.42), 130.0,
+          const Color(0xFF2D7A4F)), // green
+      (Offset(size.width * 0.9, size.height * 0.72), 140.0,
+          const Color(0xFFC0573A)), // terracotta
+    ];
+    for (final (center, radius, color) in blooms) {
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..color = color.withOpacity(0.10)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 60),
+      );
+    }
+
+    // Faint concentric arcs — a subtle archival motif, top-left.
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = const Color(0xFFC4A961).withOpacity(0.10);
+    final origin = Offset(size.width * 0.1, size.height * 0.16);
+    for (var r = 40.0; r <= 160; r += 28) {
+      canvas.drawCircle(origin, r, ring);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ─── Step indicator ──────────────────────────────────────────────────────────
