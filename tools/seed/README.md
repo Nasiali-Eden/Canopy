@@ -14,9 +14,20 @@ key**. Save the JSON somewhere outside the repo. **Never commit it.**
 ```bash
 cd tools/seed
 npm install
-node seed_heritage.js --key /absolute/path/to/serviceAccount.json
 ```
-(or `export GOOGLE_APPLICATION_CREDENTIALS=/abs/path.json` and omit `--key`)
+Then run with the key, easiest first:
+```bash
+# A) drop the key here as serviceAccount.json (gitignored) and just run:
+node seed_heritage.js
+
+# B) or point at it explicitly:
+node seed_heritage.js --key /absolute/path/to/serviceAccount.json
+
+# C) or via env:
+#   export GOOGLE_APPLICATION_CREDENTIALS=/abs/path.json   (PowerShell: $env:GOOGLE_APPLICATION_CREDENTIALS="...")
+#   node seed_heritage.js
+```
+The script auto-detects `tools/seed/serviceAccount.json` if present.
 
 ## What it does
 - Resolves the ONE org with `culturalStatus == 'approved'` (aborts if 0 or >1).

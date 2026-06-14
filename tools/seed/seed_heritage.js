@@ -19,6 +19,7 @@
 
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 
@@ -28,23 +29,33 @@ function arg(name) {
   const i = argv.indexOf(name);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : null;
 }
-const keyPath = arg('--key');
+
+// Resolve a key path from --key, then GOOGLE_APPLICATION_CREDENTIALS, then a
+// serviceAccount.json dropped next to this script (gitignored).
+const localKey = path.join(__dirname, 'serviceAccount.json');
+let keyPath = arg('--key') || process.env.GOOGLE_APPLICATION_CREDENTIALS || null;
+if (!keyPath && fs.existsSync(localKey)) keyPath = localKey;
 
 // ── init ──────────────────────────────────────────────────────────────────────
-try {
-  if (keyPath) {
-    admin.initializeApp({
-      credential: admin.credential.cert(require(path.resolve(keyPath))),
-    });
-  } else {
-    // Uses GOOGLE_APPLICATION_CREDENTIALS / ADC.
-    admin.initializeApp({ credential: admin.credential.applicationDefault() });
-  }
-} catch (e) {
-  console.error('Failed to initialise firebase-admin:', e.message);
-  console.error('Pass --key <serviceAccount.json> or set GOOGLE_APPLICATION_CREDENTIALS.');
+if (!keyPath) {
+  console.error('No service-account credentials found.');
+  console.error('Do ONE of:');
+  console.error('  - Save the key as tools/seed/serviceAccount.json, then: node seed_heritage.js');
+  console.error('  - node seed_heritage.js --key /abs/path/serviceAccount.json');
+  console.error('  - set GOOGLE_APPLICATION_CREDENTIALS to the key path');
+  console.error('Get the key: Firebase console -> Project settings -> Service accounts -> Generate new private key.');
   process.exit(1);
 }
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(require(path.resolve(keyPath))),
+  });
+} catch (e) {
+  console.error('Failed to initialise firebase-admin with key:', keyPath);
+  console.error(e.message);
+  process.exit(1);
+}
+console.log(`[heritage-seed] using key: ${keyPath}`);
 
 const db = admin.firestore();
 const Timestamp = admin.firestore.Timestamp;
