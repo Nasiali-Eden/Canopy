@@ -54,6 +54,7 @@ class HeritageBrowseScreen extends StatelessWidget {
             service: service,
             countryId: countryId,
             contentType: contentType,
+            communityId: communityId,
             explicitNodeId: bgNodeId,
             accent: accent,
           ),
@@ -182,6 +183,7 @@ class _Backdrop extends StatelessWidget {
   final HeritageDataService service;
   final String countryId;
   final String? contentType;
+  final String? communityId;
   final String? explicitNodeId;
   final Color accent;
 
@@ -189,16 +191,20 @@ class _Backdrop extends StatelessWidget {
     required this.service,
     required this.countryId,
     required this.contentType,
+    required this.communityId,
     required this.explicitNodeId,
     required this.accent,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Priority: explicit → category → community → country.
     final primaryNode = explicitNodeId ??
         (contentType != null
             ? HeritageDataService.categoryNodeId(countryId, contentType!)
-            : countryId);
+            : communityId != null
+                ? HeritageDataService.communityNodeId(communityId!)
+                : countryId);
 
     return StreamBuilder<String?>(
       stream: service.streamNodeBg(primaryNode),

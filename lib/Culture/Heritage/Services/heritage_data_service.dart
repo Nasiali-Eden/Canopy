@@ -215,6 +215,10 @@ class HeritageDataService {
   static String categoryNodeId(String countryId, String contentTypeKey) =>
       '${countryId}__cat_$contentTypeKey';
 
+  /// Hierarchy node id for a community's background.
+  static String communityNodeId(String communityId) =>
+      'community_$communityId';
+
   CollectionReference<Map<String, dynamic>> get _entries =>
       _db.collection(entriesCollection);
 

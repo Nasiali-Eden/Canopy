@@ -121,6 +121,46 @@ class _HeritageBackgroundsScreenState extends State<HeritageBackgroundsScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    Text('COMMUNITY BACKGROUNDS',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                            color: AppTheme.darkGreen.withOpacity(0.5))),
+                    const SizedBox(height: 10),
+                    StreamBuilder<List<CommunitySummary>>(
+                      stream:
+                          _service.streamCommunitiesForCountry(_countryId!),
+                      builder: (_, snap) {
+                        final list =
+                            snap.data ?? const <CommunitySummary>[];
+                        if (list.isEmpty) {
+                          return Text(
+                            'Communities appear here once they have entries.',
+                            style: TextStyle(
+                                fontSize: 12.5,
+                                color: AppTheme.darkGreen.withOpacity(0.45)),
+                          );
+                        }
+                        return Column(
+                          children: list
+                              .map((c) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _BgRow(
+                                      nodeId:
+                                          HeritageDataService.communityNodeId(
+                                              c.id),
+                                      label: c.name,
+                                      icon: Icons.groups_outlined,
+                                      accent: HeritageContentTypes
+                                          .communitiesAccent,
+                                    ),
+                                  ))
+                              .toList(),
+                        );
+                      },
+                    ),
                   ],
                 ),
     );
