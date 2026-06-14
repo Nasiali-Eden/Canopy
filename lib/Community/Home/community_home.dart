@@ -14,6 +14,7 @@ import '../../Shared/Activities/activity_filter_sheet.dart';
 import '../Heritage/community_heritage_tab.dart';
 import '../Profile/profile_screen.dart';
 import '../Map/map.dart';
+import '../Map/org_logo_cache.dart';
 import '../Contributions/contribution_card.dart';
 import '../Contributions/contribution_detail_sheet.dart';
 import '../Contributions/all_contributions_screen.dart';
@@ -53,6 +54,14 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
   ActivityFilter _activityFilter = const ActivityFilter();
 
   bool get _isDarkTab => _index == 2 || _index == 3;
+
+  @override
+  void initState() {
+    super.initState();
+    // Warm org logo images now (post-auth) so the Map tab's markers are ready.
+    // No-op if the app-start warm-up already succeeded.
+    OrgLogoCache.instance.warmUp();
+  }
 
   void _showComingSoon() {
     ScaffoldMessenger.of(context).showSnackBar(

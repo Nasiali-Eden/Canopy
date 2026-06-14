@@ -20,6 +20,11 @@ class OrgLogoCache {
 
   final Map<String, Future<Uint8List?>> _bytes = {};
 
+  /// True once an org-list warm-up has succeeded, so repeat calls are cheap
+  /// no-ops. Stays false if an early (pre-auth) attempt failed, allowing a
+  /// later retry once the user is authenticated.
+  bool _warmed = false;
+
   /// Cached logo bytes for [url] (null if it failed). Safe to call repeatedly —
   /// the in-flight/resolved Future is reused.
   Future<Uint8List?> bytes(String url) =>
@@ -45,9 +50,13 @@ class OrgLogoCache {
     }
   }
 
-  /// Kick off downloads for every org logo at app start. Fire-and-forget; the
-  /// caller should NOT await this (it runs in the background).
+  /// Kick off downloads for every org logo. Fire-and-forget; the caller should
+  /// NOT await this (it runs in the background). Safe to call from several
+  /// places (app start + post-auth) — it only fetches the org list once it
+  /// succeeds. Call after auth is ready for best results, since reading
+  /// `organizations` may require an authenticated user.
   Future<void> warmUp() async {
+    if (_warmed) return;
     try {
       final snap =
           await FirebaseFirestore.instance.collection('organizations').get();
@@ -59,8 +68,9 @@ class OrgLogoCache {
           bytes(url);
         }
       }
+      _warmed = true; // mark only on success → failed early calls can retry
     } catch (_) {
-      // Offline / permission — the map will lazily fetch on open instead.
+      // Offline / not yet authed — a later warmUp() (post-auth) will retry.
     }
   }
 }
