@@ -10,7 +10,8 @@ import 'package:flutter/material.dart';
 import '../../Culture/Heritage/Services/heritage_content_types.dart';
 import '../../Culture/Heritage/Services/heritage_data_service.dart';
 import '../../Shared/theme/glass.dart';
-import 'category_browse_screen.dart';
+import 'heritage_item_screen.dart';
+import 'heritage_widgets.dart';
 
 class CommunitiesListScreen extends StatelessWidget {
   final String countryId;
@@ -111,13 +112,11 @@ class CommunitiesListScreen extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => HeritageBrowseScreen(
+                              builder: (_) => CommunityDetailScreen(
                                 countryId: countryId,
+                                countryName: countryName,
                                 communityId: communities[i].id,
-                                title: communities[i].name,
-                                subtitle: 'Community in $countryName',
-                                accent: _accent,
-                                icon: Icons.groups_outlined,
+                                communityName: communities[i].name,
                               ),
                             ),
                           );
@@ -199,3 +198,165 @@ class _CommunityRow extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMMUNITY DETAIL — hero header over the community background + its entries
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CommunityDetailScreen extends StatelessWidget {
+  final String countryId;
+  final String countryName;
+  final String communityId;
+  final String communityName;
+
+  const CommunityDetailScreen({
+    super.key,
+    required this.countryId,
+    required this.countryName,
+    required this.communityId,
+    required this.communityName,
+  });
+
+  static const Color _accent = HeritageContentTypes.communitiesAccent;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = HeritageDataService();
+    final topPad = MediaQuery.of(context).padding.top;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
+    return Scaffold(
+      backgroundColor: GlassPalette.base,
+      body: Stack(
+        children: [
+          // Backdrop: community background, falling back to the country's.
+          StreamBuilder<String?>(
+            stream: service
+                .streamNodeBg(HeritageDataService.communityNodeId(communityId)),
+            builder: (_, commSnap) {
+              final commBg = commSnap.data;
+              if (commBg != null && commBg.isNotEmpty) {
+                return GlassBackground(imageUrl: commBg, tint: _accent);
+              }
+              return StreamBuilder<String?>(
+                stream: service.streamNodeBg(countryId),
+                builder: (_, cSnap) =>
+                    GlassBackground(imageUrl: cSnap.data, tint: _accent),
+              );
+            },
+          ),
+          SafeArea(
+            bottom: false,
+            child: StreamBuilder<List<HeritageItem>>(
+              stream: service.streamItems(
+                  countryId: countryId, communityId: communityId),
+              builder: (context, snap) {
+                final items = snap.data ?? const <HeritageItem>[];
+                final has = items.isNotEmpty;
+                return CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(child: _hero(items.length)),
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(16, 4, 16, bottomPad + 28),
+                      sliver: SliverGrid(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 0.8,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (_, i) => has
+                              ? HeritageItemCard(
+                                  item: items[i],
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          HeritageItemScreen(item: items[i]),
+                                    ),
+                                  ),
+                                )
+                              : HeritagePlaceholderCard(
+                                  icon: Icons.auto_stories_outlined,
+                                  accent: _accent),
+                          childCount: has ? items.length : 4,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          Positioned(
+            top: topPad + 8,
+            left: 16,
+            child: CircleGlassButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              onTap: () => Navigator.pop(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hero(int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 10),
+      child: Row(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: _accent.withOpacity(0.2),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              communityName.isNotEmpty ? communityName[0].toUpperCase() : '?',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  communityName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    height: 1.1,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  count > 0
+                      ? '$count ${count == 1 ? 'entry' : 'entries'} · in $countryName'
+                      : 'Community in $countryName',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.65),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

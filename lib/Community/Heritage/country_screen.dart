@@ -270,13 +270,11 @@ class CountryScreen extends StatelessWidget {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => HeritageBrowseScreen(
+                builder: (_) => CommunityDetailScreen(
                   countryId: _countryId,
+                  countryName: country.name,
                   communityId: c.id,
-                  title: c.name,
-                  subtitle: 'Community in ${country.name}',
-                  accent: accent,
-                  icon: Icons.groups_outlined,
+                  communityName: c.name,
                 ),
               ),
             ),
