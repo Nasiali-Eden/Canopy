@@ -1,0 +1,13 @@
+{
+  "name": "canopy-heritage-seed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CLI seed for Canopy heritage data (mirror of the in-app Dart seed).",
+  "type": "commonjs",
+  "scripts": {
+    "seed": "node seed_heritage.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
