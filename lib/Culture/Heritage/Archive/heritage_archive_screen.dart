@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import '../Services/heritage_providers.dart';
 import '../heritage_theme.dart';
 import '../Create/country_completeness_card.dart';
+import '../Create/edit_entry_screen.dart';
 import '../Tools/seed_hardcoded_culture.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -659,10 +660,15 @@ class _EditOptionsSheet extends StatelessWidget {
             context,
             icon: Icons.edit_note_outlined,
             label: 'Edit content',
-            subtitle: 'Update title, description, and knowledge',
+            subtitle: 'Update title, description, cover & visibility',
             onTap: () {
               Navigator.pop(context);
-              _showSoon(context, 'Edit content');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HeritageEntryEditScreen(entryId: entry.id),
+                ),
+              );
             },
           ),
           _option(
@@ -682,7 +688,12 @@ class _EditOptionsSheet extends StatelessWidget {
             subtitle: 'Control who can see this entry',
             onTap: () {
               Navigator.pop(context);
-              _showSoon(context, 'Visibility settings');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => HeritageEntryEditScreen(entryId: entry.id),
+                ),
+              );
             },
           ),
           _option(
