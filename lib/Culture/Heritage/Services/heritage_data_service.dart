@@ -35,16 +35,9 @@
 //   heritage_hierarchy/{nodeId}: bg_image_url (per-node background, e.g.
 //     'country_kenya')
 //
-// ⚠ COMPOSITE INDEXES (apply in the Firebase console — this run does NOT touch
-//   security rules or indexes):
-//     • cultural_entries: locality.country_id ASC, visibility ASC,
-//       last_activity_at DESC
-//     • cultural_entries: locality.country_id ASC, content_type ASC,
-//       visibility ASC, last_activity_at DESC
-//     • cultural_entries: locality.country_id ASC, locality.community_id ASC,
-//       visibility ASC, last_activity_at DESC
-//   (Firestore will also surface the exact index link in a console error the
-//   first time each query runs.)
+// NOTE: all reads here are EQUALITY-ONLY queries (no orderBy) — Firestore
+// serves them from automatic single-field indexes, so NO composite indexes are
+// required. Ordering + limiting are done client-side.
 
 import 'dart:convert';
 
@@ -322,6 +315,10 @@ class HeritageDataService {
 
   /// All public entries for a country, optionally filtered by content type and
   /// community, newest activity first.
+  ///
+  /// Equality-only query (no orderBy) so Firestore serves it from automatic
+  /// single-field indexes — NO composite indexes required. Sorting + limiting
+  /// happen client-side.
   Stream<List<HeritageItem>> streamItems({
     required String countryId,
     String? contentType,
@@ -335,10 +332,12 @@ class HeritageDataService {
     if (communityId != null) {
       q = q.where('locality.community_id', isEqualTo: communityId);
     }
-    q = q.orderBy('last_activity_at', descending: true);
-    if (limit != null) q = q.limit(limit);
-    return q.snapshots().map(
-        (s) => s.docs.map((d) => HeritageItem.fromDoc(d)).toList());
+    return q.snapshots().map((s) {
+      final list = s.docs.map((d) => HeritageItem.fromDoc(d)).toList();
+      list.sort((a, b) => (b.lastActivityAt ?? DateTime(0))
+          .compareTo(a.lastActivityAt ?? DateTime(0)));
+      return limit != null ? list.take(limit).toList() : list;
+    });
   }
 
   /// A single entry, live.
@@ -355,14 +354,18 @@ class HeritageDataService {
   }
 
   /// Featured = most recently active public entries across all countries.
-  /// Replaces the old hardcoded `_staticFeatured`.
+  /// Replaces the old hardcoded `_staticFeatured`. Equality-only query + client
+  /// sort so no composite index is needed.
   Stream<List<HeritageItem>> streamFeatured({int limit = 8}) {
     return _entries
         .where('visibility', isEqualTo: 'public')
-        .orderBy('last_activity_at', descending: true)
-        .limit(limit)
         .snapshots()
-        .map((s) => s.docs.map((d) => HeritageItem.fromDoc(d)).toList());
+        .map((s) {
+      final list = s.docs.map((d) => HeritageItem.fromDoc(d)).toList();
+      list.sort((a, b) => (b.lastActivityAt ?? DateTime(0))
+          .compareTo(a.lastActivityAt ?? DateTime(0)));
+      return list.take(limit).toList();
+    });
   }
 
   // ── Aggregations (computed client-side; Firestore has no DISTINCT/GROUP) ────
