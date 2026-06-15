@@ -83,10 +83,28 @@ class _HeritageBackgroundsScreenState extends State<HeritageBackgroundsScreen> {
                           color: AppTheme.darkGreen.withOpacity(0.6)),
                     ),
                     const SizedBox(height: 16),
+                    Text('COUNTRY IMAGES',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                            color: AppTheme.darkGreen.withOpacity(0.5))),
+                    const SizedBox(height: 10),
+                    // Rectangular banner — country detail screen backdrop.
                     _BgRow(
                       nodeId: _countryId!,
-                      label: '${_countryName ?? 'Country'} (country page)',
-                      icon: Icons.public,
+                      field: 'bg_image_url',
+                      label: 'Banner (wide) — country page',
+                      icon: Icons.crop_landscape_outlined,
+                      accent: AppTheme.primary,
+                    ),
+                    const SizedBox(height: 10),
+                    // Square card — the Heritage-tab country card.
+                    _BgRow(
+                      nodeId: _countryId!,
+                      field: 'card_image_url',
+                      label: 'Card (square) — Heritage tab',
+                      icon: Icons.crop_square_outlined,
                       accent: AppTheme.primary,
                     ),
                     const SizedBox(height: 18),
@@ -190,11 +208,16 @@ class _BgRow extends StatefulWidget {
   final IconData icon;
   final Color accent;
 
+  /// Which hierarchy field this row reads/writes (e.g. 'bg_image_url' for the
+  /// rectangular banner, 'card_image_url' for the square heritage card).
+  final String field;
+
   const _BgRow({
     required this.nodeId,
     required this.label,
     required this.icon,
     required this.accent,
+    this.field = 'bg_image_url',
   });
 
   @override
@@ -218,7 +241,7 @@ class _BgRowState extends State<_BgRow> {
       await FirebaseFirestore.instance
           .collection(HeritageDataService.hierarchyCollection)
           .doc(widget.nodeId)
-          .set({'bg_image_url': url}, SetOptions(merge: true));
+          .set({widget.field: url}, SetOptions(merge: true));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -232,10 +255,12 @@ class _BgRowState extends State<_BgRow> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<String?>(
-      stream: HeritageDataService().streamNodeBg(widget.nodeId),
+    return StreamBuilder<({String? bg, String? card})>(
+      stream: HeritageDataService().streamNodeImages(widget.nodeId),
       builder: (context, snap) {
-        final url = snap.data;
+        final url = widget.field == 'card_image_url'
+            ? snap.data?.card
+            : snap.data?.bg;
         final hasBg = url != null && url.isNotEmpty;
         return Container(
           padding: const EdgeInsets.all(10),

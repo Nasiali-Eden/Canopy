@@ -317,10 +317,16 @@ class _CountryCard extends StatelessWidget {
               // style (frosted over the Heritage background) — never a coloured
               // per-country gradient.
               Positioned.fill(
-                child: StreamBuilder<String?>(
-                  stream: service.streamNodeBg(country.id),
+                child: StreamBuilder<({String? bg, String? card})>(
+                  stream: service.streamNodeImages(country.id),
                   builder: (_, snap) {
-                    final url = snap.data;
+                    // Prefer the square "heritage card" image; fall back to the
+                    // rectangular banner, then to the glassy BG.png frost.
+                    final url = (snap.data?.card?.isNotEmpty ?? false)
+                        ? snap.data!.card
+                        : (snap.data?.bg?.isNotEmpty ?? false)
+                            ? snap.data!.bg
+                            : null;
                     if (url != null && url.isNotEmpty) {
                       return CachedNetworkImage(
                         imageUrl: url,

@@ -291,6 +291,19 @@ class HeritageDataService {
         .map((d) => (d.data())?['bg_image_url'] as String?);
   }
 
+  /// Both images for a node: `bg` is the rectangular backdrop (country screen /
+  /// banner), `card` is the square heritage-tab card image. Either may be null.
+  Stream<({String? bg, String? card})> streamNodeImages(String nodeId) {
+    return _db
+        .collection(hierarchyCollection)
+        .doc(nodeId)
+        .snapshots()
+        .map((d) => (
+              bg: (d.data())?['bg_image_url'] as String?,
+              card: (d.data())?['card_image_url'] as String?,
+            ));
+  }
+
   /// True when a country has at least one public entry (drives Live/Soon).
   Stream<bool> streamCountryHasEntries(String countryId) {
     return _publicForCountry(countryId)
