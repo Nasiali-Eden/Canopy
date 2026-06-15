@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 
 import '../../../Shared/theme/app_theme.dart';
 import '../heritage_theme.dart';
+import '../Services/heritage_data_service.dart';
 import 'create_entry_provider.dart';
+import 'heritage_backgrounds_screen.dart';
 import 'locality_selector_sheet.dart';
 import 'media_upload_item.dart';
 import 'type_data_form_builder.dart';
@@ -619,6 +621,13 @@ class _StepLocality extends StatelessWidget {
                 },
               ),
             ),
+          ),
+
+          // ── Country must have images before content is added for it ───────
+          _CountryImagesGate(
+            countryId: loc.countryId,
+            countryLabel: selectedCountry.label,
+            orgId: prov.orgId,
           ),
 
           // ── Coming-soon banner for non-Kenya countries ───────────────────
@@ -1559,6 +1568,92 @@ class _ReviewRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Country images gate ──────────────────────────────────────────────────────
+// Content for a country needs that country's images first. Shows a clear notice
+// + CTA on the locality step when the selected country has no banner image yet.
+class _CountryImagesGate extends StatelessWidget {
+  final String countryId;
+  final String countryLabel;
+  final String orgId;
+
+  const _CountryImagesGate({
+    required this.countryId,
+    required this.countryLabel,
+    required this.orgId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<({String? bg, String? card})>(
+      stream: HeritageDataService().streamNodeImages(countryId),
+      builder: (context, snap) {
+        // Until the doc resolves, don't show the warning (avoids a flash).
+        if (!snap.hasData) return const SizedBox.shrink();
+        final hasBanner = (snap.data!.bg ?? '').isNotEmpty;
+        if (hasBanner) return const SizedBox.shrink();
+        return Container(
+          margin: const EdgeInsets.only(top: 16),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF3E0),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFFFCC80)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.image_not_supported_outlined,
+                      size: 18, color: Colors.orange.shade800),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Set $countryLabel\'s images first',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.orange.shade900),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Add $countryLabel\'s banner and card images so this content '
+                'displays properly on the country and Heritage screens.',
+                style: TextStyle(
+                    fontSize: 12, height: 1.5, color: Colors.orange.shade900),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => HeritageBackgroundsScreen(orgId: orgId),
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.orange.shade800,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.image_outlined, size: 18),
+                  label: const Text('Set country images',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
