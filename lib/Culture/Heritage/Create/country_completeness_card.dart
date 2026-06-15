@@ -7,7 +7,6 @@
 // is derived from live Firestore data; if the org has no country set, it
 // renders nothing.
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../Shared/theme/app_theme.dart';
@@ -39,22 +38,13 @@ class _CountryCompletenessCardState extends State<CountryCompletenessCard> {
 
   Future<void> _resolve() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(widget.orgId)
-          .get();
-      final name = (doc.data()?['country'] as String?)?.trim();
-      if (name != null && name.isNotEmpty) {
-        final countries = await _service.loadCountries();
-        for (final c in countries) {
-          if (c.name.toLowerCase() == name.toLowerCase()) {
-            _countryId = c.id;
-            _countryName = c.name;
-            break;
-          }
-        }
-        // Org has a country that isn't in the registry yet — still nudge by name.
-        _countryName ??= name;
+      // Resolve from the org's `country` field, falling back to its entries'
+      // locality — so a Kenyan org sees its checklist even before it sets a
+      // country on the org doc.
+      final country = await _service.resolveOrgCountry(widget.orgId);
+      if (country != null) {
+        _countryId = country.id;
+        _countryName = country.name;
       }
     } catch (_) {
       // leave unresolved → renders nothing

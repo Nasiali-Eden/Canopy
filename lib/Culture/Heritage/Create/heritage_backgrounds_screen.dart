@@ -40,23 +40,11 @@ class _HeritageBackgroundsScreenState extends State<HeritageBackgroundsScreen> {
 
   Future<void> _resolve() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(widget.orgId)
-          .get();
-      final name = (doc.data()?['country'] as String?)?.trim();
-      if (name != null && name.isNotEmpty) {
-        _countryName = name;
-        final countries = await _service.loadCountries();
-        for (final c in countries) {
-          if (c.name.toLowerCase() == name.toLowerCase()) {
-            _countryId = c.id;
-            break;
-          }
-        }
-        // Fall back to a derived node id so it matches the edit-screen mirror.
-        _countryId ??=
-            'country_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '')}';
+      // From the org's `country`, else inferred from its entries' locality.
+      final country = await _service.resolveOrgCountry(widget.orgId);
+      if (country != null) {
+        _countryId = country.id;
+        _countryName = country.name;
       }
     } catch (_) {
       // leave unresolved

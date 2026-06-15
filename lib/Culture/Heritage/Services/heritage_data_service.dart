@@ -244,6 +244,42 @@ class HeritageDataService {
     }
   }
 
+  /// Resolves the country an org operates in for the cultural tools:
+  ///   1) the org doc's `country` name (matched to the registry), else
+  ///   2) inferred from the org's entries (`locality.country_id`).
+  /// Returns null only if neither is available.
+  Future<HeritageCountry?> resolveOrgCountry(String orgId) async {
+    final countries = await loadCountries();
+    HeritageCountry? byId(String id) {
+      for (final c in countries) {
+        if (c.id == id) return c;
+      }
+      return null;
+    }
+
+    try {
+      final orgDoc = await _db.collection('organizations').doc(orgId).get();
+      final name = (orgDoc.data()?['country'] as String?)?.trim();
+      if (name != null && name.isNotEmpty) {
+        for (final c in countries) {
+          if (c.name.toLowerCase() == name.toLowerCase()) return c;
+        }
+      }
+    } catch (_) {/* fall through to inference */}
+
+    try {
+      final snap =
+          await _entries.where('org_id', isEqualTo: orgId).limit(1).get();
+      if (snap.docs.isNotEmpty) {
+        final loc = (snap.docs.first.data()['locality'] as Map?)
+            ?.cast<String, dynamic>();
+        final cid = loc?['country_id'] as String?;
+        if (cid != null && cid.isNotEmpty) return byId(cid);
+      }
+    } catch (_) {/* ignore */}
+    return null;
+  }
+
   /// Per-node background image url (e.g. nodeId 'country_kenya'). Null when the
   /// org hasn't uploaded one yet — callers render a gradient (never an emoji or
   /// static asset).
