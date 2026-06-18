@@ -78,6 +78,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   CollectionZone? _selectedZone;
   List<CollectionZone> _zones = [];
   GoogleMapController? _staticMapController;
+  String? _orgId;
 
   static const LatLng _fallbackCenter = LatLng(-1.2921, 36.8219);
 
@@ -99,8 +100,24 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadZones();
+    _loadOrgThenZones();
     _initLocation();
+  }
+
+  Future<void> _loadOrgThenZones() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+        _orgId = userDoc.data()?['orgId'] as String?;
+      }
+    } catch (_) {
+      // Fall back to an unscoped load below.
+    }
+    await _loadZones();
   }
 
   Future<void> _initLocation() async {
@@ -133,15 +150,17 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
 
   Future<void> _loadZones() async {
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('collection_zones')
-          .orderBy('created_at', descending: true)
-          .limit(50)
-          .get();
+      // Index-free: single equality filter, sorted client-side. Scoped to the
+      // current organisation so Territory and the Overview dashboard agree.
+      Query query = FirebaseFirestore.instance.collection('collection_zones');
+      if (_orgId != null) {
+        query = query.where('org_id', isEqualTo: _orgId);
+      }
+      final snap = await query.limit(50).get();
       if (mounted) {
-        setState(() {
-          _zones = snap.docs.map(CollectionZone.fromFirestore).toList();
-        });
+        final zones = snap.docs.map(CollectionZone.fromFirestore).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        setState(() => _zones = zones);
       }
     } catch (_) {
       // Firestore unavailable — show no zones
@@ -156,7 +175,9 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
       vertices: result.vertices.toList(),
       createdAt: DateTime.now(),
       createdBy: uid,
-      orgId: uid,
+      // Tag with the real organisation so dashboard counts are accurate;
+      // fall back to uid only when the org is unknown.
+      orgId: _orgId ?? uid,
       status: 'active',
       areaKm2: result.areaKm2,
     );
@@ -334,33 +355,8 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
       zoomControlsEnabled: false,
       mapToolbarEnabled: false,
       polygons: _zonePolygons,
-      markers: _buildLegacyMarkers(),
     );
   }
-
-  Set<Marker> _buildLegacyMarkers() => {
-        Marker(
-          markerId: const MarkerId('hub'),
-          position: const LatLng(-1.3140, 36.7840),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueYellow),
-          infoWindow: const InfoWindow(title: 'Kibera Hub'),
-        ),
-        Marker(
-          markerId: const MarkerId('dropoff'),
-          position: const LatLng(-1.3110, 36.7890),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueCyan),
-          infoWindow: const InfoWindow(title: 'Drop-off Point'),
-        ),
-        Marker(
-          markerId: const MarkerId('collection'),
-          position: const LatLng(-1.3160, 36.7870),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueGreen),
-          infoWindow: const InfoWindow(title: 'Collection Point'),
-        ),
-      };
 
   Widget _buildStatusBar() {
     return Container(
@@ -382,7 +378,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
               color: AppTheme.accent, size: 20),
           const SizedBox(width: 8),
           Text(
-            '${_zones.length} zone${_zones.length == 1 ? '' : 's'}  ·  3 sites',
+            '${_zones.length} zone${_zones.length == 1 ? '' : 's'}',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -473,37 +469,20 @@ class _ZoneDetailSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: AppTheme.primary),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text('Close',
-                      style: TextStyle(color: AppTheme.primary)),
-                ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text('View Org',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
+              child: const Text('Close',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)),
+            ),
           ),
           SizedBox(height: MediaQuery.of(context).padding.bottom),
         ],

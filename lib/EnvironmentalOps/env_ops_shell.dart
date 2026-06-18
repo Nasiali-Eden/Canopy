@@ -15,6 +15,7 @@ import 'Market/create_listing_screen.dart';
 import 'Territory/env_territory.dart';
 import 'Trees/env_trees.dart';
 import 'Fleet/env_fleet.dart';
+import 'Verified/env_verified.dart';
 import '../Organization/Map/org_map_ops.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,13 +47,22 @@ class EnvOpsShell extends StatefulWidget {
 class _EnvOpsShellState extends State<EnvOpsShell> {
   // 0=Overview  1=Territory  2=Operations  3=Profile
   int _selectedIndex = 0;
+  // Sub-tab to open when entering Operations (0=Market 1=Trees 2=Fleet).
+  int _operationsInitialTab = 0;
+
+  void _openOperations(int subTab) {
+    setState(() {
+      _operationsInitialTab = subTab;
+      _selectedIndex = 2;
+    });
+  }
 
   Widget _buildCurrentPage() {
     switch (_selectedIndex) {
       case 1:
         return const EnvTerritoryScreen();
       case 2:
-        return const _EnvOperationsTab();
+        return _EnvOperationsTab(initialTab: _operationsInitialTab);
       case 3:
         return _EnvOpsProfileTab(
           orgContextBuilder: widget.orgContextBuilder,
@@ -65,6 +75,7 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
       default:
         return _EnvOpsOverviewTab(
           onSelectTab: (i) => setState(() => _selectedIndex = i),
+          onOpenOperations: _openOperations,
         );
     }
   }
@@ -118,7 +129,12 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
         body: _buildCurrentPage(),
         bottomNavigationBar: FloatingNavBar(
           currentIndex: _selectedIndex,
-          onTap: (i) => setState(() => _selectedIndex = i),
+          onTap: (i) => setState(() {
+            // Manual taps on Operations land on the default (Market) sub-tab;
+            // deep-links via _openOperations set the target explicitly.
+            if (i == 2) _operationsInitialTab = 0;
+            _selectedIndex = i;
+          }),
           destinations: _tabs
               .map((t) => FloatingNavDestination(
                     icon: t.icon,
@@ -137,8 +153,14 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _EnvOpsOverviewTab extends StatefulWidget {
+  /// Switches the bottom-nav tab (1 = Territory, 3 = Profile, …).
   final void Function(int index)? onSelectTab;
-  const _EnvOpsOverviewTab({this.onSelectTab});
+
+  /// Opens the Operations tab on a specific sub-tab (0 = Market, 1 = Trees,
+  /// 2 = Fleet).
+  final void Function(int operationsSubTab)? onOpenOperations;
+
+  const _EnvOpsOverviewTab({this.onSelectTab, this.onOpenOperations});
 
   @override
   State<_EnvOpsOverviewTab> createState() => _EnvOpsOverviewTabState();
@@ -146,8 +168,13 @@ class _EnvOpsOverviewTab extends StatefulWidget {
 
 class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   String? _orgId;
+  String? _uid;
   Map<String, dynamic>? _orgData;
   bool _loading = true;
+
+  // Cached so they are not rebuilt on every setState/scroll.
+  Future<Map<String, int>>? _statsFuture;
+  Future<List<_ActivityEntry>>? _activityFuture;
 
   @override
   void initState() {
@@ -158,48 +185,93 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   Future<void> _loadOrg() async {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
+      _uid = uid;
+      if (uid == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .get();
       final orgId = userDoc.data()?['orgId'] as String?;
-      if (orgId == null) return;
-      final orgDoc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(orgId)
-          .get();
-      if (mounted) {
-        setState(() {
-          _orgId = orgId;
-          _orgData = orgDoc.data();
-          _loading = false;
-        });
+      Map<String, dynamic>? orgData;
+      if (orgId != null) {
+        final orgDoc = await FirebaseFirestore.instance
+            .collection('organizations')
+            .doc(orgId)
+            .get();
+        orgData = orgDoc.data();
       }
+      if (!mounted) return;
+      setState(() {
+        _orgId = orgId;
+        _orgData = orgData;
+        _loading = false;
+        _statsFuture = _loadStats();
+        _activityFuture = _loadActivity();
+      });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
+  Future<void> _refresh() async {
+    await _loadOrg();
+    await Future.wait([
+      if (_statsFuture != null) _statsFuture!,
+      if (_activityFuture != null) _activityFuture!,
+    ]);
+  }
+
+  /// orgData enriched with the org id, so screens that read `orgData['orgId']`
+  /// (e.g. OrgMapOpsScreen, which tags new pins with `added_by_org_id`) save
+  /// against the correct organisation.
+  Map<String, dynamic>? get _orgDataWithId {
+    if (_orgData == null) return null;
+    return {..._orgData!, 'orgId': _orgId};
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildOrgHeader(),
-          const SizedBox(height: 20),
-          _buildStatsRow(),
-          const SizedBox(height: 24),
-          _buildSectionLabel('QUICK ACTIONS'),
-          const SizedBox(height: 12),
-          _buildActionGrid(),
-          const SizedBox(height: 24),
-          _buildSectionLabel('RECENT ACTIVITY'),
-          const SizedBox(height: 12),
-          _buildRecentActivity(),
-        ],
+    return RefreshIndicator(
+      color: _EnvOpsShellState._accentGreen,
+      onRefresh: _refresh,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildOrgHeader(),
+            const SizedBox(height: 20),
+            _buildStatsRow(),
+            const SizedBox(height: 24),
+            _buildSectionLabel('QUICK ACTIONS'),
+            const SizedBox(height: 12),
+            _buildActionGrid(),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                _buildSectionLabel('RECENT ACTIVITY'),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => widget.onSelectTab?.call(1),
+                  child: Text(
+                    'View territory',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: _EnvOpsShellState._accentGreen.withOpacity(0.8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildRecentActivity(),
+          ],
+        ),
       ),
     );
   }
@@ -207,115 +279,116 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   Widget _buildOrgHeader() {
     if (_loading) {
       return Container(
-        height: 72,
+        height: 80,
         decoration: BoxDecoration(
           color: Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
         ),
       );
     }
     final name = (_orgData?['org_name'] ?? 'Your Organisation') as String;
     final city = (_orgData?['city'] ?? '') as String;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1B4332), Color(0xFF2D7A4F)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2D7A4F).withOpacity(0.30),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+    return GestureDetector(
+      onTap: () => widget.onSelectTab?.call(3), // → Profile / context
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1B4332), Color(0xFF2D7A4F)],
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2D7A4F).withOpacity(0.30),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
-            child: const Icon(Icons.eco_outlined, color: Colors.white, size: 26),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (city.isNotEmpty)
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child:
+                  const Icon(Icons.eco_outlined, color: Colors.white, size: 26),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    city,
+                    name,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    city.isNotEmpty ? city : 'Environmental Operations',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white.withOpacity(0.65),
                     ),
                   ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Text(
-              'Env Ops',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
+                ],
               ),
             ),
-          ),
-        ],
+            Icon(Icons.chevron_right,
+                color: Colors.white.withOpacity(0.7), size: 22),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildStatsRow() {
     return FutureBuilder<Map<String, int>>(
-      future: _loadStats(),
+      future: _statsFuture,
       builder: (context, snap) {
+        final loading =
+            _loading || snap.connectionState == ConnectionState.waiting;
         final zones = snap.data?['zones'] ?? 0;
         final trees = snap.data?['trees'] ?? 0;
         final pins = snap.data?['pins'] ?? 0;
         return Row(
           children: [
             _StatTile(
-                icon: Icons.map_outlined,
-                value: '$zones',
-                label: 'Zones',
-                color: const Color(0xFF2D7A4F)),
+              icon: Icons.map_outlined,
+              value: '$zones',
+              label: 'Zones',
+              color: const Color(0xFF2D7A4F),
+              loading: loading,
+              onTap: () => widget.onSelectTab?.call(1), // → Territory
+            ),
             const SizedBox(width: 10),
             _StatTile(
-                icon: Icons.park_outlined,
-                value: '$trees',
-                label: 'Trees',
-                color: const Color(0xFF388E3C)),
+              icon: Icons.park_outlined,
+              value: '$trees',
+              label: 'Trees',
+              color: const Color(0xFF388E3C),
+              loading: loading,
+              onTap: () => widget.onOpenOperations?.call(1), // → Trees
+            ),
             const SizedBox(width: 10),
             _StatTile(
-                icon: Icons.place_outlined,
-                value: '$pins',
-                label: 'Map Pins',
-                color: const Color(0xFF1565C0)),
+              icon: Icons.place_outlined,
+              value: '$pins',
+              label: 'Map Pins',
+              color: const Color(0xFF1565C0),
+              loading: loading,
+              onTap: _openMapPins,
+            ),
           ],
         );
       },
@@ -323,28 +396,50 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   }
 
   Future<Map<String, int>> _loadStats() async {
-    if (_orgId == null) return {};
+    final orgId = _orgId;
+    final uid = _uid;
+    int zones = 0;
+    int trees = 0;
+    int pins = 0;
     try {
-      final results = await Future.wait([
-        FirebaseFirestore.instance
+      if (orgId != null) {
+        final zoneSnap = await FirebaseFirestore.instance
             .collection('collection_zones')
-            .where('org_id', isEqualTo: _orgId)
+            .where('org_id', isEqualTo: orgId)
             .count()
-            .get(),
-        FirebaseFirestore.instance
+            .get();
+        zones = zoneSnap.count ?? 0;
+        final pinSnap = await FirebaseFirestore.instance
             .collection('map_pins')
-            .where('added_by_org_id', isEqualTo: _orgId)
+            .where('added_by_org_id', isEqualTo: orgId)
             .count()
-            .get(),
-      ]);
-      return {
-        'zones': results[0].count ?? 0,
-        'pins': results[1].count ?? 0,
-        'trees': 0, // tree records require separate query
-      };
+            .get();
+        pins = pinSnap.count ?? 0;
+      }
+      if (uid != null) {
+        // Sum tree quantities across this user's planting posts. Index-free
+        // (single equality filter, no orderBy).
+        final treeSnap = await FirebaseFirestore.instance
+            .collection('planting_posts')
+            .where('created_by', isEqualTo: uid)
+            .get();
+        trees = treeSnap.docs.fold<int>(
+          0,
+          (acc, d) => acc + ((d.data()['quantity'] as num?)?.toInt() ?? 0),
+        );
+      }
     } catch (_) {
-      return {};
+      // Leave whatever counts succeeded.
     }
+    return {'zones': zones, 'trees': trees, 'pins': pins};
+  }
+
+  void _openMapPins() {
+    final data = _orgDataWithId;
+    if (data == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => OrgMapOpsScreen(orgData: data)),
+    );
   }
 
   Widget _buildActionGrid() {
@@ -361,23 +456,16 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
         label: 'Add Map Pin',
         description: 'Mark a community location on the map',
         color: const Color(0xFF1565C0),
-        onTap: () {
-          if (_orgData == null) return;
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => OrgMapOpsScreen(orgData: _orgData!),
-            ),
-          );
-        },
+        onTap: _openMapPins,
       ),
       _ActionItem(
         icon: Icons.park_outlined,
         label: 'Log Trees',
         description: 'Record trees planted or monitored',
         color: const Color(0xFF388E3C),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const EnvTreesScreen()),
-        ),
+        // → Operations · Trees (its screen has no AppBar, so it must live
+        // inside the shell rather than be pushed as a dead-end route).
+        onTap: () => widget.onOpenOperations?.call(1),
       ),
       _ActionItem(
         icon: Icons.storefront_outlined,
@@ -407,48 +495,139 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   }
 
   Widget _buildRecentActivity() {
+    if (_loading) {
+      return _EmptyCard(
+        icon: Icons.history_outlined,
+        message: 'Loading recent activity…',
+      );
+    }
     if (_orgId == null) {
       return _EmptyCard(
         icon: Icons.history_outlined,
         message: 'Activity will appear here once you start operations',
       );
     }
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('collection_zones')
-          .where('org_id', isEqualTo: _orgId)
-          .orderBy('created_at', descending: true)
-          .limit(5)
-          .snapshots(),
+    return FutureBuilder<List<_ActivityEntry>>(
+      future: _activityFuture,
       builder: (context, snap) {
-        final docs = snap.data?.docs ?? [];
-        if (docs.isEmpty) {
+        if (snap.connectionState == ConnectionState.waiting) {
           return _EmptyCard(
             icon: Icons.history_outlined,
-            message: 'No zones defined yet — go to Territory to start',
+            message: 'Loading recent activity…',
+          );
+        }
+        final entries = snap.data ?? const <_ActivityEntry>[];
+        if (entries.isEmpty) {
+          return _EmptyCard(
+            icon: Icons.history_outlined,
+            message: 'No activity yet — define a zone, log trees, '
+                'or add a map pin to get started',
           );
         }
         return Column(
-          children: docs.map((d) {
-            final data = d.data() as Map<String, dynamic>;
-            final name = data['name'] as String? ?? 'Unnamed Zone';
-            final status = data['status'] as String? ?? 'draft';
-            final ts = data['created_at'] as dynamic;
-            return _ActivityRow(
-              icon: Icons.map_outlined,
-              title: name,
-              subtitle: status.toUpperCase(),
-              color: status == 'active'
-                  ? const Color(0xFF2D7A4F)
-                  : Colors.orange,
-              timestamp: ts is Timestamp
-                  ? _fmtDate(ts.toDate())
-                  : '',
-            );
-          }).toList(),
+          children: entries
+              .map((e) => _ActivityRow(
+                    icon: e.icon,
+                    title: e.title,
+                    subtitle: e.subtitle,
+                    color: e.color,
+                    timestamp:
+                        e.timestamp != null ? _fmtDate(e.timestamp!) : '',
+                    onTap: () => _onActivityTap(e),
+                  ))
+              .toList(),
         );
       },
     );
+  }
+
+  void _onActivityTap(_ActivityEntry e) {
+    switch (e.kind) {
+      case _ActivityKind.zone:
+        widget.onSelectTab?.call(1); // → Territory
+        break;
+      case _ActivityKind.planting:
+        widget.onOpenOperations?.call(1); // → Operations · Trees
+        break;
+      case _ActivityKind.pin:
+        _openMapPins();
+        break;
+    }
+  }
+
+  /// Builds a unified, index-free recent-activity feed from zones, plantings
+  /// and map pins, sorted client-side by timestamp.
+  Future<List<_ActivityEntry>> _loadActivity() async {
+    final orgId = _orgId;
+    final uid = _uid;
+    final out = <_ActivityEntry>[];
+    try {
+      if (orgId != null) {
+        final zoneSnap = await FirebaseFirestore.instance
+            .collection('collection_zones')
+            .where('org_id', isEqualTo: orgId)
+            .limit(20)
+            .get();
+        for (final d in zoneSnap.docs) {
+          final m = d.data();
+          final status = (m['status'] as String? ?? 'draft');
+          out.add(_ActivityEntry(
+            kind: _ActivityKind.zone,
+            icon: Icons.map_outlined,
+            title: m['name'] as String? ?? 'Unnamed Zone',
+            subtitle: status.toUpperCase(),
+            color: status == 'active'
+                ? const Color(0xFF2D7A4F)
+                : Colors.orange,
+            timestamp: (m['created_at'] as Timestamp?)?.toDate(),
+          ));
+        }
+
+        final pinSnap = await FirebaseFirestore.instance
+            .collection('map_pins')
+            .where('added_by_org_id', isEqualTo: orgId)
+            .limit(20)
+            .get();
+        for (final d in pinSnap.docs) {
+          final m = d.data();
+          out.add(_ActivityEntry(
+            kind: _ActivityKind.pin,
+            icon: Icons.place_outlined,
+            title: m['name'] as String? ?? 'Map Pin',
+            subtitle: 'MAP PIN',
+            color: const Color(0xFF1565C0),
+            timestamp: (m['created_at'] as Timestamp?)?.toDate(),
+          ));
+        }
+      }
+
+      if (uid != null) {
+        final treeSnap = await FirebaseFirestore.instance
+            .collection('planting_posts')
+            .where('created_by', isEqualTo: uid)
+            .limit(20)
+            .get();
+        for (final d in treeSnap.docs) {
+          final m = d.data();
+          final qty = (m['quantity'] as num?)?.toInt() ?? 0;
+          final stage = (m['stage'] as String? ?? 'pending');
+          out.add(_ActivityEntry(
+            kind: _ActivityKind.planting,
+            icon: Icons.park_outlined,
+            title: m['species'] as String? ?? 'Planting',
+            subtitle: '$qty TREES · ${stage.toUpperCase()}',
+            color: const Color(0xFF388E3C),
+            timestamp: (m['created_at'] as Timestamp?)?.toDate() ??
+                (m['planted_date'] as Timestamp?)?.toDate(),
+          ));
+        }
+      }
+    } catch (_) {
+      // Return whatever loaded.
+    }
+    out.sort((a, b) => (b.timestamp ?? DateTime(0))
+        .compareTo(a.timestamp ?? DateTime(0)));
+    return out.take(6).toList();
   }
 
   static String _fmtDate(DateTime dt) {
@@ -471,12 +650,34 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   }
 }
 
+// ─── Recent-activity entry ────────────────────────────────────────────────────
+enum _ActivityKind { zone, planting, pin }
+
+class _ActivityEntry {
+  final _ActivityKind kind;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final DateTime? timestamp;
+
+  const _ActivityEntry({
+    required this.kind,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.timestamp,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // TAB 2 — OPERATIONS (Market · Trees · Fleet)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _EnvOperationsTab extends StatefulWidget {
-  const _EnvOperationsTab();
+  final int initialTab;
+  const _EnvOperationsTab({this.initialTab = 0});
 
   @override
   State<_EnvOperationsTab> createState() => _EnvOperationsTabState();
@@ -489,7 +690,11 @@ class _EnvOperationsTabState extends State<_EnvOperationsTab>
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 3),
+    );
   }
 
   @override
@@ -527,6 +732,10 @@ class _EnvOperationsTabState extends State<_EnvOperationsTab>
                 icon: Icon(Icons.local_shipping_outlined, size: 16),
                 text: 'Fleet',
               ),
+              Tab(
+                icon: Icon(Icons.verified_outlined, size: 16),
+                text: 'Verified',
+              ),
             ],
           ),
         ),
@@ -537,6 +746,7 @@ class _EnvOperationsTabState extends State<_EnvOperationsTab>
               EnvMarketScreen(),
               EnvTreesScreen(),
               EnvFleetScreen(),
+              EnvVerifiedScreen(),
             ],
           ),
         ),
@@ -749,49 +959,73 @@ class _StatTile extends StatelessWidget {
   final String value;
   final String label;
   final Color color;
+  final bool loading;
+  final VoidCallback? onTap;
   const _StatTile(
       {required this.icon,
       required this.value,
       required this.label,
-      required this.color});
+      required this.color,
+      this.loading = false,
+      this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 18, color: color),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                color: AppTheme.darkGreen,
-                height: 1,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                  fontSize: 10, color: AppTheme.darkGreen.withOpacity(0.50)),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 18, color: color),
+                  const Spacer(),
+                  if (onTap != null)
+                    Icon(Icons.chevron_right,
+                        size: 16, color: AppTheme.darkGreen.withOpacity(0.25)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              loading
+                  ? Container(
+                      width: 28,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    )
+                  : Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.darkGreen,
+                        height: 1,
+                      ),
+                    ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                    fontSize: 10, color: AppTheme.darkGreen.withOpacity(0.50)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -881,62 +1115,75 @@ class _ActivityRow extends StatelessWidget {
   final String subtitle;
   final Color color;
   final String timestamp;
+  final VoidCallback? onTap;
   const _ActivityRow(
       {required this.icon,
       required this.title,
       required this.subtitle,
       required this.color,
-      required this.timestamp});
+      required this.timestamp,
+      this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
-              shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.10),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 16, color: color),
             ),
-            child: Icon(icon, size: 16, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.darkGreen)),
-                Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: color)),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.darkGreen)),
+                  Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: color)),
+                ],
+              ),
             ),
-          ),
-          Text(timestamp,
-              style: TextStyle(
-                  fontSize: 10,
-                  color: AppTheme.darkGreen.withOpacity(0.40))),
-        ],
+            const SizedBox(width: 8),
+            Text(timestamp,
+                style: TextStyle(
+                    fontSize: 10,
+                    color: AppTheme.darkGreen.withOpacity(0.40))),
+            if (onTap != null) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right,
+                  size: 16, color: AppTheme.darkGreen.withOpacity(0.25)),
+            ],
+          ],
+        ),
       ),
     );
   }

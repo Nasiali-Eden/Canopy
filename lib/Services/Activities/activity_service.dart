@@ -42,30 +42,73 @@ class ActivityService {
     required DateTime dateTime,
     required int requiredParticipants,
     String? createdBy,
-    XFile? coverImage,
+    String? orgId,
+    String? organizerName,
+    List<XFile?> images = const [],
+    RegistrationState registrationState = RegistrationState.open,
   }) async {
-    String? coverUrl;
-    if (coverImage != null) {
-      final ref = _storage.ref().child(
-          'activities/covers/${DateTime.now().millisecondsSinceEpoch}.jpg');
-      await ref.putFile(File(coverImage.path));
-      coverUrl = await ref.getDownloadURL();
+    final docRef = _db.collection('activities').doc();
+    final activityId = docRef.id;
+
+    // Preserve slot order (0 = cover). Firestore arrays cannot hold nulls.
+    final imageSlots = List<String>.filled(4, '');
+    for (var i = 0; i < images.length && i < 4; i++) {
+      final file = images[i];
+      if (file == null) continue;
+
+      final ref =
+          _storage.ref().child('activities/$activityId/gallery_$i.jpg');
+      await ref.putFile(File(file.path));
+      imageSlots[i] = await ref.getDownloadURL();
     }
 
-    final doc = await _db.collection('activities').add({
+    final coverUrl = imageSlots.firstWhere(
+      (url) => url.isNotEmpty,
+      orElse: () => '',
+    );
+    final coverUrlOrNull = coverUrl.isEmpty ? null : coverUrl;
+    final scheduledAt = Timestamp.fromDate(dateTime);
+    final status =
+        registrationState == RegistrationState.closed ? 'closed' : 'open';
+    final locationName = _locationLabel(location);
+
+    await docRef.set({
       'type': type,
       'title': title,
+      'name': title,
       'description': description,
       'location': location,
-      'dateTime': Timestamp.fromDate(dateTime),
+      'locationName': locationName,
+      'dateTime': scheduledAt,
+      'scheduledAt': scheduledAt,
+      'date': scheduledAt,
       'requiredParticipants': requiredParticipants,
+      'maxParticipants': requiredParticipants,
       'participantIds': <String>[],
-      'coverImageUrl': coverUrl,
+      'participants': 0,
+      'registeredCount': 0,
+      'images': imageSlots,
+      'coverImageUrl': coverUrlOrNull,
+      'registrationState': registrationState.name,
+      'status': status,
+      'orgId': orgId,
+      'organizerName': organizerName,
       'createdBy': createdBy,
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    return doc.id;
+    return activityId;
+  }
+
+  static String _locationLabel(Map<String, dynamic> location) {
+    final venue = location['venue'] as String? ?? '';
+    final area = location['area'] as String? ?? '';
+    final city = location['city'] as String? ?? '';
+    return [
+      if (venue.isNotEmpty) venue,
+      if (area.isNotEmpty) area,
+      if (city.isNotEmpty) city,
+    ].join(', ');
   }
 
   Future<void> joinActivity(

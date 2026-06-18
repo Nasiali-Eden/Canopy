@@ -166,6 +166,25 @@ class Activity {
 
   // ── Serialisation ─────────────────────────────────────────────────────────
 
+  static List<String?> _parseImages(Map<String, dynamic> data) {
+    final raw = data['images'] as List<dynamic>?;
+    if (raw != null && raw.isNotEmpty) {
+      return raw
+          .map((e) {
+            final url = e as String?;
+            return (url == null || url.isEmpty) ? null : url;
+          })
+          .toList();
+    }
+
+    final legacyCover = data['coverImageUrl'] as String?;
+    if (legacyCover != null && legacyCover.isNotEmpty) {
+      return [legacyCover];
+    }
+
+    return const [];
+  }
+
   factory Activity.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
     return Activity(
@@ -175,10 +194,7 @@ class Activity {
       type: ActivityType.fromString(data['type'] as String? ?? 'event'),
       location: ActivityLocation.fromMap(
           data['location'] as Map<String, dynamic>? ?? {}),
-      images: (data['images'] as List<dynamic>?)
-          ?.map((e) => e as String?)
-          .toList() ??
-          [],
+      images: _parseImages(data),
       registrationState: RegistrationState.fromString(
           data['registrationState'] as String? ?? 'open'),
       participantIds: (data['participantIds'] as List<dynamic>?)

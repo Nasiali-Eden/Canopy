@@ -92,10 +92,10 @@ class FloatingNavBar extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withOpacity(0.05),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: Colors.white.withOpacity(0.45),
+              color: Colors.white.withOpacity(0.3),
               width: 0.6,
             ),
             boxShadow: [

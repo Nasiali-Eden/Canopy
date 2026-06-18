@@ -309,19 +309,27 @@ class _HeritageSeedDebugButtonState extends State<HeritageSeedDebugButton> {
                         fontWeight: FontWeight.w800,
                         color: Colors.deepPurple)),
               ),
-              FilledButton(
-                onPressed: _running ? null : _run,
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  visualDensity: VisualDensity.compact,
+              // Bound the button's width: in some layout passes (e.g. an
+              // offstage/overlay measure) the Row hands its non-flex child an
+              // unbounded width, which a FilledButton turns into an
+              // "infinite width" assertion. Capping maxWidth keeps it finite
+              // without changing how it looks at its natural ~64px size.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 120),
+                child: FilledButton(
+                  onPressed: _running ? null : _run,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: _running
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Run'),
                 ),
-                child: _running
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Run'),
               ),
             ],
           ),

@@ -78,39 +78,50 @@ class ArticleService {
 
   // ── Create ────────────────────────────────────────────────────────────────
 
-  /// Publishes an article immediately.
-  /// [body] is an ordered list of block maps: `{ type, text }`.
-  /// Stored directly on the doc as an array — avoids a body subcollection
-  /// while keeping reads to a single document fetch.
   Future<String> createArticle({
     required String heading,
     required String topic,
     required List<Map<String, dynamic>> body,
-    required XFile coverPhoto,
+    XFile? coverPhoto,
+    String? coverPhotoUrl,
     String? orgId,
     String? createdBy,
+    String status = 'published',
   }) async {
-    // Upload cover photo
-    final path = orgId != null
-        ? 'organizations/$orgId/articles/${DateTime.now().millisecondsSinceEpoch}_cover.jpg'
-        : 'articles/covers/${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
-    final ref = _storage.ref().child(path);
-    await ref.putFile(File(coverPhoto.path));
-    final coverUrl = await ref.getDownloadURL();
+    String? finalCoverUrl = coverPhotoUrl;
+    if (coverPhoto != null) {
+      final path = orgId != null
+          ? 'organizations/$orgId/articles/${DateTime.now().millisecondsSinceEpoch}_cover.jpg'
+          : 'articles/covers/${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
+      final ref = _storage.ref().child(path);
+      await ref.putFile(File(coverPhoto.path));
+      finalCoverUrl = await ref.getDownloadURL();
+    }
 
     final now = FieldValue.serverTimestamp();
+    final org = orgId != null
+        ? await _db.collection('organizations').doc(orgId).get()
+        : null;
+    final orgName = (org?.data()?['org_name'] ?? org?.data()?['name']) as String?;
+    final orgLogoUrl = (org?.data()?['logoUrl'] ?? org?.data()?['profilePhoto']) as String?;
 
     final doc = await _db.collection('articles').add({
       'heading': heading,
+      'title': heading,
       'topic': topic,
-      'coverPhotoUrl': coverUrl,
-      // Body stored as an ordered array of block maps — one read, full article
+      'category': topic,
+      'coverPhotoUrl': finalCoverUrl,
+      'coverImageUrl': finalCoverUrl,
       'body': body,
       'orgId': orgId,
+      'orgName': orgName,
+      'orgLogoUrl': orgLogoUrl,
+      'authorName': orgName ?? createdBy ?? '',
       'createdBy': createdBy,
-      'status': 'published',
+      'status': status,
       'createdAt': now,
-      'publishedAt': now,
+      'publishedAt': status == 'published' ? now : null,
+      'updatedAt': now,
     });
 
     return doc.id;
@@ -137,14 +148,18 @@ class ArticleService {
 
     final doc = await _db.collection('articles').add({
       'heading': heading,
+      'title': heading,
       'topic': topic,
+      'category': topic,
       'coverPhotoUrl': coverUrl,
+      'coverImageUrl': coverUrl,
       'body': body,
       'orgId': orgId,
       'createdBy': createdBy,
       'status': 'draft',
       'createdAt': FieldValue.serverTimestamp(),
       'publishedAt': null,
+      'updatedAt': FieldValue.serverTimestamp(),
     });
 
     return doc.id;
@@ -152,20 +167,47 @@ class ArticleService {
 
   // ── Update ────────────────────────────────────────────────────────────────
 
-  /// Updates a draft's content and optionally publishes it.
   Future<void> updateArticle({
     required String articleId,
     String? heading,
     String? topic,
     List<Map<String, dynamic>>? body,
-    bool publish = false,
-  }) {
-    return _db.collection('articles').doc(articleId).update({
-      if (heading != null) 'heading': heading,
-      if (topic != null) 'topic': topic,
+    XFile? coverPhoto,
+    String? coverPhotoUrl,
+    String? status,
+  }) async {
+    String? finalCoverUrl = coverPhotoUrl;
+    if (coverPhoto != null) {
+      final doc = await _db.collection('articles').doc(articleId).get();
+      final orgId = doc.data()?['orgId'] as String?;
+      final path = orgId != null
+          ? 'organizations/$orgId/articles/${DateTime.now().millisecondsSinceEpoch}_cover.jpg'
+          : 'articles/covers/${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
+      final ref = _storage.ref().child(path);
+      await ref.putFile(File(coverPhoto.path));
+      finalCoverUrl = await ref.getDownloadURL();
+    }
+
+    final now = FieldValue.serverTimestamp();
+    await _db.collection('articles').doc(articleId).update({
+      if (heading != null) ...{
+        'heading': heading,
+        'title': heading,
+      },
+      if (topic != null) ...{
+        'topic': topic,
+        'category': topic,
+      },
       if (body != null) 'body': body,
-      if (publish) 'status': 'published',
-      if (publish) 'publishedAt': FieldValue.serverTimestamp(),
+      if (coverPhotoUrl != null) ...{
+        'coverPhotoUrl': coverPhotoUrl,
+        'coverImageUrl': coverPhotoUrl,
+      },
+      if (status != null) ...{
+        'status': status,
+        'publishedAt': status == 'published' ? now : null,
+      },
+      'updatedAt': now,
     });
   }
 

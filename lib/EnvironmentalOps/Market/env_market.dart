@@ -78,7 +78,7 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
   String _imageForListing(Map<String, dynamic> data) {
     final uploaded = data['image_url'] as String?;
     if (uploaded != null && uploaded.isNotEmpty) return uploaded;
-    final subId = data['material_sub_type_id'] as String? ?? '';
+    final subId = data['sub_type_id'] as String? ?? '';
     return _sampleImages[subId] ??
         'https://picsum.photos/seed/${subId.isEmpty ? 'material' : subId}/400/250';
   }
@@ -100,6 +100,8 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
         ),
       ),
       floatingActionButton: Container(
+        // Lifted clear of the shell's floating nav pill (body is extendBody).
+        margin: const EdgeInsets.only(bottom: 78),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [AppTheme.darkGreen, AppTheme.primary],
@@ -157,14 +159,17 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
       );
     }
     return StreamBuilder<QuerySnapshot>(
+      // Index-free: single equality filter; active count derived client-side.
       stream: FirebaseFirestore.instance
           .collection('market_listings')
           .where('org_id', isEqualTo: _orgId)
-          .where('status', isEqualTo: 'active')
           .snapshots(),
       builder: (context, snap) {
         final docs = snap.data?.docs ?? [];
-        final activeCount = docs.length;
+        final activeCount = docs.where((d) {
+          final m = d.data() as Map<String, dynamic>;
+          return (m['status'] as String? ?? 'active') == 'active';
+        }).length;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -220,10 +225,10 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
         : ['sell_listing'];
 
     return StreamBuilder<QuerySnapshot>(
+      // Index-free: single equality filter; type-filter + sort client-side.
       stream: FirebaseFirestore.instance
           .collection('market_listings')
           .where('org_id', isEqualTo: _orgId)
-          .orderBy('created_at', descending: true)
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
@@ -238,7 +243,14 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
           final data = d.data() as Map<String, dynamic>;
           final type = data['listing_type'] as String? ?? '';
           return targetType.contains(type);
-        }).toList();
+        }).toList()
+          ..sort((a, b) {
+            final ta = (a.data() as Map<String, dynamic>)['created_at']
+                as Timestamp?;
+            final tb = (b.data() as Map<String, dynamic>)['created_at']
+                as Timestamp?;
+            return (tb ?? Timestamp(0, 0)).compareTo(ta ?? Timestamp(0, 0));
+          });
 
         if (filtered.isEmpty) {
           return _buildEmptyState();
@@ -318,17 +330,17 @@ class _ListingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final material =
-        data['material_sub_type_label'] as String? ?? 'Material';
+        data['sub_type_label'] as String? ?? 'Material';
     final grade = data['grade'] as String? ?? '';
     final price = (data['price_per_unit'] as num?)?.toInt() ?? 0;
     final unit = data['unit'] as String? ?? 'kg';
     final quantity = (data['quantity_kg'] as num?)?.toInt() ?? 0;
-    final location = data['location'] as String? ?? '';
+    final location = data['location_text'] as String? ?? '';
     final status = data['status'] as String? ?? 'active';
     final isRecurring = data['is_recurring'] as bool? ?? false;
     final catLabel =
-        data['material_category_label'] as String? ?? '';
-    final weCollect = data['we_collect'] as bool? ?? false;
+        data['category_label'] as String? ?? '';
+    final weCollect = data['can_collect'] as bool? ?? false;
     final notes = data['notes'] as String? ?? '';
 
     final statusColor = status == 'active'

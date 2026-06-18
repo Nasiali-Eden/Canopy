@@ -50,7 +50,7 @@ class CulturalEntry {
       description: data['description'] as String?,
       tags: List<String>.from(data['tags'] as List? ?? []),
       visibility: data['visibility'] as String? ?? 'public',
-      locality: data['locality'] as String?,
+      locality: _localityToDisplay(data['locality']),
       imageUrl: data['image_url'] as String?,
       commentCount: data['comment_count'] as int? ?? 0,
       connectionCount: data['connection_count'] as int? ?? 0,
@@ -59,6 +59,24 @@ class CulturalEntry {
       updatedAt: (data['updated_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
       createdBy: data['created_by'] as String? ?? '',
     );
+  }
+
+  /// `locality` is stored in Firestore as a structured map
+  /// (`{country_id, community_name, locality_notes, …}`), but this model
+  /// surfaces it as a single human-readable string. Coerce defensively so a
+  /// map, a legacy plain string, or null all yield a sensible display value
+  /// instead of crashing the entries stream with a bad cast.
+  static String? _localityToDisplay(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is String) return raw.isEmpty ? null : raw;
+    if (raw is Map) {
+      final map = raw.cast<String, dynamic>();
+      final name = map['community_name'] as String?;
+      if (name != null && name.isNotEmpty) return name;
+      final notes = map['locality_notes'] as String?;
+      if (notes != null && notes.isNotEmpty) return notes;
+    }
+    return null;
   }
 
   Map<String, dynamic> toFirestore() {

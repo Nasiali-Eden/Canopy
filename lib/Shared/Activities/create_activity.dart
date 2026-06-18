@@ -1,16 +1,24 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'dart:convert';
 
 import '../../Models/user.dart';
 import '../../Services/Activities/activity_service.dart';
 import '../theme/app_theme.dart';
 import 'activity.dart';
+import 'activity_detail.dart';
 
+/// When true, pops back to the caller on success instead of opening the detail
+/// screen. Used from org Operations so the event appears in the Events tab.
 class CreateActivityScreen extends StatefulWidget {
-  const CreateActivityScreen({super.key});
+  final bool returnOnSuccess;
+
+  const CreateActivityScreen({super.key, this.returnOnSuccess = false});
 
   @override
   State<CreateActivityScreen> createState() => _CreateActivityScreenState();
@@ -165,6 +173,10 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
       _showSnack('Please select a city');
       return;
     }
+    if (_images[0] == null) {
+      _showSnack('Please add a cover photo');
+      return;
+    }
 
     final dateTime = DateTime(
       _date!.year,
@@ -186,6 +198,20 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
         lng: _lng,
       );
 
+      final orgId = await user?.orgId;
+      String? organizerName;
+      if (orgId != null) {
+        try {
+          final orgDoc = await FirebaseFirestore.instance
+              .collection('organizations')
+              .doc(orgId)
+              .get();
+          organizerName = orgDoc.data()?['org_name'] as String?;
+        } catch (e) {
+          debugPrint('Create activity org lookup error: $e');
+        }
+      }
+
       final id = await ActivityService().createActivity(
         type: 'event',
         title: _titleController.text.trim(),
@@ -195,16 +221,29 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
         requiredParticipants:
             int.tryParse(_requiredParticipantsController.text.trim()) ?? 10,
         createdBy: user?.uid,
-        coverImage: _images.whereType<XFile>().isNotEmpty
-            ? _images.whereType<XFile>().first
-            : null,
+        orgId: orgId,
+        organizerName: organizerName,
+        images: _images,
+        registrationState: _registrationState,
       );
 
       if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/activities/$id');
-    } catch (e) {
+
+      if (widget.returnOnSuccess) {
+        Navigator.pop(context, id);
+        return;
+      }
+
+      await Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ActivityDetailScreen(activityId: id),
+        ),
+      );
+    } catch (e, stackTrace) {
+      debugPrint('Create activity error: $e\n$stackTrace');
       if (!mounted) return;
-      _showSnack('Error: $e');
+      _showSnack('Could not create activity. Please try again.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -676,11 +715,15 @@ class _ImageSlot extends StatelessWidget {
               : Stack(
                   fit: StackFit.expand,
                   children: [
-                    Container(
-                      color: AppTheme.lightGreen.withOpacity(0.15),
-                      child: const Center(
-                        child: Icon(Icons.image_outlined,
-                            size: 30, color: AppTheme.primary),
+                    Image.file(
+                      File(file!.path),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: AppTheme.lightGreen.withOpacity(0.15),
+                        child: const Center(
+                          child: Icon(Icons.broken_image_outlined,
+                              size: 30, color: AppTheme.primary),
+                        ),
                       ),
                     ),
                     Positioned(

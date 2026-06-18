@@ -97,15 +97,15 @@ class _EnvTreesScreenState extends State<EnvTreesScreen> {
     setState(() => _loading = true);
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      Query q = FirebaseFirestore.instance
-          .collection('planting_posts')
-          .orderBy('planted_date', descending: true)
-          .limit(20);
+      // Index-free: single equality filter, sorted client-side.
+      Query q = FirebaseFirestore.instance.collection('planting_posts');
       if (uid != null) q = q.where('created_by', isEqualTo: uid);
-      final snap = await q.get();
+      final snap = await q.limit(50).get();
       if (mounted) {
         setState(() {
-          _posts = snap.docs.map(PlantingPost.fromFirestore).toList();
+          _posts = snap.docs.map(PlantingPost.fromFirestore).toList()
+            ..sort((a, b) => b.plantedDate.compareTo(a.plantedDate));
+          _posts = _posts.take(20).toList();
           _loading = false;
         });
       }
@@ -138,13 +138,17 @@ class _EnvTreesScreenState extends State<EnvTreesScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openPostWizard(),
-        backgroundColor: AppTheme.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('New Planting',
-            style: TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700)),
+      // Lifted clear of the shell's floating nav pill (body is extendBody).
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 78),
+        child: FloatingActionButton.extended(
+          onPressed: () => _openPostWizard(),
+          backgroundColor: AppTheme.primary,
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text('New Planting',
+              style: TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700)),
+        ),
       ),
     );
   }
@@ -313,7 +317,7 @@ class _EnvTreesScreenState extends State<EnvTreesScreen> {
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
       itemCount: _posts.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (_, i) => _PlantingPostCard(post: _posts[i]),

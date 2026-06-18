@@ -65,12 +65,27 @@ class _OrgOperationsState extends State<OrgOperations>
 
   void _refresh() => setState(() => _refreshKey++);
 
-  void _onAdd() {
+  void _onAdd() async {
     switch (_tabController.index) {
       case 0:
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const CreateActivityScreen()),
+        final createdId = await Navigator.of(context).push<String>(
+          MaterialPageRoute(
+            builder: (_) => const CreateActivityScreen(returnOnSuccess: true),
+          ),
         );
+        if (createdId != null && mounted) {
+          _refresh();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Event created successfully'),
+              backgroundColor: AppTheme.primary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
         break;
       case 1:
         if (_orgId != null) {
@@ -216,8 +231,46 @@ class _EventsTab extends StatelessWidget {
     if (impact == 'confirmed') return 'onChain';
     if (status == 'completed' && impact == 'pending') return 'verifying';
     if (status == 'ongoing') return 'executing';
-    if (status == 'upcoming') return 'active';
+    if (status == 'upcoming' || status == 'open') return 'active';
     return 'draft';
+  }
+
+  static String _locationLabel(Map<String, dynamic> data) {
+    final locationName = data['locationName'] as String?;
+    if (locationName != null && locationName.isNotEmpty) return locationName;
+
+    final raw = data['location'];
+    if (raw is String && raw.isNotEmpty) return raw;
+    if (raw is Map<String, dynamic>) {
+      final venue = raw['venue'] as String? ?? '';
+      final area = raw['area'] as String? ?? '';
+      final city = raw['city'] as String? ?? '';
+      return [
+        if (venue.isNotEmpty) venue,
+        if (area.isNotEmpty) area,
+        if (city.isNotEmpty) city,
+      ].join(', ');
+    }
+    return '';
+  }
+
+  Future<void> _openCreate(BuildContext context) async {
+    final createdId = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => const CreateActivityScreen(returnOnSuccess: true),
+      ),
+    );
+    if (createdId == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Event created successfully'),
+        backgroundColor: AppTheme.primary,
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
@@ -243,9 +296,7 @@ class _EventsTab extends StatelessWidget {
             title: 'No events yet',
             subtitle: 'Create your first event to mobilise volunteers',
             actionLabel: 'Create Event',
-            onAction: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CreateActivityScreen()),
-            ),
+            onAction: () => _openCreate(context),
           );
         }
 
@@ -480,10 +531,15 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = data['name'] as String? ?? 'Untitled';
-    final location = data['location'] as String? ?? '';
-    final participants = data['participants'] as int? ?? 0;
-    final maxParticipants = data['maxParticipants'] as int? ?? 0;
+    final name =
+        data['name'] as String? ?? data['title'] as String? ?? 'Untitled';
+    final location = _EventsTab._locationLabel(data);
+    final participants = data['participants'] as int? ??
+        data['registeredCount'] as int? ??
+        ((data['participantIds'] as List?)?.length ?? 0);
+    final maxParticipants = data['maxParticipants'] as int? ??
+        data['requiredParticipants'] as int? ??
+        0;
     final bountyAmount = (data['bountyAmount'] as num?)?.toDouble();
     final txHash = data['txHash'] as String?;
     final pct = maxParticipants > 0
@@ -563,7 +619,8 @@ class _EventCard extends StatelessWidget {
                             color: AppTheme.darkGreen.withOpacity(0.4)),
                         const SizedBox(width: 3),
                         Text(
-                          _formatDate(data['date']),
+                          _formatDate(
+                              data['date'] ?? data['scheduledAt'] ?? data['dateTime']),
                           style: TextStyle(
                             fontSize: 11,
                             color: AppTheme.darkGreen.withOpacity(0.5),
