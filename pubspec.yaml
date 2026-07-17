@@ -48,6 +48,7 @@ dependencies:
   shared_preferences: ^2.3.5  # Local storage
   fl_chart: ^0.66.2
   cached_network_image: ^3.3.1
+  url_launcher: ^6.3.0  # Open external social links
 
   # Image handling
   image_picker: any

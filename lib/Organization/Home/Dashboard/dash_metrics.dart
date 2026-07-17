@@ -12,12 +12,14 @@ class DashMetrics extends StatelessWidget {
   final String? orgId;
   final FirebaseFirestore firestore;
   final VoidCallback onViewReport;
+  final VoidCallback? onViewArticles;
 
   const DashMetrics({
     super.key,
     required this.orgId,
     required this.firestore,
     required this.onViewReport,
+    this.onViewArticles,
   });
 
   @override
@@ -43,11 +45,6 @@ class DashMetrics extends StatelessWidget {
           builder: (context, actSnap) {
             final actDocs = actSnap.data?.docs ?? [];
             final totalEvents = actDocs.length;
-            final verified = actDocs
-                .where((d) =>
-                    (d.data() as Map<String, dynamic>)['impactStatus'] ==
-                    'confirmed')
-                .length;
 
             return StreamBuilder<QuerySnapshot>(
               stream: firestore
@@ -113,11 +110,22 @@ class DashMetrics extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
-                                  child: _MetricCard(
-                                    value: actSnap.hasData ? '$verified' : '—',
-                                    label: 'Verified',
-                                    icon: Icons.verified,
-                                    color: AppTheme.tertiary,
+                                  child: StreamBuilder<QuerySnapshot>(
+                                    stream: firestore
+                                        .collection('articles')
+                                        .where('orgId', isEqualTo: orgId)
+                                        .snapshots(),
+                                    builder: (context, artSnap) {
+                                      final count =
+                                          artSnap.data?.docs.length ?? 0;
+                                      return _MetricCard(
+                                        value: artSnap.hasData ? '$count' : '—',
+                                        label: 'Articles',
+                                        icon: Icons.article_outlined,
+                                        color: AppTheme.tertiary,
+                                        onTap: onViewArticles,
+                                      );
+                                    },
                                   ),
                                 ),
                               ],
@@ -146,17 +154,21 @@ class _MetricCard extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   const _MetricCard({
     required this.value,
     required this.label,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -228,6 +240,7 @@ class _MetricCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

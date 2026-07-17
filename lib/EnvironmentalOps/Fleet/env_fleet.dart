@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../Shared/theme/app_theme.dart';
+import '../../Services/Environmental/environment_ops_service.dart';
+import '../../Models/environmental/enums/fleet_collector_status.dart';
+import '../../Models/environmental/enums/payment_method.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FLEET — collectors & collection handoffs, backed by Firestore.
@@ -354,15 +357,14 @@ class _EnvFleetScreenState extends State<EnvFleetScreen> {
     );
     if (result == null) return;
     try {
-      await _collectorsRef.add({
-        'org_id': _orgId,
-        'name': result['name'],
-        'zone': result['zone'],
-        'phone': result['phone'],
-        'status': (result['status'] as CollectorStatus).key,
-        'created_by': _uid,
-        'created_at': FieldValue.serverTimestamp(),
-      });
+      await EnvironmentOpsService.instance.addCollector(
+        orgId: _orgId!,
+        uid: _uid ?? 'anon',
+        name: result['name'] as String,
+        zone: result['zone'] as String?,
+        phone: result['phone'] as String?,
+        status: _toFleetStatus(result['status'] as CollectorStatus),
+      );
     } catch (e) {
       _toast('Could not add collector: $e');
     }
@@ -391,19 +393,32 @@ class _EnvFleetScreenState extends State<EnvFleetScreen> {
     );
     if (result == null) return;
     try {
-      await _handoffsRef.add({
-        'org_id': _orgId,
-        'collector_id': result['collector_id'],
-        'collector_name': result['collector_name'],
-        'kg': result['kg'],
-        'material': result['material'],
-        'delivered_at': Timestamp.fromDate(result['delivered_at'] as DateTime),
-        'created_by': _uid,
-        'created_at': FieldValue.serverTimestamp(),
-      });
+      await EnvironmentOpsService.instance.logCollectionHandoff(
+        orgId: _orgId!,
+        uid: _uid ?? 'anon',
+        collectorId: result['collector_id'] as String,
+        collectorName: result['collector_name'] as String,
+        weightKg: (result['kg'] as num).toDouble(),
+        materialType: (result['material'] as String?)?.trim().isNotEmpty == true
+            ? (result['material'] as String).trim()
+            : 'Mixed Plastics',
+        deliveredAt: result['delivered_at'] as DateTime,
+        paymentMethod: PaymentMethod.mpesa,
+      );
       _toast('Handoff logged');
     } catch (e) {
       _toast('Could not log handoff: $e');
+    }
+  }
+
+  FleetCollectorStatus _toFleetStatus(CollectorStatus status) {
+    switch (status) {
+      case CollectorStatus.active:
+        return FleetCollectorStatus.active;
+      case CollectorStatus.offShift:
+        return FleetCollectorStatus.offShift;
+      case CollectorStatus.uncontactable:
+        return FleetCollectorStatus.uncontactable;
     }
   }
 

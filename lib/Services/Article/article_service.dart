@@ -4,23 +4,34 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
-/// Handles org-authored Articles.
+/// Handles org-authored Articles ("Community Updates").
 ///
-/// Firestore layout:
-///   articles/{articleId}             ← flat doc
-///     heading: String
-///     topic: String                  ← 'Community' | 'Health' | 'Environment'
-///                                       | 'Tech' | 'Education' | 'Policy'
-///     coverPhotoUrl: String?
-///     body: [                        ← ordered list of block maps — no subcollection
-///       { type: 'h1' | 'h2' | 'h3' | 'paragraph', text: String },
-///       ...
-///     ]
-///     orgId: String?
-///     createdBy: String?             ← uid
-///     status: 'draft' | 'published'
-///     createdAt: Timestamp
-///     publishedAt: Timestamp?
+/// Single flat collection — no subcollections, no composite indexes required.
+/// Every doc carries dual field aliases so all reader surfaces work:
+///   • heading / title           ← same value
+///   • topic / category          ← same value (e.g. 'news')
+///   • coverPhotoUrl / coverImageUrl
+///   • status ('draft'|'published') / isPublished (bool)
+///
+/// Firestore layout — articles/{articleId}:
+///   heading, title              : String
+///   topic, category             : String
+///   coverPhotoUrl, coverImageUrl: String?
+///   body                        : String   ← rich text. Lines beginning
+///                                            '# ' / '## ' / '### ' render as
+///                                            h1 / h2 / h3; everything else is
+///                                            a paragraph. Blocks separated by
+///                                            a blank line.
+///   orgId                       : String?
+///   orgName, authorName         : String?
+///   orgLogoUrl, authorAvatarUrl : String?
+///   createdBy                   : String?  ← uid
+///   status                      : 'draft' | 'published'
+///   isPublished                 : bool
+///   readTimeMinutes             : int
+///   createdAt                   : Timestamp
+///   publishedAt                 : Timestamp?   (null while draft)
+///   updatedAt                   : Timestamp
 class ArticleService {
   final FirebaseFirestore _db;
   final FirebaseStorage _storage;
@@ -31,41 +42,25 @@ class ArticleService {
 
   // ── Streams ───────────────────────────────────────────────────────────────
 
-  /// All published articles, newest first.
-  Stream<List<Map<String, dynamic>>> watchArticles() {
-    return _db
-        .collection('articles')
-        .where('status', isEqualTo: 'published')
-        .orderBy('publishedAt', descending: true)
-        .snapshots()
-        .map((s) => s.docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList());
-  }
-
-  /// Articles filtered by topic.
-  Stream<List<Map<String, dynamic>>> watchArticlesByTopic(String topic) {
-    return _db
-        .collection('articles')
-        .where('status', isEqualTo: 'published')
-        .where('topic', isEqualTo: topic)
-        .orderBy('publishedAt', descending: true)
-        .snapshots()
-        .map((s) => s.docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList());
-  }
-
-  /// Articles authored by a specific organisation.
+  /// Articles authored by a specific organisation, newest first.
+  /// Index-free: single-field order on `createdAt`.
   Stream<List<Map<String, dynamic>>> watchOrgArticles(String orgId) {
     return _db
         .collection('articles')
         .where('orgId', isEqualTo: orgId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((s) => s.docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList());
+        .map((s) {
+      final list = s.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      list.sort((a, b) {
+        final ta = a['createdAt'] as Timestamp?;
+        final tb = b['createdAt'] as Timestamp?;
+        if (ta == null && tb == null) return 0;
+        if (ta == null) return 1;
+        if (tb == null) return -1;
+        return tb.compareTo(ta);
+      });
+      return list;
+    });
   }
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -76,144 +71,142 @@ class ArticleService {
     return {'id': doc.id, ...doc.data()!};
   }
 
-  // ── Create ────────────────────────────────────────────────────────────────
+  // ── Create / publish ────────────────────────────────────────────────────────
 
+  /// Creates a new article. [publish] decides whether it goes live immediately
+  /// or is parked as a draft.
   Future<String> createArticle({
     required String heading,
-    required String topic,
-    required List<Map<String, dynamic>> body,
+    required String category,
+    required String body,
     XFile? coverPhoto,
     String? coverPhotoUrl,
     String? orgId,
     String? createdBy,
-    String status = 'published',
+    bool publish = true,
   }) async {
+    final docRef = _db.collection('articles').doc();
+
     String? finalCoverUrl = coverPhotoUrl;
     if (coverPhoto != null) {
-      final path = orgId != null
-          ? 'organizations/$orgId/articles/${DateTime.now().millisecondsSinceEpoch}_cover.jpg'
-          : 'articles/covers/${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
-      final ref = _storage.ref().child(path);
-      await ref.putFile(File(coverPhoto.path));
-      finalCoverUrl = await ref.getDownloadURL();
+      finalCoverUrl = await _uploadCover(docRef.id, orgId, coverPhoto);
     }
 
+    final org = await _orgIdentity(orgId);
     final now = FieldValue.serverTimestamp();
-    final org = orgId != null
-        ? await _db.collection('organizations').doc(orgId).get()
-        : null;
-    final orgName = (org?.data()?['org_name'] ?? org?.data()?['name']) as String?;
-    final orgLogoUrl = (org?.data()?['logoUrl'] ?? org?.data()?['profilePhoto']) as String?;
 
-    final doc = await _db.collection('articles').add({
+    await docRef.set({
       'heading': heading,
       'title': heading,
-      'topic': topic,
-      'category': topic,
+      'topic': category,
+      'category': category,
       'coverPhotoUrl': finalCoverUrl,
       'coverImageUrl': finalCoverUrl,
       'body': body,
       'orgId': orgId,
-      'orgName': orgName,
-      'orgLogoUrl': orgLogoUrl,
-      'authorName': orgName ?? createdBy ?? '',
+      'orgName': org.name,
+      'authorName': org.name ?? createdBy ?? 'Organisation',
+      'orgLogoUrl': org.logo,
+      'authorAvatarUrl': org.logo,
       'createdBy': createdBy,
-      'status': status,
+      'status': publish ? 'published' : 'draft',
+      'isPublished': publish,
+      'readTimeMinutes': _readMinutes(body),
       'createdAt': now,
-      'publishedAt': status == 'published' ? now : null,
+      'publishedAt': publish ? now : null,
       'updatedAt': now,
     });
 
-    return doc.id;
-  }
-
-  /// Saves an article as a draft without publishing.
-  Future<String> saveDraft({
-    required String heading,
-    required String topic,
-    required List<Map<String, dynamic>> body,
-    XFile? coverPhoto,
-    String? orgId,
-    String? createdBy,
-  }) async {
-    String? coverUrl;
-    if (coverPhoto != null) {
-      final path = orgId != null
-          ? 'organizations/$orgId/articles/drafts/${DateTime.now().millisecondsSinceEpoch}_cover.jpg'
-          : 'articles/drafts/${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
-      final ref = _storage.ref().child(path);
-      await ref.putFile(File(coverPhoto.path));
-      coverUrl = await ref.getDownloadURL();
-    }
-
-    final doc = await _db.collection('articles').add({
-      'heading': heading,
-      'title': heading,
-      'topic': topic,
-      'category': topic,
-      'coverPhotoUrl': coverUrl,
-      'coverImageUrl': coverUrl,
-      'body': body,
-      'orgId': orgId,
-      'createdBy': createdBy,
-      'status': 'draft',
-      'createdAt': FieldValue.serverTimestamp(),
-      'publishedAt': null,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    return doc.id;
+    return docRef.id;
   }
 
   // ── Update ────────────────────────────────────────────────────────────────
 
+  /// Updates an existing article. Pass [publish] to flip live/draft state.
   Future<void> updateArticle({
     required String articleId,
-    String? heading,
-    String? topic,
-    List<Map<String, dynamic>>? body,
+    required String heading,
+    required String category,
+    required String body,
     XFile? coverPhoto,
     String? coverPhotoUrl,
-    String? status,
+    String? orgId,
+    bool? publish,
   }) async {
     String? finalCoverUrl = coverPhotoUrl;
     if (coverPhoto != null) {
-      final doc = await _db.collection('articles').doc(articleId).get();
-      final orgId = doc.data()?['orgId'] as String?;
-      final path = orgId != null
-          ? 'organizations/$orgId/articles/${DateTime.now().millisecondsSinceEpoch}_cover.jpg'
-          : 'articles/covers/${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
-      final ref = _storage.ref().child(path);
-      await ref.putFile(File(coverPhoto.path));
-      finalCoverUrl = await ref.getDownloadURL();
+      finalCoverUrl = await _uploadCover(articleId, orgId, coverPhoto);
     }
 
     final now = FieldValue.serverTimestamp();
-    await _db.collection('articles').doc(articleId).update({
-      if (heading != null) ...{
-        'heading': heading,
-        'title': heading,
-      },
-      if (topic != null) ...{
-        'topic': topic,
-        'category': topic,
-      },
-      if (body != null) 'body': body,
-      if (coverPhotoUrl != null) ...{
-        'coverPhotoUrl': coverPhotoUrl,
-        'coverImageUrl': coverPhotoUrl,
-      },
-      if (status != null) ...{
-        'status': status,
-        'publishedAt': status == 'published' ? now : null,
-      },
+    final doc = _db.collection('articles').doc(articleId);
+
+    final data = <String, dynamic>{
+      'heading': heading,
+      'title': heading,
+      'topic': category,
+      'category': category,
+      'body': body,
+      'readTimeMinutes': _readMinutes(body),
       'updatedAt': now,
-    });
+      if (finalCoverUrl != null) ...{
+        'coverPhotoUrl': finalCoverUrl,
+        'coverImageUrl': finalCoverUrl,
+      },
+    };
+
+    if (publish != null) {
+      data['status'] = publish ? 'published' : 'draft';
+      data['isPublished'] = publish;
+      // Stamp publishedAt the first time it goes live; clear when unpublished.
+      final snap = await doc.get();
+      final already = snap.data()?['publishedAt'];
+      if (publish) {
+        data['publishedAt'] = already ?? now;
+      } else {
+        data['publishedAt'] = null;
+      }
+    }
+
+    await doc.update(data);
   }
 
-  // ── Delete ────────────────────────────────────────────────────────────────
+  // ── Delete ──────────────────────────────────────────────────────────────────
 
   Future<void> deleteArticle(String articleId) {
     return _db.collection('articles').doc(articleId).delete();
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  Future<String> _uploadCover(
+      String articleId, String? orgId, XFile coverPhoto) async {
+    final path = orgId != null
+        ? 'organizations/$orgId/articles/${articleId}_cover.jpg'
+        : 'articles/covers/${articleId}_cover.jpg';
+    final ref = _storage.ref().child(path);
+    await ref.putFile(File(coverPhoto.path));
+    return ref.getDownloadURL();
+  }
+
+  Future<({String? name, String? logo})> _orgIdentity(String? orgId) async {
+    if (orgId == null) return (name: null, logo: null);
+    try {
+      final org = await _db.collection('organizations').doc(orgId).get();
+      final d = org.data();
+      final name = (d?['org_name'] ?? d?['name']) as String?;
+      final logo = (d?['logoUrl'] ?? d?['profilePhoto']) as String?;
+      return (name: name, logo: logo);
+    } catch (_) {
+      return (name: null, logo: null);
+    }
+  }
+
+  /// ~200 words per minute, floor of 1.
+  int _readMinutes(String body) {
+    final words =
+        body.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    final mins = (words / 200).ceil();
+    return mins < 1 ? 1 : mins;
   }
 }

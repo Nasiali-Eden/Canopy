@@ -11,6 +11,7 @@ import '../../../Shared/theme/app_theme.dart';
 import '../../../Shared/Activities/create_activity.dart';
 import '../../../Shared/Activities/create_article.dart';
 import '../../../Community/Contributions/log_contribution.dart';
+import '../Articles/org_articles.dart';
 import '../Programmes/programme_editor.dart';
 
 import 'edit_org_details_screen.dart';
@@ -347,6 +348,13 @@ class _DashboardContentState extends State<_DashboardContent>
           orgId: _orgId,
           firestore: widget.firestore,
           onViewReport: () => Navigator.of(context).pushNamed('/impactReport'),
+          onViewArticles: _orgId == null
+              ? null
+              : () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => OrgArticlesScreen(orgId: _orgId!),
+                    ),
+                  ),
         ),
         const SizedBox(height: 20),
         DashActivities(

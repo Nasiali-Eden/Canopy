@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../Culture/culture_home.dart';
@@ -103,10 +104,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             return Scaffold(
               backgroundColor: Colors.white,
+              // Flat white bar that blends into the page (no elevation/divider)
+              // so it flows straight into the profile header below.
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                surfaceTintColor: Colors.transparent,
+                systemOverlayStyle: SystemUiOverlayStyle.dark,
+                toolbarHeight: 62,
+                centerTitle: true,
+                title: const Text(
+                  'Profile',
+                  style: TextStyle(
+                    color: AppTheme.darkGreen,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
+                ),
+                actions: [
+                  IconButton(
+                    tooltip: 'Settings',
+                    onPressed: () => Navigator.pushNamed(context, '/settings'),
+                    icon: Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: AppTheme.lightGreen.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.settings_outlined,
+                          color: AppTheme.darkGreen, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
               body: SingleChildScrollView(
                 child: Column(
                   children: [
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 8),
                     _buildHeader(context, profile),
                     const SizedBox(height: 24),
                     // ── Role Context Switcher (only for org rep) ────

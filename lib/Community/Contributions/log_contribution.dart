@@ -1,12 +1,90 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart';
-import 'dart:io';
 
 import '../../Models/user.dart';
 import '../../Services/Contributions/contribution_service.dart';
 import '../../Shared/theme/app_theme.dart';
+
+/// Maximum number of photos a single entry can carry.
+const int _kMaxPhotos = 4;
+
+/// Project tracking modes shown as selectable cards.
+enum TrackingType {
+  oneTime(
+    'oneTime',
+    'One-time event',
+    Icons.bolt_outlined,
+    'A single activity — a one-off cleanup, donation drive or repair. '
+        'Logged once, with no monthly follow-ups.',
+  ),
+  transformation(
+    'transformation',
+    'Transformation activity',
+    Icons.timeline_outlined,
+    'An ongoing project you\'ll trace month by month. We\'ll remind you about '
+        'a month from now to add Month 1 photos, then each month after, so the '
+        'change over time is visible.',
+  );
+
+  const TrackingType(this.id, this.label, this.icon, this.description);
+
+  final String id;
+  final String label;
+  final IconData icon;
+  final String description;
+}
+
+/// A single optional social link the user can attach to an entry.
+class _SocialPlatform {
+  final String key;
+  final String label;
+  final String hint;
+  final IconData icon;
+  final Color color;
+
+  const _SocialPlatform({
+    required this.key,
+    required this.label,
+    required this.hint,
+    required this.icon,
+    required this.color,
+  });
+}
+
+const List<_SocialPlatform> _kSocialPlatforms = [
+  _SocialPlatform(
+    key: 'linkedin',
+    label: 'LinkedIn',
+    hint: 'linkedin.com/in/...',
+    icon: Icons.business_center_outlined,
+    color: Color(0xFF0A66C2),
+  ),
+  _SocialPlatform(
+    key: 'facebook',
+    label: 'Facebook',
+    hint: 'facebook.com/...',
+    icon: Icons.facebook,
+    color: Color(0xFF1877F2),
+  ),
+  _SocialPlatform(
+    key: 'instagram',
+    label: 'Instagram',
+    hint: 'instagram.com/...',
+    icon: Icons.camera_alt_outlined,
+    color: Color(0xFFE4405F),
+  ),
+  _SocialPlatform(
+    key: 'tiktok',
+    label: 'TikTok',
+    hint: 'tiktok.com/@...',
+    icon: Icons.music_note,
+    color: Color(0xFF010101),
+  ),
+];
 
 class LogContributionScreen extends StatefulWidget {
   const LogContributionScreen({super.key});
@@ -18,131 +96,116 @@ class LogContributionScreen extends StatefulWidget {
 class _LogContributionScreenState extends State<LogContributionScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // New fields
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   String _workType = 'Cleanup';
+  TrackingType _trackingType = TrackingType.oneTime;
 
-  // Old fields
-  String _type = 'Time';
-  final _hoursController = TextEditingController();
-  final _effortController = TextEditingController();
-  final _materialsController = TextEditingController();
-  final _notesController = TextEditingController();
-  final _locationController = TextEditingController();
+  // Social link controllers, keyed by platform.
+  final Map<String, TextEditingController> _socialControllers = {
+    for (final p in _kSocialPlatforms) p.key: TextEditingController(),
+  };
+
+  // Points are estimated from the work type bonus (time-based contribution).
+  static const String _type = 'Time';
 
   final _picker = ImagePicker();
-  final List<XFile> _beforePhotos = [];
-  final List<XFile> _afterPhotos = [];
+  final List<XFile> _photos = [];
 
   bool _saving = false;
   bool _verifyingLocation = false;
   bool _locationVerified = false;
   Position? _currentPosition;
+  final _locationController = TextEditingController();
 
   final double _requiredLatitude = -1.286389;
   final double _requiredLongitude = 36.817223;
   final double _maxDistanceInMeters = 500;
 
-  // Work type configurations
+  // Work type configurations.
   static const List<Map<String, dynamic>> _workTypes = [
     {
       'name': 'Cleanup',
       'icon': Icons.cleaning_services,
       'description': 'Community cleanup initiatives',
-      'maxBeforeImages': 4,
-      'maxAfterImages': 4,
     },
     {
       'name': 'Tree Planting',
       'icon': Icons.park,
       'description': 'Planting and nurturing trees',
-      'maxBeforeImages': 3,
-      'maxAfterImages': 0,
     },
     {
       'name': 'School Upgrading',
       'icon': Icons.school,
       'description': 'Improving school facilities',
-      'maxBeforeImages': 4,
-      'maxAfterImages': 4,
     },
     {
       'name': 'Waste Management',
       'icon': Icons.recycling,
       'description': 'Organizing waste and recycling',
-      'maxBeforeImages': 4,
-      'maxAfterImages': 4,
     },
     {
       'name': 'Water & Sanitation',
       'icon': Icons.water_drop,
       'description': 'Improving water and sanitation',
-      'maxBeforeImages': 4,
-      'maxAfterImages': 4,
     },
     {
       'name': 'Infrastructure',
       'icon': Icons.construction,
       'description': 'Community infrastructure projects',
-      'maxBeforeImages': 4,
-      'maxAfterImages': 4,
     },
   ];
 
   @override
   void dispose() {
     _titleController.dispose();
-    _hoursController.dispose();
-    _effortController.dispose();
-    _materialsController.dispose();
-    _notesController.dispose();
+    _descriptionController.dispose();
     _locationController.dispose();
+    for (final c in _socialControllers.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  int _getMaxBeforeImages() {
-    final config = _workTypes.firstWhere(
-      (w) => w['name'] == _workType,
-      orElse: () => _workTypes[0],
-    );
-    return config['maxBeforeImages'] as int;
-  }
+  // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  int _getMaxAfterImages() {
-    final config = _workTypes.firstWhere(
-      (w) => w['name'] == _workType,
-      orElse: () => _workTypes[0],
-    );
-    return config['maxAfterImages'] as int;
-  }
-
-  bool _isTreePlanting() => _workType == 'Tree Planting';
-
-  List<String> _parseMaterials() {
-    final text = _materialsController.text;
-    if (text.trim().isEmpty) return const [];
-    return text
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
-  double? _parseHours() {
-    final v = _hoursController.text.trim();
-    if (v.isEmpty) return null;
-    return double.tryParse(v);
-  }
+  Map<String, dynamic> get _workTypeConfig => _workTypes.firstWhere(
+        (w) => w['name'] == _workType,
+        orElse: () => _workTypes[0],
+      );
 
   int _estimate() {
     return ContributionService().estimateImpactPoints(
       type: _type,
       workType: _workType,
-      hours: _parseHours(),
-      effort: _effortController.text,
-      materials: _parseMaterials(),
     );
   }
+
+  void _showSnack(String message, Color color, {IconData? icon}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(message,
+                  style: const TextStyle(fontWeight: FontWeight.w500)),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // ── Location verification ────────────────────────────────────────────────────
 
   Future<void> _verifyLocation() async {
     setState(() => _verifyingLocation = true);
@@ -178,90 +241,94 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
           _locationController.text =
               'Verified (${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)})';
         });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.white, size: 20),
-                  SizedBox(width: 10),
-                  Text('Location verified successfully!'),
-                ],
-              ),
-              backgroundColor: Colors.green.shade600,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        }
+        _showSnack('Location verified successfully!', Colors.green.shade600,
+            icon: Icons.check_circle);
       } else {
         throw Exception(
-            'You are ${distance.toStringAsFixed(0)}m away. Please be within ${_maxDistanceInMeters}m of the location.');
+            'You are ${distance.toStringAsFixed(0)}m away. Please be within ${_maxDistanceInMeters.toStringAsFixed(0)}m of the location.');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Location verification failed: $e'),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        );
-      }
+      _showSnack('Location verification failed: $e', Colors.red.shade600,
+          icon: Icons.error_outline);
     } finally {
-      if (mounted) {
-        setState(() => _verifyingLocation = false);
-      }
+      if (mounted) setState(() => _verifyingLocation = false);
     }
   }
 
-  Future<void> _pickPhotos(bool isBefore) async {
-    final targetList = isBefore ? _beforePhotos : _afterPhotos;
-    final maxImages = isBefore ? _getMaxBeforeImages() : _getMaxAfterImages();
-    final remaining = maxImages - targetList.length;
+  // ── Photos ───────────────────────────────────────────────────────────────────
 
-    if (remaining <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'You can only add $maxImages ${isBefore ? 'before' : 'after'} photos for $_workType'),
-          backgroundColor: Colors.orange.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+  Future<void> _pickPhoto() async {
+    if (_photos.length >= _kMaxPhotos) {
+      _showSnack('You can add up to $_kMaxPhotos photos.',
+          Colors.orange.shade700,
+          icon: Icons.info_outline);
       return;
     }
 
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.lightGreen.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const _IconPill(
+                  icon: Icons.photo_camera_outlined, color: AppTheme.primary),
+              title: const Text('Take a photo',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const _IconPill(
+                  icon: Icons.photo_library_outlined, color: AppTheme.tertiary),
+              title: const Text('Choose from gallery',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
     final file = await _picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       imageQuality: 85,
       preferredCameraDevice: CameraDevice.rear,
     );
 
     if (file != null && mounted) {
-      setState(() {
-        targetList.add(file);
-      });
+      setState(() => _photos.add(file));
     }
   }
 
-  void _removePhoto(bool isBefore, int index) {
-    setState(() {
-      if (isBefore) {
-        _beforePhotos.removeAt(index);
-      } else {
-        _afterPhotos.removeAt(index);
-      }
-    });
+  void _removePhoto(int index) => setState(() => _photos.removeAt(index));
+
+  // ── Submit ───────────────────────────────────────────────────────────────────
+
+  Map<String, String> _collectSocialLinks() {
+    final links = <String, String>{};
+    for (final p in _kSocialPlatforms) {
+      final v = _socialControllers[p.key]!.text.trim();
+      if (v.isNotEmpty) links[p.key] = v;
+    }
+    return links;
   }
 
   Future<void> _submit() async {
@@ -274,47 +341,14 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     if (!_locationVerified) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please verify your location first'),
-          backgroundColor: Colors.orange.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      _showSnack('Please verify your location first.', Colors.orange.shade700,
+          icon: Icons.location_off_outlined);
       return;
     }
 
-    final maxBefore = _getMaxBeforeImages();
-    final maxAfter = _getMaxAfterImages();
-
-    if (_beforePhotos.length < maxBefore) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please add $maxBefore before photos'),
-          backgroundColor: Colors.orange.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-      return;
-    }
-
-    if (!_isTreePlanting() && _afterPhotos.length < maxAfter) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please add $maxAfter after photos'),
-          backgroundColor: Colors.orange.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+    if (_photos.isEmpty) {
+      _showSnack('Add at least one photo.', Colors.orange.shade700,
+          icon: Icons.photo_outlined);
       return;
     }
 
@@ -326,70 +360,66 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
         title: _titleController.text.trim(),
         workType: _workType,
         type: _type,
-        hours: _type == 'Time' ? _parseHours() : null,
-        effort: _type == 'Effort' ? _effortController.text.trim() : null,
-        materials: _type == 'Materials' ? _parseMaterials() : const [],
-        notes: _notesController.text.trim().isEmpty
+        description: _descriptionController.text.trim().isEmpty
             ? null
-            : _notesController.text.trim(),
-        beforePhotos: _beforePhotos,
-        afterPhotos: _afterPhotos,
+            : _descriptionController.text.trim(),
+        photos: _photos,
+        trackingType: _trackingType.id,
+        socialLinks: _collectSocialLinks(),
         location: _locationController.text.trim(),
         latitude: _currentPosition?.latitude,
         longitude: _currentPosition?.longitude,
       );
 
       if (!mounted) return;
-
       Navigator.pushReplacementNamed(
         context,
         '/contributions/confirm',
         arguments: {'points': points},
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red.shade600,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      _showSnack('Error: $e', Colors.red.shade600, icon: Icons.error_outline);
     } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
+      if (mounted) setState(() => _saving = false);
     }
   }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final points = _estimate();
-    final maxBefore = _getMaxBeforeImages();
-    final maxAfter = _getMaxAfterImages();
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppTheme.darkGreen),
+          icon: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppTheme.tertiary.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.arrow_back_ios_new,
+                size: 15, color: AppTheme.darkGreen),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(
-          'Log Contribution',
-          style: TextStyle(
-            color: AppTheme.darkGreen,
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-          ),
-        ),
         centerTitle: true,
+        title: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Log Contribution',
+              style: TextStyle(
+                  color: AppTheme.darkGreen,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17)),
+          Text('Record the work you did',
+              style: TextStyle(
+                  color: AppTheme.darkGreen.withOpacity(0.5), fontSize: 11)),
+        ]),
       ),
       body: SafeArea(
         child: Form(
@@ -399,567 +429,144 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
             children: [
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Location Verification Section
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: _locationVerified
-                              ? Colors.green.shade50
-                              : Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _locationVerified
-                                ? Colors.green.shade300
-                                : Colors.orange.shade300,
-                            width: 2,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: _locationVerified
-                                        ? Colors.green.shade600
-                                        : Colors.orange.shade600,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    _locationVerified
-                                        ? Icons.check_circle
-                                        : Icons.location_on,
-                                    color: Colors.white,
-                                    size: 26,
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Location Verification',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppTheme.darkGreen,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _locationVerified
-                                            ? 'Location verified ✓'
-                                            : 'Required to log contribution',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: AppTheme.darkGreen
-                                              .withOpacity(0.6),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (!_locationVerified) ...[
-                              const SizedBox(height: 16),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 50,
-                                child: ElevatedButton.icon(
-                                  onPressed: _verifyingLocation
-                                      ? null
-                                      : _verifyLocation,
-                                  icon: _verifyingLocation
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2.5,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    Colors.white),
-                                          ),
-                                        )
-                                      : const Icon(Icons.my_location, size: 20),
-                                  label: Text(
-                                    _verifyingLocation
-                                        ? 'Verifying...'
-                                        : 'Verify Location',
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppTheme.primary,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 0,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                      // Location verification
+                      _LocationCard(
+                        verified: _locationVerified,
+                        verifying: _verifyingLocation,
+                        onVerify: _verifyLocation,
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
 
-                      // Title Field
-                      _buildSectionLabel(
-                        'Contribution Title',
-                        Icons.title,
-                        AppTheme.primary,
-                        badge: 'Max 50 chars',
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
+                      // Title
+                      const _SectionLabel('Title', AppTheme.primary),
+                      const SizedBox(height: 10),
+                      _LabeledField(
                         controller: _titleController,
+                        label: 'Contribution title',
+                        icon: Icons.title,
+                        accent: AppTheme.primary,
                         maxLength: 50,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'e.g., Kibera Street Cleanup',
-                          hintStyle: TextStyle(
-                            color: AppTheme.darkGreen.withOpacity(0.4),
-                            fontWeight: FontWeight.w500,
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          counterText: '${_titleController.text.length}/50',
-                          counterStyle: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.primary.withOpacity(0.7),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 16,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: AppTheme.lightGreen.withOpacity(0.3),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: AppTheme.lightGreen.withOpacity(0.3),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                BorderSide(color: AppTheme.primary, width: 2.5),
-                          ),
-                        ),
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Please enter a title';
-                          }
-                          return null;
-                        },
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 22),
 
-                      // Work Type
-                      _buildSectionLabel(
-                        'Work Type',
-                        Icons.category,
-                        AppTheme.lightGreen,
-                        badge: '6 categories',
+                      // Description
+                      const _SectionLabel('Description', AppTheme.accent),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Shown on the community feed. Tell people what changed.',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.darkGreen.withOpacity(0.5)),
                       ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: _workType,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 16,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: AppTheme.lightGreen.withOpacity(0.3),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: AppTheme.lightGreen.withOpacity(0.3),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                BorderSide(color: AppTheme.primary, width: 2.5),
-                          ),
-                        ),
-                        items: _workTypes.map((workType) {
-                          return DropdownMenuItem(
-                            value: workType['name'] as String,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  workType['icon'] as IconData,
-                                  size: 22,
-                                  color: AppTheme.primary,
-                                ),
-                                const SizedBox(width: 14),
-                                Text(
-                                  workType['name'] as String,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (v) => setState(() {
-                          _workType = v ?? 'Cleanup';
-                          _beforePhotos.clear();
-                          _afterPhotos.clear();
-                        }),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Work Type Info Card
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppTheme.lightGreen.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: AppTheme.lightGreen.withOpacity(0.3),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                _workTypes.firstWhere(
-                                  (w) => w['name'] == _workType,
-                                )['icon'] as IconData,
-                                color: AppTheme.primary,
-                                size: 22,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Text(
-                                _workTypes.firstWhere(
-                                  (w) => w['name'] == _workType,
-                                )['description'] as String,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppTheme.darkGreen,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      // Tree Planting Tip
-                      if (_isTreePlanting())
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 28),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppTheme.lightGreen.withOpacity(0.2),
-                                  AppTheme.primary.withOpacity(0.15),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: AppTheme.lightGreen.withOpacity(0.5),
-                                width: 2,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.lightGreen,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(
-                                    Icons.tips_and_updates,
-                                    color: Colors.white,
-                                    size: 24,
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Tree Planting Tip',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: AppTheme.darkGreen,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Add 3 before images today. Update with after images monthly to track growth.',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color:
-                                              AppTheme.darkGreen.withOpacity(0.8),
-                                          fontWeight: FontWeight.w500,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                      // Before Photos
-                      _buildSectionLabel(
-                        'Before Photos',
-                        Icons.camera_alt,
-                        AppTheme.primary,
-                        badge: '$maxBefore required',
-                      ),
-                      const SizedBox(height: 14),
-                      _PhotoGrid(
-                        photos: _beforePhotos,
-                        maxPhotos: maxBefore,
-                        onAdd: () => _pickPhotos(true),
-                        onRemove: (i) => _removePhoto(true, i),
-                        isBefore: true,
-                      ),
-                      const SizedBox(height: 28),
-
-                      // After Photos
-                      if (!_isTreePlanting() || _afterPhotos.isNotEmpty) ...[
-                        _buildSectionLabel(
-                          'After Photos',
-                          Icons.check_circle_outline,
-                          AppTheme.lightGreen,
-                          badge: _isTreePlanting()
-                              ? 'Optional - monthly'
-                              : '$maxAfter required',
-                          badgeColor: _isTreePlanting()
-                              ? Colors.orange.shade700
-                              : AppTheme.tertiary,
-                        ),
-                        const SizedBox(height: 14),
-                        _PhotoGrid(
-                          photos: _afterPhotos,
-                          maxPhotos: maxAfter,
-                          onAdd: () => _pickPhotos(false),
-                          onRemove: (i) => _removePhoto(false, i),
-                          isBefore: false,
-                        ),
-                        const SizedBox(height: 28),
-                      ],
-
-                      // Notes
-                      _buildSectionLabel(
-                        'Notes',
-                        Icons.edit_note,
-                        AppTheme.darkGreen,
-                        badge: 'Optional',
-                        badgeColor: Colors.grey.shade600,
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _notesController,
+                      const SizedBox(height: 10),
+                      _LabeledField(
+                        controller: _descriptionController,
+                        label: 'Describe the activity...',
+                        icon: Icons.notes_outlined,
+                        accent: AppTheme.accent,
                         maxLines: 4,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Add any additional details...',
-                          hintStyle: TextStyle(
-                            color: AppTheme.darkGreen.withOpacity(0.4),
-                          ),
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.all(18),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: AppTheme.lightGreen.withOpacity(0.3),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide(
-                              color: AppTheme.lightGreen.withOpacity(0.3),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                BorderSide(color: AppTheme.primary, width: 2.5),
-                          ),
-                        ),
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 22),
 
-                      // Impact Estimate
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [AppTheme.primary, AppTheme.lightGreen],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.primary.withOpacity(0.3),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.25),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(
-                                Icons.eco,
-                                color: Colors.white,
-                                size: 36,
-                              ),
-                            ),
-                            const SizedBox(width: 18),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Estimated Impact',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white.withOpacity(0.95),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '$points Points',
-                                    style: const TextStyle(
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                      letterSpacing: -0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+                      // Work type
+                      const _SectionLabel('Work Type', AppTheme.lightGreen),
+                      const SizedBox(height: 10),
+                      _buildWorkTypeDropdown(),
+                      const SizedBox(height: 22),
+
+                      // Tracking type
+                      const _SectionLabel('Activity Type', AppTheme.tertiary),
+                      const SizedBox(height: 6),
+                      Text(
+                        'How should we follow this project over time?',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.darkGreen.withOpacity(0.5)),
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 12),
+                      ...TrackingType.values.map((t) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _TrackingCard(
+                              type: t,
+                              selected: _trackingType == t,
+                              onTap: () =>
+                                  setState(() => _trackingType = t),
+                            ),
+                          )),
+                      const SizedBox(height: 12),
+
+                      // Photos
+                      _SectionLabel(
+                        'Photos',
+                        AppTheme.primary,
+                        trailing: '${_photos.length}/$_kMaxPhotos',
+                      ),
+                      const SizedBox(height: 12),
+                      _PhotoGrid(
+                        photos: _photos,
+                        maxPhotos: _kMaxPhotos,
+                        onAdd: _pickPhoto,
+                        onRemove: _removePhoto,
+                      ),
+                      const SizedBox(height: 22),
+
+                      // Social links
+                      const _SectionLabel('Links', AppTheme.darkGreen,
+                          trailing: 'Optional'),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Attach social links so people can follow the project.',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.darkGreen.withOpacity(0.5)),
+                      ),
+                      const SizedBox(height: 12),
+                      ..._kSocialPlatforms.map((p) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _LabeledField(
+                              controller: _socialControllers[p.key]!,
+                              label: '${p.label} (optional)',
+                              hint: p.hint,
+                              icon: p.icon,
+                              accent: p.color,
+                              keyboardType: TextInputType.url,
+                            ),
+                          )),
+                      const SizedBox(height: 10),
+
+                      // Impact estimate
+                      _ImpactCard(points: points),
                     ],
                   ),
                 ),
               ),
 
-              // Submit Button
+              // Submit
               Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withOpacity(0.06),
                       blurRadius: 16,
                       offset: const Offset(0, -4),
                     ),
                   ],
                 ),
                 child: SafeArea(
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _saving ? null : _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primary,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            AppTheme.primary.withOpacity(0.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: _saving
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 3,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Text(
-                              'Submit Contribution',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                    ),
+                  top: false,
+                  child: _GradientButton(
+                    label: 'Submit Contribution',
+                    icon: Icons.check_circle_outline,
+                    isLoading: _saving,
+                    onPressed: _saving ? null : _submit,
                   ),
                 ),
               ),
@@ -970,63 +577,79 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
     );
   }
 
-  Widget _buildSectionLabel(
-    String title,
-    IconData icon,
-    Color color, {
-    String? badge,
-    Color? badgeColor,
-  }) {
+  Widget _buildWorkTypeDropdown() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border:
+            Border.all(color: AppTheme.lightGreen.withOpacity(0.4), width: 1.5),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          _IconPill(
+              icon: _workTypeConfig['icon'] as IconData,
+              color: AppTheme.lightGreen),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _workType,
+                isExpanded: true,
+                borderRadius: BorderRadius.circular(12),
+                icon: Icon(Icons.keyboard_arrow_down_rounded,
+                    color: AppTheme.lightGreen.withOpacity(0.8)),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.darkGreen,
+                ),
+                items: _workTypes.map((w) {
+                  return DropdownMenuItem(
+                    value: w['name'] as String,
+                    child: Text(w['name'] as String),
+                  );
+                }).toList(),
+                onChanged: (v) => setState(() => _workType = v ?? 'Cleanup'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Reusable widgets (registration-style)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  final Color color;
+  final String? trailing;
+
+  const _SectionLabel(this.text, this.color, {this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 10,
-            vertical: 6,
-          ),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: color,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (badge != null) ...[
-          const SizedBox(width: 10),
+        Text(text,
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: (badgeColor ?? AppTheme.tertiary).withOpacity(0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
             ),
-            child: Text(
-              badge,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: badgeColor ?? AppTheme.tertiary,
-              ),
-            ),
+            child: Text(trailing!,
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.w700, color: color)),
           ),
         ],
       ],
@@ -1034,48 +657,407 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
   }
 }
 
+class _IconPill extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+
+  const _IconPill({required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(8)),
+      child: Icon(icon, size: 16, color: color),
+    );
+  }
+}
+
+class _LabeledField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final IconData icon;
+  final Color accent;
+  final String? hint;
+  final int maxLines;
+  final int? maxLength;
+  final TextInputType? keyboardType;
+  final String? Function(String?)? validator;
+
+  const _LabeledField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.accent,
+    this.hint,
+    this.maxLines = 1,
+    this.maxLength,
+    this.keyboardType,
+    this.validator,
+  });
+
+  OutlineInputBorder _border(Color color, {double width = 1.5}) =>
+      OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: color, width: width));
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      maxLength: maxLength,
+      style: const TextStyle(
+          color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
+      decoration: InputDecoration(
+        labelText: hint == null ? label : null,
+        hintText: hint,
+        labelStyle: TextStyle(color: accent.withOpacity(0.75), fontSize: 13),
+        hintStyle: TextStyle(
+            color: AppTheme.darkGreen.withOpacity(0.35), fontSize: 13),
+        filled: true,
+        fillColor: Colors.white,
+        counterText: maxLength == null ? null : '',
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.all(10),
+          child: _IconPill(icon: icon, color: accent),
+        ),
+        prefixIconConstraints:
+            const BoxConstraints(minWidth: 52, minHeight: 52),
+        border: _border(accent.withOpacity(0.2)),
+        enabledBorder: _border(accent.withOpacity(0.22)),
+        focusedBorder: _border(accent, width: 2),
+        errorBorder: _border(Colors.red.shade300),
+        focusedErrorBorder: _border(Colors.red.shade400, width: 2),
+      ),
+      validator: validator,
+    );
+  }
+}
+
+class _TrackingCard extends StatelessWidget {
+  final TrackingType type;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TrackingCard({
+    required this.type,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = AppTheme.tertiary;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: selected ? accent.withOpacity(0.07) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: selected ? accent : Colors.grey.withOpacity(0.22),
+              width: selected ? 2 : 1),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                      color: accent.withOpacity(0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4))
+                ]
+              : [],
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: selected ? accent : accent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(type.icon,
+                color: selected ? Colors.white : accent, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(type.label,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: selected ? accent : AppTheme.darkGreen)),
+                  const SizedBox(height: 3),
+                  Text(type.description,
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          height: 1.35,
+                          color: AppTheme.darkGreen.withOpacity(0.6))),
+                ]),
+          ),
+          if (selected) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.check_circle_rounded, color: accent, size: 20),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+class _LocationCard extends StatelessWidget {
+  final bool verified;
+  final bool verifying;
+  final VoidCallback onVerify;
+
+  const _LocationCard({
+    required this.verified,
+    required this.verifying,
+    required this.onVerify,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = verified ? AppTheme.primary : AppTheme.tertiary;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: accent.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accent.withOpacity(0.3), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                  verified ? Icons.check_circle : Icons.location_on_outlined,
+                  color: Colors.white,
+                  size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Location Verification',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.darkGreen)),
+                    const SizedBox(height: 2),
+                    Text(
+                      verified
+                          ? 'Location verified ✓'
+                          : 'Required to log a contribution',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.darkGreen.withOpacity(0.55)),
+                    ),
+                  ]),
+            ),
+          ]),
+          if (!verified) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: FilledButton.icon(
+                onPressed: verifying ? null : onVerify,
+                style: FilledButton.styleFrom(
+                  backgroundColor: accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: verifying
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: Colors.white))
+                    : const Icon(Icons.my_location, size: 18),
+                label: Text(verifying ? 'Verifying...' : 'Verify Location',
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ImpactCard extends StatelessWidget {
+  final int points;
+  const _ImpactCard({required this.points});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppTheme.primary, AppTheme.lightGreen],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: AppTheme.primary.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Row(children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.eco, color: Colors.white, size: 32),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Estimated Impact',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withOpacity(0.95))),
+            const SizedBox(height: 2),
+            Text('$points Points',
+                style: const TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.5)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _GradientButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isLoading;
+  final VoidCallback? onPressed;
+
+  const _GradientButton({
+    required this.label,
+    required this.icon,
+    required this.isLoading,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 54,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+            colors: [AppTheme.darkGreen, AppTheme.primary, AppTheme.tertiary],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight),
+        boxShadow: [
+          BoxShadow(
+              color: AppTheme.primary.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(16),
+          child: Center(
+            child: isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.5, color: Colors.white))
+                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(icon, color: Colors.white, size: 18),
+                    const SizedBox(width: 10),
+                    Text(label,
+                        style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.2)),
+                  ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Photo grid ────────────────────────────────────────────────────────────────
+
 class _PhotoGrid extends StatelessWidget {
   final List<XFile> photos;
   final int maxPhotos;
   final VoidCallback onAdd;
-  final Function(int) onRemove;
-  final bool isBefore;
+  final void Function(int) onRemove;
 
   const _PhotoGrid({
     required this.photos,
     required this.maxPhotos,
     required this.onAdd,
     required this.onRemove,
-    required this.isBefore,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Always use 2 columns for cleaner, taller tiles
+    // Show all picked photos plus a single trailing "add" tile while there's room.
+    final showAdd = photos.length < maxPhotos;
+    final itemCount = photos.length + (showAdd ? 1 : 0);
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, // Always 2 columns for larger tiles
-        crossAxisSpacing: 14,
-        mainAxisSpacing: 14,
-        childAspectRatio: 0.85, // Taller tiles (portrait-ish)
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1, // square tiles
       ),
-      itemCount: maxPhotos,
+      itemCount: itemCount,
       itemBuilder: (context, index) {
         if (index < photos.length) {
           return _PhotoTile(
             file: photos[index],
             onRemove: () => onRemove(index),
-            index: index + 1,
-          );
-        } else {
-          return _AddPhotoTile(
-            onTap: onAdd,
-            index: index + 1,
-            isBefore: isBefore,
           );
         }
+        return _AddPhotoTile(onTap: onAdd);
       },
     );
   }
@@ -1084,93 +1066,37 @@ class _PhotoGrid extends StatelessWidget {
 class _PhotoTile extends StatelessWidget {
   final XFile file;
   final VoidCallback onRemove;
-  final int index;
 
-  const _PhotoTile({
-    required this.file,
-    required this.onRemove,
-    required this.index,
-  });
+  const _PhotoTile({required this.file, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
     return Stack(
+      fit: StackFit.expand,
       children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppTheme.primary.withOpacity(0.4),
-              width: 2.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(11),
-            child: Image.file(
-              File(file.path),
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-            ),
-          ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.file(File(file.path), fit: BoxFit.cover),
         ),
         Positioned(
-          top: 8,
-          left: 8,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.primary,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(
-              '$index',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
+          top: 6,
+          right: 6,
           child: GestureDetector(
             onTap: onRemove,
             child: Container(
-              width: 32,
-              height: 32,
+              width: 30,
+              height: 30,
               decoration: BoxDecoration(
                 color: Colors.red.shade600,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2)),
                 ],
               ),
-              child: const Icon(
-                Icons.close,
-                color: Colors.white,
-                size: 18,
-              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 17),
             ),
           ),
         ),
@@ -1181,64 +1107,39 @@ class _PhotoTile extends StatelessWidget {
 
 class _AddPhotoTile extends StatelessWidget {
   final VoidCallback onTap;
-  final int index;
-  final bool isBefore;
-
-  const _AddPhotoTile({
-    required this.onTap,
-    required this.index,
-    required this.isBefore,
-  });
+  const _AddPhotoTile({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
           color: AppTheme.lightGreen.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: AppTheme.lightGreen.withOpacity(0.4),
-            width: 2.5,
-            style: BorderStyle.solid,
-          ),
+              color: AppTheme.lightGreen.withOpacity(0.4), width: 1.5),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.15),
+                color: AppTheme.primary.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.camera_alt,
-                color: AppTheme.primary,
-                size: 28,
-              ),
+              child: const Icon(Icons.add_a_photo_outlined,
+                  color: AppTheme.primary, size: 24),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Photo $index',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.darkGreen.withOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Tap to add',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.darkGreen.withOpacity(0.5),
-              ),
-            ),
+            const SizedBox(height: 10),
+            Text('Add photo',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.darkGreen.withOpacity(0.7))),
           ],
         ),
       ),

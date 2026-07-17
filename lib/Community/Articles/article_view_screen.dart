@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/utils/rich_body.dart';
 
 const _kArticles = 'articles';
 
@@ -40,18 +41,12 @@ class ArticleViewScreen extends StatelessWidget {
     for (final line in lines) {
       if (line.trim().isEmpty) continue;
 
-      if (line.startsWith('## ')) {
-        widgets.add(Padding(
-          padding: const EdgeInsets.only(top: 24, bottom: 8),
-          child: Text(
-            line.substring(3),
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.darkGreen,
-                  fontSize: 18,
-                ),
-          ),
-        ));
+      if (line.startsWith('### ')) {
+        widgets.add(_heading(line.substring(4), 16, const EdgeInsets.only(top: 18, bottom: 6)));
+      } else if (line.startsWith('## ')) {
+        widgets.add(_heading(line.substring(3), 19, const EdgeInsets.only(top: 22, bottom: 8)));
+      } else if (line.startsWith('# ')) {
+        widgets.add(_heading(line.substring(2), 23, const EdgeInsets.only(top: 26, bottom: 10)));
       } else {
         widgets.add(Padding(
           padding: const EdgeInsets.only(bottom: 16),
@@ -71,6 +66,21 @@ class ArticleViewScreen extends StatelessWidget {
     return widgets;
   }
 
+  Widget _heading(String text, double size, EdgeInsets padding) {
+    return Padding(
+      padding: padding,
+      child: Text(
+        text,
+        style: TextStyle(
+          fontWeight: FontWeight.w800,
+          color: AppTheme.darkGreen,
+          fontSize: size,
+          height: 1.25,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -85,8 +95,9 @@ class ArticleViewScreen extends StatelessWidget {
             : articleData;
 
         final title = data['title'] as String? ?? '';
-        final body = data['body'] as String? ?? '';
-        final coverImageUrl = data['coverImageUrl'] as String?;
+        final body = richBodyToMarkdown(data['body']);
+        final coverImageUrl =
+            (data['coverImageUrl'] ?? data['coverPhotoUrl']) as String?;
         final category = data['category'] as String?;
         final authorName = data['authorName'] as String? ?? '';
         final authorAvatarUrl = data['authorAvatarUrl'] as String?;

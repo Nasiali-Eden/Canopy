@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'dart:io';
 
 import '../../Shared/theme/app_theme.dart';
+import '../../Services/Environmental/environment_ops_service.dart';
 import '../Shared/zone_drawing_controller.dart';
 
 // ─── Enums & models ───────────────────────────────────────────────────────────
@@ -679,23 +680,25 @@ class _PlantingWizardState extends State<_PlantingWizard> {
       final lat = _pinLocation?.latitude ?? _gpsPosition?.latitude ?? 0;
       final lng = _pinLocation?.longitude ?? _gpsPosition?.longitude ?? 0;
 
-      await FirebaseFirestore.instance.collection('planting_posts').add({
-        'species': _speciesCtrl.text.trim(),
-        'quantity': int.parse(_quantityCtrl.text),
-        'planted_date': Timestamp.fromDate(_plantedDate),
-        'lat': lat,
-        'lng': lng,
-        'photo_urls': photoUrls,
-        'stage': 'pending',
-        'created_by': uid,
-        'created_at': Timestamp.fromDate(now),
-        'follow_up_30': Timestamp.fromDate(now.add(const Duration(days: 30))),
-        'follow_up_90': Timestamp.fromDate(now.add(const Duration(days: 90))),
-        if (vertices.isNotEmpty)
-          'zone_vertices': vertices
-              .map((v) => {'lat': v.latitude, 'lng': v.longitude})
-              .toList(),
-      });
+      final service = EnvironmentOpsService.instance;
+      final envContext = await service.resolveContext();
+      final orgId = envContext?.orgId;
+      if (orgId == null || orgId.isEmpty) {
+        throw Exception('No organisation is linked to this account yet.');
+      }
+
+      await service.createTreePlanting(
+        orgId: orgId,
+        uid: uid,
+        speciesName: _speciesCtrl.text.trim(),
+        quantity: int.parse(_quantityCtrl.text),
+        plantedDate: _plantedDate,
+        lat: lat,
+        lng: lng,
+        photoUrls: photoUrls,
+        area: envContext?.area ?? 'Unspecified area',
+        zoneVertices: vertices,
+      );
 
       if (mounted) Navigator.pop(context, true);
     } catch (e) {

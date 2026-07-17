@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/utils/rich_body.dart';
 import '../Home/community_home.dart' show timeAgo;
 import 'article_view_screen.dart';
 
@@ -58,22 +59,15 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
     try {
-      // Firestore: articles — published, newest first, paginated
-      Query query;
-      if (_selectedCategory != null) {
-        query = FirebaseFirestore.instance
-            .collection(_kArticles)
-            .where('isPublished', isEqualTo: true)
-            .where('category', isEqualTo: _selectedCategory)
-            .orderBy('publishedAt', descending: true)
-            .limit(_pageSize);
-      } else {
-        query = FirebaseFirestore.instance
-            .collection(_kArticles)
-            .where('isPublished', isEqualTo: true)
-            .orderBy('publishedAt', descending: true)
-            .limit(_pageSize);
-      }
+      // Firestore: articles — newest published first, paginated.
+      // Index-free: ordering by `publishedAt` alone (a single-field index that
+      // always exists) returns only docs that have a publishedAt, i.e. live
+      // articles — drafts carry a null publishedAt and are excluded. Category
+      // is filtered client-side (see `_filtered`).
+      Query query = FirebaseFirestore.instance
+          .collection(_kArticles)
+          .orderBy('publishedAt', descending: true)
+          .limit(_pageSize);
 
       if (_lastDocument != null) {
         query = query.startAfterDocument(_lastDocument!);
@@ -93,22 +87,20 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
   }
 
   void _applyCategory(String? cat) {
-    setState(() {
-      _selectedCategory = cat;
-      _docs.clear();
-      _lastDocument = null;
-      _hasMore = true;
-    });
-    _loadPage();
+    // Category is filtered client-side, so just re-render — no refetch needed.
+    setState(() => _selectedCategory = cat);
   }
 
   List<DocumentSnapshot> get _filtered {
-    if (_searchQuery.isEmpty) return _docs;
     final q = _searchQuery.toLowerCase();
     return _docs.where((d) {
-      final title =
-          ((d.data() as Map<String, dynamic>)['title']?.toString() ?? '')
-              .toLowerCase();
+      final data = d.data() as Map<String, dynamic>;
+      if (_selectedCategory != null &&
+          (data['category'] ?? data['topic']) != _selectedCategory) {
+        return false;
+      }
+      if (q.isEmpty) return true;
+      final title = (data['title']?.toString() ?? '').toLowerCase();
       return title.contains(q);
     }).toList();
   }
@@ -280,8 +272,9 @@ class _ArticleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = data['title'] as String? ?? '';
-    final body = data['body'] as String? ?? '';
-    final coverImageUrl = data['coverImageUrl'] as String?;
+    final body = richBodyToPlainText(data['body']);
+    final coverImageUrl =
+        (data['coverImageUrl'] ?? data['coverPhotoUrl']) as String?;
     final category = data['category'] as String?;
     final authorName = data['authorName'] as String? ?? '';
     final authorAvatarUrl = data['authorAvatarUrl'] as String?;

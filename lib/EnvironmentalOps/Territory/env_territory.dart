@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../Shared/theme/app_theme.dart';
+import '../../Services/Environmental/environment_ops_service.dart';
 import '../Shared/zone_drawing_controller.dart';
 import '../Shared/zone_walk_capture.dart';
 
@@ -169,33 +170,17 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
 
   Future<void> _saveZone(ZoneDrawingResult result, String name) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
-    final zone = CollectionZone(
-      id: '',
-      name: name,
-      vertices: result.vertices.toList(),
-      createdAt: DateTime.now(),
-      createdBy: uid,
-      // Tag with the real organisation so dashboard counts are accurate;
-      // fall back to uid only when the org is unknown.
-      orgId: _orgId ?? uid,
-      status: 'active',
-      areaKm2: result.areaKm2,
-    );
+    final service = EnvironmentOpsService.instance;
+    final orgId = _orgId ?? uid;
     try {
-      final ref = await FirebaseFirestore.instance
-          .collection('collection_zones')
-          .add(zone.toFirestore());
-      final saved = CollectionZone(
-        id: ref.id,
-        name: zone.name,
-        vertices: zone.vertices,
-        createdAt: zone.createdAt,
-        createdBy: zone.createdBy,
-        orgId: zone.orgId,
-        status: zone.status,
-        areaKm2: zone.areaKm2,
+      await service.createZone(
+        orgId: orgId,
+        uid: uid,
+        name: name,
+        vertices: result.vertices.toList(),
+        areaKm2: result.areaKm2,
       );
-      if (mounted) setState(() => _zones.insert(0, saved));
+      await _loadZones();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

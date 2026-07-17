@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/utils/rich_body.dart';
 import '../Home/community_home.dart' show timeAgo;
 
 const _kAnnouncements = 'announcements';
@@ -205,7 +206,7 @@ class _AnnouncementCard extends StatelessWidget {
     final orgLogoUrl = data['orgLogoUrl'] as String?;
     final orgName = data['orgName'] as String? ?? '';
     final title = data['title'] as String? ?? '';
-    final body = data['body'] as String? ?? '';
+    final body = richBodyToMarkdown(data['body']);
     final createdAt = data['createdAt'] as Timestamp?;
     final accent = _accentFor(type);
 
@@ -327,7 +328,7 @@ class _AnnouncementDetailSheet extends StatelessWidget {
     final orgLogoUrl = data['orgLogoUrl'] as String?;
     final orgName = data['orgName'] as String? ?? '';
     final title = data['title'] as String? ?? '';
-    final body = data['body'] as String? ?? '';
+    final body = richBodyToMarkdown(data['body']);
     final createdAt = data['createdAt'] as Timestamp?;
     final attachedEventId = data['attachedEventId'] as String?;
 

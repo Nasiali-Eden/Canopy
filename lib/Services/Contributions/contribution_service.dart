@@ -82,8 +82,10 @@ class ContributionService {
     String? effort,
     List<String> materials = const [],
     String? notes,
-    List<XFile> beforePhotos = const [],
-    List<XFile> afterPhotos = const [],
+    String? description,
+    List<XFile> photos = const [],
+    String trackingType = 'oneTime', // 'oneTime' | 'transformation'
+    Map<String, String> socialLinks = const {},
     String? location,
     double? latitude,
     double? longitude,
@@ -106,29 +108,24 @@ class ContributionService {
     final contributionRef = db.collection('contributions').doc();
     final contributionId = contributionRef.id;
 
-    // Upload before photos
-    final beforePhotoUrls = <String>[];
-    for (var i = 0; i < beforePhotos.length; i++) {
-      final file = beforePhotos[i];
+    // Upload photos (single gallery — max 4 enforced by the form).
+    final photoUrls = <String>[];
+    for (var i = 0; i < photos.length; i++) {
+      final file = photos[i];
       final ref = storage.ref().child(
-            'contributions/$userId/$contributionId/before/photo_$i.jpg',
+            'contributions/$userId/$contributionId/photos/photo_$i.jpg',
           );
       await ref.putFile(File(file.path));
       final url = await ref.getDownloadURL();
-      beforePhotoUrls.add(url);
+      photoUrls.add(url);
     }
 
-    // Upload after photos
-    final afterPhotoUrls = <String>[];
-    for (var i = 0; i < afterPhotos.length; i++) {
-      final file = afterPhotos[i];
-      final ref = storage.ref().child(
-            'contributions/$userId/$contributionId/after/photo_$i.jpg',
-          );
-      await ref.putFile(File(file.path));
-      final url = await ref.getDownloadURL();
-      afterPhotoUrls.add(url);
-    }
+    // Transformation tracking: stamp the first monthly check-in (~1 month out)
+    // so the client-side scheduler can nudge the user to add Month 1 photos.
+    // (No Cloud Functions in this project — see processDueTransformationReminders.)
+    final isTransformation = trackingType == 'transformation';
+    final now = DateTime.now();
+    final firstUpdateDue = DateTime(now.year, now.month + 1, now.day);
 
     final batch = db.batch();
 
@@ -146,25 +143,39 @@ class ContributionService {
       'effort': effort,
       'materials': materials,
       'notes': notes,
-      
-      // Photo URLs
-      'beforeImages': beforePhotoUrls, // Changed from beforePhotoUrls for consistency
-      'afterImages': afterPhotoUrls,   // Changed from afterPhotoUrls for consistency
-      
+      'description': description,
+
+      // Photo URLs (single gallery). `beforeImages` mirrors `photos` so the
+      // legacy ContributionCard still renders images on older screens.
+      'photos': photoUrls,
+      'beforeImages': photoUrls,
+      'afterImages': const <String>[],
+
+      // Optional social links (linkedin / facebook / instagram), all optional.
+      'socialLinks': socialLinks,
+
+      // Project tracking: 'oneTime' (a single event) or 'transformation'
+      // (traced month-by-month with reminders).
+      'trackingType': trackingType,
+      'trackingActive': isTransformation,
+      'reminderCycle': 0,
+      'nextUpdateDueAt':
+          isTransformation ? Timestamp.fromDate(firstUpdateDue) : null,
+
       // Location data
       'location': location,
       'latitude': latitude,
       'longitude': longitude,
-      
+
       // Metadata
       'points': points, // Changed from estimatedImpactPoints for simplicity
       'communityId': communityId,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       'status': 'pending', // Can be: pending, verified, rejected
-      
-      // Monthly tracking for Tree Planting
-      'monthlyUpdates': workType == 'Tree Planting' ? [] : null,
+
+      // Monthly transformation photo sets (null for one-time events).
+      'monthlyUpdates': isTransformation ? [] : null,
     });
 
     // Update user stats
@@ -218,6 +229,74 @@ class ContributionService {
     await batch.commit();
 
     return points;
+  }
+
+  /// Client-side transformation reminder scheduler.
+  ///
+  /// This project has no backend scheduler (no Cloud Functions / FCM cron), so
+  /// "notify the user one month after posting" is handled here: call this on
+  /// app/home load. It scans the user's transformation entries whose monthly
+  /// check-in is due, writes an in-app reminder notification, and advances the
+  /// due marker by a month so the same cycle isn't notified twice.
+  ///
+  /// Upgrade path: move this logic into a scheduled Cloud Function (Pub/Sub
+  /// cron) that also sends FCM pushes — the document fields written here
+  /// (`trackingType` / `nextUpdateDueAt` / `reminderCycle`) are already shaped
+  /// for a server-side runner.
+  ///
+  /// Index-free: filters on the single `userId` field (auto-indexed); the
+  /// tracking-type / due-date checks run client-side to avoid a composite index.
+  Future<int> processDueTransformationReminders({required String userId}) async {
+    final now = DateTime.now();
+
+    final snap = await db
+        .collection('contributions')
+        .where('userId', isEqualTo: userId)
+        .get();
+
+    var sent = 0;
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      if (data['trackingType'] != 'transformation') continue;
+      if (data['trackingActive'] == false) continue;
+      if (data['deleted'] == true) continue;
+
+      final due = data['nextUpdateDueAt'];
+      if (due is! Timestamp) continue;
+      if (due.toDate().isAfter(now)) continue; // not yet due
+
+      final cycle = (data['reminderCycle'] as int? ?? 0) + 1;
+      final title = (data['title'] as String?)?.trim();
+      final label = (title == null || title.isEmpty) ? 'your project' : '"$title"';
+
+      // Write the in-app notification (matches NotificationService path:
+      // Users/{uid}/notifications, capital U).
+      await db
+          .collection('Users')
+          .doc(userId)
+          .collection('notifications')
+          .add({
+        'title': 'Time to update $label',
+        'body':
+            'Add this month\'s photos (Month $cycle) to keep tracing your project\'s transformation.',
+        'type': 'transformation_update',
+        'read': false,
+        'contributionId': doc.id,
+        'month': cycle,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // Advance the due marker by a month so we don't re-notify this cycle.
+      final nextDue = DateTime(now.year, now.month + 1, now.day);
+      await doc.reference.update({
+        'reminderCycle': cycle,
+        'nextUpdateDueAt': Timestamp.fromDate(nextDue),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      sent++;
+    }
+
+    return sent;
   }
 
   /// Update monthly progress for Tree Planting contributions

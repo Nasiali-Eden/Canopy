@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../Shared/theme/app_theme.dart';
+import '../../../Shared/utils/rich_body.dart';
 import '../../../Shared/Activities/create_activity.dart';
 import 'send_partnership_request.dart';
 
@@ -1370,7 +1371,7 @@ class _AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final body = data['body'] as String? ?? '';
+    final body = richBodyToMarkdown(data['body']);
     final reach = data['reach'] as String? ?? 'followers';
     final recipients = data['recipientCount'] as int? ?? 0;
 

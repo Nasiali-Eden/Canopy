@@ -8,12 +8,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../Shared/theme/app_theme.dart';
+import '../../Services/Environmental/environment_ops_service.dart';
+import '../../Models/environmental/enums/material_category.dart';
+import '../../Models/environmental/models/market_order.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LISTING TYPE
@@ -193,15 +195,17 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     setState(() => _submitting = true);
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
-      final orgId = widget.orgId ??
-          (await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(uid)
-                  .get())
-              .data()?['orgId'] as String? ??
+      final service = EnvironmentOpsService.instance;
+      final envContext = await service.resolveContext();
+      final orgId = widget.orgId ?? envContext?.orgId ?? '';
+      final orgName = ((widget.orgData?['org_name'] ??
+                  widget.orgData?['name']) as String?) ??
+          envContext?.orgName ??
           '';
-      final orgName =
-          (widget.orgData?['org_name'] ?? widget.orgData?['name'] ?? '') as String;
+
+      if (orgId.isEmpty) {
+        throw Exception('No organisation is linked to this account yet.');
+      }
 
       String? imageUrl;
       if (_imageFile != null) {
@@ -214,31 +218,34 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       final subType = _selectedSubType!;
       final qty = double.tryParse(_quantityCtrl.text.trim());
       final price = double.tryParse(_priceCtrl.text.trim());
+      final category = MaterialCategory.fromFirestoreKey(
+        (_selectedCategory!['id'] as String?) ?? 'plastics',
+      );
+      final orderType = _listingType == _ListingType.sellListing
+          ? MarketOrderType.sell
+          : MarketOrderType.buy;
 
-      await FirebaseFirestore.instance.collection('market_listings').add({
-        'listing_type': _listingType.firestoreKey,
-        'is_recurring': _listingType == _ListingType.recurringBuy,
-        'category_id': _selectedCategory!['id'],
-        'category_label': _selectedCategory!['label'],
-        'sub_type_id': subType['id'],
-        'sub_type_label': subType['label'],
-        'grade': _selectedGrade,
-        'quantity_kg': qty,
-        'unit': subType['units'] ?? 'kg',
-        'price_per_unit': price,
-        'currency': 'KSh',
-        'notes': _notesCtrl.text.trim(),
-        'location_text': _locationCtrl.text.trim(),
-        'can_collect': _canCollect,
-        'can_deliver': _canDeliver,
-        'image_url': imageUrl,
-        'org_id': orgId,
-        'org_name': orgName,
-        'posted_by_uid': uid,
-        'status': 'active',
-        'created_at': FieldValue.serverTimestamp(),
-        'responses_count': 0,
-      });
+      await service.createMarketOrder(
+        orgId: orgId,
+        uid: uid,
+        orgName: orgName,
+        orderType: orderType,
+        category: category,
+        categoryLabel: (_selectedCategory!['label'] as String?) ??
+            category.displayLabel,
+        materialType: (subType['label'] as String?) ?? 'Material',
+        materialSubTypeId: (subType['id'] as String?) ?? '',
+        grade: _selectedGrade,
+        quantityKg: qty ?? 0,
+        unit: (subType['units'] as String?) ?? 'kg',
+        pricePerUnit: price ?? 0,
+        notes: _notesCtrl.text.trim(),
+        locationText: _locationCtrl.text.trim(),
+        canCollect: _canCollect,
+        canDeliver: _canDeliver,
+        imageUrl: imageUrl,
+        isRecurring: _listingType == _ListingType.recurringBuy,
+      );
 
       if (mounted) {
         Navigator.pop(context, true);

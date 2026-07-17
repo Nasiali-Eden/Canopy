@@ -1,26 +1,17 @@
-// lib/EnvironmentalOps/env_ops_shell.dart
-//
-// 4-tab Environmental Ops shell — similar pattern to CultureHomeScreen.
-// Tabs: Overview · Territory · Operations · Profile
-
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 
+import '../Organization/Map/org_map_ops.dart';
 import '../Shared/theme/app_theme.dart';
-import '../Shared/widgets/role_context_switcher.dart';
 import '../Shared/widgets/floating_nav_bar.dart';
-import 'Market/env_market.dart';
+import '../Shared/widgets/role_context_switcher.dart';
+import 'Fleet/env_fleet.dart';
 import 'Market/create_listing_screen.dart';
+import 'Market/env_market.dart';
 import 'Territory/env_territory.dart';
 import 'Trees/env_trees.dart';
-import 'Fleet/env_fleet.dart';
 import 'Verified/env_verified.dart';
-import '../Organization/Map/org_map_ops.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SHELL
-// ─────────────────────────────────────────────────────────────────────────────
 
 class EnvOpsShell extends StatefulWidget {
   final WidgetBuilder? orgContextBuilder;
@@ -45,10 +36,17 @@ class EnvOpsShell extends StatefulWidget {
 }
 
 class _EnvOpsShellState extends State<EnvOpsShell> {
-  // 0=Overview  1=Territory  2=Operations  3=Profile
+  static const _accentGreen = Color(0xFF2D7A4F);
+
   int _selectedIndex = 0;
-  // Sub-tab to open when entering Operations (0=Market 1=Trees 2=Fleet).
   int _operationsInitialTab = 0;
+
+  static const _tabs = [
+    _TabInfo('Overview', Icons.dashboard_outlined, Icons.dashboard_rounded),
+    _TabInfo('Territory', Icons.map_outlined, Icons.map_rounded),
+    _TabInfo('Operations', Icons.tune_outlined, Icons.tune_rounded),
+    _TabInfo('Profile', Icons.person_outline, Icons.person_rounded),
+  ];
 
   void _openOperations(int subTab) {
     setState(() {
@@ -74,20 +72,11 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
         );
       default:
         return _EnvOpsOverviewTab(
-          onSelectTab: (i) => setState(() => _selectedIndex = i),
+          onSelectTab: (index) => setState(() => _selectedIndex = index),
           onOpenOperations: _openOperations,
         );
     }
   }
-
-  static const _tabs = [
-    _TabInfo('Overview', Icons.dashboard_outlined, Icons.dashboard_rounded),
-    _TabInfo('Territory', Icons.map_outlined, Icons.map_rounded),
-    _TabInfo('Operations', Icons.settings_outlined, Icons.settings_rounded),
-    _TabInfo('Profile', Icons.person_outline, Icons.person_rounded),
-  ];
-
-  static const _accentGreen = Color(0xFF2D7A4F);
 
   @override
   Widget build(BuildContext context) {
@@ -100,47 +89,49 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           automaticallyImplyLeading: false,
+          centerTitle: true,
           title: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 'ENVIRONMENTAL OPS',
                 style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2.5,
-                  fontSize: 13,
                   color: AppTheme.darkGreen,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.3,
                 ),
               ),
               Text(
                 _tabs[_selectedIndex].label,
                 style: TextStyle(
+                  color: _accentGreen.withOpacity(0.68),
                   fontSize: 10,
-                  color: _accentGreen.withOpacity(0.65),
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
                 ),
               ),
             ],
           ),
-          centerTitle: true,
         ),
         extendBody: true,
         body: _buildCurrentPage(),
         bottomNavigationBar: FloatingNavBar(
           currentIndex: _selectedIndex,
-          onTap: (i) => setState(() {
-            // Manual taps on Operations land on the default (Market) sub-tab;
-            // deep-links via _openOperations set the target explicitly.
-            if (i == 2) _operationsInitialTab = 0;
-            _selectedIndex = i;
+          onTap: (index) => setState(() {
+            if (index == 2) {
+              _operationsInitialTab = 0;
+            }
+            _selectedIndex = index;
           }),
           destinations: _tabs
-              .map((t) => FloatingNavDestination(
-                    icon: t.icon,
-                    activeIcon: t.selectedIcon,
-                    label: t.label,
-                  ))
+              .map(
+                (tab) => FloatingNavDestination(
+                  icon: tab.icon,
+                  activeIcon: tab.selectedIcon,
+                  label: tab.label,
+                ),
+              )
               .toList(),
         ),
       ),
@@ -148,19 +139,14 @@ class _EnvOpsShellState extends State<EnvOpsShell> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TAB 0 — OVERVIEW
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _EnvOpsOverviewTab extends StatefulWidget {
-  /// Switches the bottom-nav tab (1 = Territory, 3 = Profile, …).
   final void Function(int index)? onSelectTab;
-
-  /// Opens the Operations tab on a specific sub-tab (0 = Market, 1 = Trees,
-  /// 2 = Fleet).
   final void Function(int operationsSubTab)? onOpenOperations;
 
-  const _EnvOpsOverviewTab({this.onSelectTab, this.onOpenOperations});
+  const _EnvOpsOverviewTab({
+    this.onSelectTab,
+    this.onOpenOperations,
+  });
 
   @override
   State<_EnvOpsOverviewTab> createState() => _EnvOpsOverviewTabState();
@@ -171,8 +157,6 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   String? _uid;
   Map<String, dynamic>? _orgData;
   bool _loading = true;
-
-  // Cached so they are not rebuilt on every setState/scroll.
   Future<Map<String, int>>? _statsFuture;
   Future<List<_ActivityEntry>>? _activityFuture;
 
@@ -182,18 +166,27 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
     _loadOrg();
   }
 
+  Map<String, dynamic>? get _orgDataWithId {
+    if (_orgData == null) {
+      return null;
+    }
+    return {..._orgData!, 'orgId': _orgId};
+  }
+
   Future<void> _loadOrg() async {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       _uid = uid;
       if (uid == null) {
-        if (mounted) setState(() => _loading = false);
+        if (!mounted) {
+          return;
+        }
+        setState(() => _loading = false);
         return;
       }
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
       final orgId = userDoc.data()?['orgId'] as String?;
       Map<String, dynamic>? orgData;
       if (orgId != null) {
@@ -203,7 +196,11 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
             .get();
         orgData = orgDoc.data();
       }
-      if (!mounted) return;
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _orgId = orgId;
         _orgData = orgData;
@@ -212,7 +209,10 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
         _activityFuture = _loadActivity();
       });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _loading = false);
     }
   }
 
@@ -224,12 +224,228 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
     ]);
   }
 
-  /// orgData enriched with the org id, so screens that read `orgData['orgId']`
-  /// (e.g. OrgMapOpsScreen, which tags new pins with `added_by_org_id`) save
-  /// against the correct organisation.
-  Map<String, dynamic>? get _orgDataWithId {
-    if (_orgData == null) return null;
-    return {..._orgData!, 'orgId': _orgId};
+  Future<Map<String, int>> _loadStats() async {
+    final orgId = _orgId;
+    final uid = _uid;
+    var zones = 0;
+    var trees = 0;
+    var pins = 0;
+
+    try {
+      if (orgId != null) {
+        final orgRef =
+            FirebaseFirestore.instance.collection('organizations').doc(orgId);
+
+        final newZoneSnap = await orgRef.collection('collectionZones').count().get();
+        final legacyZoneSnap = await FirebaseFirestore.instance
+            .collection('collection_zones')
+            .where('org_id', isEqualTo: orgId)
+            .count()
+            .get();
+        zones = (newZoneSnap.count ?? 0) > 0
+            ? (newZoneSnap.count ?? 0)
+            : (legacyZoneSnap.count ?? 0);
+
+        final pinSnap = await FirebaseFirestore.instance
+            .collection('map_pins')
+            .where('added_by_org_id', isEqualTo: orgId)
+            .count()
+            .get();
+        pins = pinSnap.count ?? 0;
+
+        final newTreeSnap = await orgRef.collection('trees').count().get();
+        trees = newTreeSnap.count ?? 0;
+      }
+
+      if (trees == 0 && uid != null) {
+        final legacyTreeSnap = await FirebaseFirestore.instance
+            .collection('planting_posts')
+            .where('created_by', isEqualTo: uid)
+            .get();
+        trees = legacyTreeSnap.docs.fold<int>(
+          0,
+          (sum, doc) => sum + ((doc.data()['quantity'] as num?)?.toInt() ?? 0),
+        );
+      }
+    } catch (_) {
+      // Keep partial counts when some queries succeed.
+    }
+
+    return {
+      'zones': zones,
+      'trees': trees,
+      'pins': pins,
+    };
+  }
+
+  Future<List<_ActivityEntry>> _loadActivity() async {
+    final orgId = _orgId;
+    final uid = _uid;
+    final out = <_ActivityEntry>[];
+
+    try {
+      if (orgId != null) {
+        final orgRef =
+            FirebaseFirestore.instance.collection('organizations').doc(orgId);
+
+        final newZoneSnap = await orgRef.collection('collectionZones').limit(20).get();
+        if (newZoneSnap.docs.isNotEmpty) {
+          for (final doc in newZoneSnap.docs) {
+            final data = doc.data();
+            final isActive = (data['isActive'] as bool?) ?? false;
+            out.add(
+              _ActivityEntry(
+                kind: _ActivityKind.zone,
+                icon: Icons.map_outlined,
+                title: data['label'] as String? ?? 'Unnamed Zone',
+                subtitle: isActive ? 'ACTIVE' : 'INACTIVE',
+                color: isActive ? const Color(0xFF2D7A4F) : Colors.orange,
+                timestamp: (data['createdAt'] as Timestamp?)?.toDate(),
+              ),
+            );
+          }
+        } else {
+          final legacyZoneSnap = await FirebaseFirestore.instance
+              .collection('collection_zones')
+              .where('org_id', isEqualTo: orgId)
+              .limit(20)
+              .get();
+          for (final doc in legacyZoneSnap.docs) {
+            final data = doc.data();
+            final status = (data['status'] as String? ?? 'draft').toUpperCase();
+            out.add(
+              _ActivityEntry(
+                kind: _ActivityKind.zone,
+                icon: Icons.map_outlined,
+                title: data['name'] as String? ?? 'Unnamed Zone',
+                subtitle: status,
+                color: status == 'ACTIVE'
+                    ? const Color(0xFF2D7A4F)
+                    : Colors.orange,
+                timestamp: (data['created_at'] as Timestamp?)?.toDate(),
+              ),
+            );
+          }
+        }
+
+        final pinSnap = await FirebaseFirestore.instance
+            .collection('map_pins')
+            .where('added_by_org_id', isEqualTo: orgId)
+            .limit(20)
+            .get();
+        for (final doc in pinSnap.docs) {
+          final data = doc.data();
+          out.add(
+            _ActivityEntry(
+              kind: _ActivityKind.pin,
+              icon: Icons.place_outlined,
+              title: data['name'] as String? ?? 'Map Pin',
+              subtitle: 'MAP PIN',
+              color: const Color(0xFF1565C0),
+              timestamp: (data['created_at'] as Timestamp?)?.toDate(),
+            ),
+          );
+        }
+
+        final newTreeSnap = await orgRef.collection('trees').limit(20).get();
+        if (newTreeSnap.docs.isNotEmpty) {
+          for (final doc in newTreeSnap.docs) {
+            final data = doc.data();
+            final planting =
+                (data['planting'] as Map<String, dynamic>?) ?? const {};
+            final plantedAt = (planting['plantedAt'] as Timestamp?)?.toDate();
+            out.add(
+              _ActivityEntry(
+                kind: _ActivityKind.planting,
+                icon: Icons.park_outlined,
+                title: data['commonName'] as String? ?? 'Tree Record',
+                subtitle:
+                    'TREE RECORDED - ${((data['status'] as String?) ?? 'unconfirmed').toUpperCase()}',
+                color: const Color(0xFF388E3C),
+                timestamp: (data['createdAt'] as Timestamp?)?.toDate() ?? plantedAt,
+              ),
+            );
+          }
+        } else if (uid != null) {
+          final legacyTreeSnap = await FirebaseFirestore.instance
+              .collection('planting_posts')
+              .where('created_by', isEqualTo: uid)
+              .limit(20)
+              .get();
+          for (final doc in legacyTreeSnap.docs) {
+            final data = doc.data();
+            final quantity = (data['quantity'] as num?)?.toInt() ?? 0;
+            final stage = (data['stage'] as String? ?? 'pending').toUpperCase();
+            out.add(
+              _ActivityEntry(
+                kind: _ActivityKind.planting,
+                icon: Icons.park_outlined,
+                title: data['species'] as String? ?? 'Planting',
+                subtitle: '$quantity TREES - $stage',
+                color: const Color(0xFF388E3C),
+                timestamp: (data['created_at'] as Timestamp?)?.toDate() ??
+                    (data['planted_date'] as Timestamp?)?.toDate(),
+              ),
+            );
+          }
+        }
+      }
+    } catch (_) {
+      // Return whatever was already collected.
+    }
+
+    out.sort(
+      (a, b) => (b.timestamp ?? DateTime(0)).compareTo(a.timestamp ?? DateTime(0)),
+    );
+    return out.take(6).toList();
+  }
+
+  void _openMapPins() {
+    final orgData = _orgDataWithId;
+    if (orgData == null) {
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OrgMapOpsScreen(orgData: orgData),
+      ),
+    );
+  }
+
+  void _openListingComposer() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreateListingScreen(
+          orgId: _orgId,
+          orgData: _orgData,
+        ),
+      ),
+    );
+  }
+
+  void _onActivityTap(_ActivityEntry entry) {
+    switch (entry.kind) {
+      case _ActivityKind.zone:
+        widget.onSelectTab?.call(1);
+        break;
+      case _ActivityKind.planting:
+        widget.onOpenOperations?.call(1);
+        break;
+      case _ActivityKind.pin:
+        _openMapPins();
+        break;
+    }
+  }
+
+  static String _fmtDate(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays <= 0) {
+      return 'Today';
+    }
+    if (diff.inDays == 1) {
+      return 'Yesterday';
+    }
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 
   @override
@@ -237,41 +453,43 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
     return RefreshIndicator(
       color: _EnvOpsShellState._accentGreen,
       onRefresh: _refresh,
-      child: SingleChildScrollView(
+      child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildOrgHeader(),
-            const SizedBox(height: 20),
-            _buildStatsRow(),
-            const SizedBox(height: 24),
-            _buildSectionLabel('QUICK ACTIONS'),
-            const SizedBox(height: 12),
-            _buildActionGrid(),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                _buildSectionLabel('RECENT ACTIVITY'),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => widget.onSelectTab?.call(1),
-                  child: Text(
-                    'View territory',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: _EnvOpsShellState._accentGreen.withOpacity(0.8),
-                    ),
-                  ),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 110),
+        children: [
+          _buildOrgHeader(),
+          const SizedBox(height: 20),
+          _SectionLabel(
+            label: 'LIVE SNAPSHOT',
+            note: 'A quick read of coverage, planting, and mapped field presence.',
+          ),
+          const SizedBox(height: 12),
+          _buildStatsRow(),
+          const SizedBox(height: 24),
+          _SectionLabel(
+            label: 'QUICK ACTIONS',
+            note: 'Shortcuts into the daily work that feeds verification later.',
+          ),
+          const SizedBox(height: 12),
+          _buildActionGrid(),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              const Expanded(
+                child: _SectionLabel(
+                  label: 'RECENT ACTIVITY',
+                  note: 'Latest zone, planting, and map activity tied to this org.',
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildRecentActivity(),
-          ],
-        ),
+              ),
+              TextButton(
+                onPressed: () => widget.onOpenOperations?.call(3),
+                child: const Text('Open verified'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildRecentActivity(),
+        ],
       ),
     );
   }
@@ -279,75 +497,149 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   Widget _buildOrgHeader() {
     if (_loading) {
       return Container(
-        height: 80,
+        height: 196,
         decoration: BoxDecoration(
           color: Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(24),
         ),
       );
     }
+
     final name = (_orgData?['org_name'] ?? 'Your Organisation') as String;
-    final city = (_orgData?['city'] ?? '') as String;
-    return GestureDetector(
-      onTap: () => widget.onSelectTab?.call(3), // → Profile / context
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1B4332), Color(0xFF2D7A4F)],
-          ),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF2D7A4F).withOpacity(0.30),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
+    final city = (_orgData?['city'] ?? _orgData?['area'] ?? '') as String;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF173728),
+            Color(0xFF2D7A4F),
+            Color(0xFF87B68C),
           ],
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
-                shape: BoxShape.circle,
-              ),
-              child:
-                  const Icon(Icons.eco_outlined, color: Colors.white, size: 26),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2D7A4F).withOpacity(0.22),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 460;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.14),
+                      borderRadius: BorderRadius.circular(18),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    child: const Icon(
+                      Icons.eco_outlined,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
-                  Text(
-                    city.isNotEmpty ? city : 'Environmental Operations',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.65),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          city.isNotEmpty ? city : 'Environmental operations hub',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.76),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-            Icon(Icons.chevron_right,
-                color: Colors.white.withOpacity(0.7), size: 22),
-          ],
-        ),
+              const SizedBox(height: 18),
+              Text(
+                'Coordinate collection zones, tree work, dumpsite interventions, and evidence logging from one operational surface.',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.88),
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: const [
+                  _HeroPill(icon: Icons.route_outlined, label: 'Territory ready'),
+                  _HeroPill(icon: Icons.recycling_outlined, label: 'Collections tracked'),
+                  _HeroPill(icon: Icons.verified_outlined, label: 'Evidence pipeline'),
+                ],
+              ),
+              const SizedBox(height: 18),
+              stacked
+                  ? Column(
+                      children: [
+                        _HeaderActionButton(
+                          label: 'Open Territory',
+                          icon: Icons.map_outlined,
+                          filled: true,
+                          onTap: () => widget.onSelectTab?.call(1),
+                        ),
+                        const SizedBox(height: 10),
+                        _HeaderActionButton(
+                          label: 'Log Verification',
+                          icon: Icons.verified_outlined,
+                          onTap: () => widget.onOpenOperations?.call(3),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: _HeaderActionButton(
+                            label: 'Open Territory',
+                            icon: Icons.map_outlined,
+                            filled: true,
+                            onTap: () => widget.onSelectTab?.call(1),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _HeaderActionButton(
+                            label: 'Log Verification',
+                            icon: Icons.verified_outlined,
+                            onTap: () => widget.onOpenOperations?.call(3),
+                          ),
+                        ),
+                      ],
+                    ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -355,90 +647,51 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   Widget _buildStatsRow() {
     return FutureBuilder<Map<String, int>>(
       future: _statsFuture,
-      builder: (context, snap) {
+      builder: (context, snapshot) {
         final loading =
-            _loading || snap.connectionState == ConnectionState.waiting;
-        final zones = snap.data?['zones'] ?? 0;
-        final trees = snap.data?['trees'] ?? 0;
-        final pins = snap.data?['pins'] ?? 0;
-        return Row(
-          children: [
-            _StatTile(
-              icon: Icons.map_outlined,
-              value: '$zones',
-              label: 'Zones',
-              color: const Color(0xFF2D7A4F),
-              loading: loading,
-              onTap: () => widget.onSelectTab?.call(1), // → Territory
-            ),
-            const SizedBox(width: 10),
-            _StatTile(
-              icon: Icons.park_outlined,
-              value: '$trees',
-              label: 'Trees',
-              color: const Color(0xFF388E3C),
-              loading: loading,
-              onTap: () => widget.onOpenOperations?.call(1), // → Trees
-            ),
-            const SizedBox(width: 10),
-            _StatTile(
-              icon: Icons.place_outlined,
-              value: '$pins',
-              label: 'Map Pins',
-              color: const Color(0xFF1565C0),
-              loading: loading,
-              onTap: _openMapPins,
-            ),
-          ],
+            _loading || snapshot.connectionState == ConnectionState.waiting;
+        final tiles = [
+          _StatTile(
+            icon: Icons.map_outlined,
+            value: '${snapshot.data?['zones'] ?? 0}',
+            label: 'Zones',
+            color: const Color(0xFF2D7A4F),
+            loading: loading,
+            onTap: () => widget.onSelectTab?.call(1),
+          ),
+          _StatTile(
+            icon: Icons.park_outlined,
+            value: '${snapshot.data?['trees'] ?? 0}',
+            label: 'Trees',
+            color: const Color(0xFF388E3C),
+            loading: loading,
+            onTap: () => widget.onOpenOperations?.call(1),
+          ),
+          _StatTile(
+            icon: Icons.place_outlined,
+            value: '${snapshot.data?['pins'] ?? 0}',
+            label: 'Map Pins',
+            color: const Color(0xFF1565C0),
+            loading: loading,
+            onTap: _openMapPins,
+          ),
+        ];
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 430 ? 3 : 1;
+            final width =
+                (constraints.maxWidth - (12 * (columns - 1))) / columns;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: tiles
+                  .map((tile) => SizedBox(width: width, child: tile))
+                  .toList(),
+            );
+          },
         );
       },
-    );
-  }
-
-  Future<Map<String, int>> _loadStats() async {
-    final orgId = _orgId;
-    final uid = _uid;
-    int zones = 0;
-    int trees = 0;
-    int pins = 0;
-    try {
-      if (orgId != null) {
-        final zoneSnap = await FirebaseFirestore.instance
-            .collection('collection_zones')
-            .where('org_id', isEqualTo: orgId)
-            .count()
-            .get();
-        zones = zoneSnap.count ?? 0;
-        final pinSnap = await FirebaseFirestore.instance
-            .collection('map_pins')
-            .where('added_by_org_id', isEqualTo: orgId)
-            .count()
-            .get();
-        pins = pinSnap.count ?? 0;
-      }
-      if (uid != null) {
-        // Sum tree quantities across this user's planting posts. Index-free
-        // (single equality filter, no orderBy).
-        final treeSnap = await FirebaseFirestore.instance
-            .collection('planting_posts')
-            .where('created_by', isEqualTo: uid)
-            .get();
-        trees = treeSnap.docs.fold<int>(
-          0,
-          (acc, d) => acc + ((d.data()['quantity'] as num?)?.toInt() ?? 0),
-        );
-      }
-    } catch (_) {
-      // Leave whatever counts succeeded.
-    }
-    return {'zones': zones, 'trees': trees, 'pins': pins};
-  }
-
-  void _openMapPins() {
-    final data = _orgDataWithId;
-    if (data == null) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => OrgMapOpsScreen(orgData: data)),
     );
   }
 
@@ -447,210 +700,105 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
       _ActionItem(
         icon: Icons.edit_location_alt_outlined,
         label: 'Define Zone',
-        description: 'Walk & trace a collection zone',
+        description: 'Trace territory and register a collection boundary.',
         color: const Color(0xFF2D7A4F),
-        onTap: () => widget.onSelectTab?.call(1), // → Territory tab
+        onTap: () => widget.onSelectTab?.call(1),
       ),
       _ActionItem(
         icon: Icons.add_location_alt_outlined,
         label: 'Add Map Pin',
-        description: 'Mark a community location on the map',
+        description: 'Tag collection points, dumpsites, or partner sites.',
         color: const Color(0xFF1565C0),
         onTap: _openMapPins,
       ),
       _ActionItem(
         icon: Icons.park_outlined,
         label: 'Log Trees',
-        description: 'Record trees planted or monitored',
+        description: 'Capture planting activity and follow-up records.',
         color: const Color(0xFF388E3C),
-        // → Operations · Trees (its screen has no AppBar, so it must live
-        // inside the shell rather than be pushed as a dead-end route).
         onTap: () => widget.onOpenOperations?.call(1),
       ),
       _ActionItem(
         icon: Icons.storefront_outlined,
         label: 'Post Order',
-        description: 'Buy or sell recyclable materials',
+        description: 'Create a buy or sell order for recyclable materials.',
         color: const Color(0xFFE65100),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => CreateListingScreen(
-              orgId: _orgId,
-              orgData: _orgData,
-            ),
-          ),
-        ),
+        onTap: _openListingComposer,
       ),
     ];
 
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.5,
-      children: actions.map((a) => _ActionCard(item: a)).toList(),
-    );
-  }
-
-  Widget _buildRecentActivity() {
-    if (_loading) {
-      return _EmptyCard(
-        icon: Icons.history_outlined,
-        message: 'Loading recent activity…',
-      );
-    }
-    if (_orgId == null) {
-      return _EmptyCard(
-        icon: Icons.history_outlined,
-        message: 'Activity will appear here once you start operations',
-      );
-    }
-    return FutureBuilder<List<_ActivityEntry>>(
-      future: _activityFuture,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return _EmptyCard(
-            icon: Icons.history_outlined,
-            message: 'Loading recent activity…',
-          );
-        }
-        final entries = snap.data ?? const <_ActivityEntry>[];
-        if (entries.isEmpty) {
-          return _EmptyCard(
-            icon: Icons.history_outlined,
-            message: 'No activity yet — define a zone, log trees, '
-                'or add a map pin to get started',
-          );
-        }
-        return Column(
-          children: entries
-              .map((e) => _ActivityRow(
-                    icon: e.icon,
-                    title: e.title,
-                    subtitle: e.subtitle,
-                    color: e.color,
-                    timestamp:
-                        e.timestamp != null ? _fmtDate(e.timestamp!) : '',
-                    onTap: () => _onActivityTap(e),
-                  ))
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 940
+            ? 4
+            : constraints.maxWidth >= 560
+                ? 2
+                : 1;
+        final width =
+            (constraints.maxWidth - (12 * (columns - 1))) / columns;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: actions
+              .map((item) => SizedBox(width: width, child: _ActionCard(item: item)))
               .toList(),
         );
       },
     );
   }
 
-  void _onActivityTap(_ActivityEntry e) {
-    switch (e.kind) {
-      case _ActivityKind.zone:
-        widget.onSelectTab?.call(1); // → Territory
-        break;
-      case _ActivityKind.planting:
-        widget.onOpenOperations?.call(1); // → Operations · Trees
-        break;
-      case _ActivityKind.pin:
-        _openMapPins();
-        break;
+  Widget _buildRecentActivity() {
+    if (_loading) {
+      return const _EmptyCard(
+        icon: Icons.history_outlined,
+        message: 'Loading recent activity...',
+      );
     }
-  }
 
-  /// Builds a unified, index-free recent-activity feed from zones, plantings
-  /// and map pins, sorted client-side by timestamp.
-  Future<List<_ActivityEntry>> _loadActivity() async {
-    final orgId = _orgId;
-    final uid = _uid;
-    final out = <_ActivityEntry>[];
-    try {
-      if (orgId != null) {
-        final zoneSnap = await FirebaseFirestore.instance
-            .collection('collection_zones')
-            .where('org_id', isEqualTo: orgId)
-            .limit(20)
-            .get();
-        for (final d in zoneSnap.docs) {
-          final m = d.data();
-          final status = (m['status'] as String? ?? 'draft');
-          out.add(_ActivityEntry(
-            kind: _ActivityKind.zone,
-            icon: Icons.map_outlined,
-            title: m['name'] as String? ?? 'Unnamed Zone',
-            subtitle: status.toUpperCase(),
-            color: status == 'active'
-                ? const Color(0xFF2D7A4F)
-                : Colors.orange,
-            timestamp: (m['created_at'] as Timestamp?)?.toDate(),
-          ));
-        }
-
-        final pinSnap = await FirebaseFirestore.instance
-            .collection('map_pins')
-            .where('added_by_org_id', isEqualTo: orgId)
-            .limit(20)
-            .get();
-        for (final d in pinSnap.docs) {
-          final m = d.data();
-          out.add(_ActivityEntry(
-            kind: _ActivityKind.pin,
-            icon: Icons.place_outlined,
-            title: m['name'] as String? ?? 'Map Pin',
-            subtitle: 'MAP PIN',
-            color: const Color(0xFF1565C0),
-            timestamp: (m['created_at'] as Timestamp?)?.toDate(),
-          ));
-        }
-      }
-
-      if (uid != null) {
-        final treeSnap = await FirebaseFirestore.instance
-            .collection('planting_posts')
-            .where('created_by', isEqualTo: uid)
-            .limit(20)
-            .get();
-        for (final d in treeSnap.docs) {
-          final m = d.data();
-          final qty = (m['quantity'] as num?)?.toInt() ?? 0;
-          final stage = (m['stage'] as String? ?? 'pending');
-          out.add(_ActivityEntry(
-            kind: _ActivityKind.planting,
-            icon: Icons.park_outlined,
-            title: m['species'] as String? ?? 'Planting',
-            subtitle: '$qty TREES · ${stage.toUpperCase()}',
-            color: const Color(0xFF388E3C),
-            timestamp: (m['created_at'] as Timestamp?)?.toDate() ??
-                (m['planted_date'] as Timestamp?)?.toDate(),
-          ));
-        }
-      }
-    } catch (_) {
-      // Return whatever loaded.
+    if (_orgId == null) {
+      return const _EmptyCard(
+        icon: Icons.history_outlined,
+        message: 'Activity will appear here once your organisation starts logging work.',
+      );
     }
-    out.sort((a, b) => (b.timestamp ?? DateTime(0))
-        .compareTo(a.timestamp ?? DateTime(0)));
-    return out.take(6).toList();
-  }
 
-  static String _fmtDate(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inDays == 0) return 'Today';
-    if (diff.inDays == 1) return 'Yesterday';
-    return '${dt.day}/${dt.month}/${dt.year}';
-  }
+    return FutureBuilder<List<_ActivityEntry>>(
+      future: _activityFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _EmptyCard(
+            icon: Icons.history_outlined,
+            message: 'Loading recent activity...',
+          );
+        }
 
-  Widget _buildSectionLabel(String text) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-        color: AppTheme.darkGreen.withOpacity(0.45),
-      ),
+        final entries = snapshot.data ?? const <_ActivityEntry>[];
+        if (entries.isEmpty) {
+          return const _EmptyCard(
+            icon: Icons.history_outlined,
+            message: 'No activity yet. Define a zone, log trees, or add a map pin to begin.',
+          );
+        }
+
+        return Column(
+          children: entries
+              .map(
+                (entry) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _ActivityCard(
+                    entry: entry,
+                    timestamp: entry.timestamp != null ? _fmtDate(entry.timestamp!) : '',
+                    onTap: () => _onActivityTap(entry),
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 }
 
-// ─── Recent-activity entry ────────────────────────────────────────────────────
 enum _ActivityKind { zone, planting, pin }
 
 class _ActivityEntry {
@@ -671,13 +819,12 @@ class _ActivityEntry {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TAB 2 — OPERATIONS (Market · Trees · Fleet)
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _EnvOperationsTab extends StatefulWidget {
   final int initialTab;
-  const _EnvOperationsTab({this.initialTab = 0});
+
+  const _EnvOperationsTab({
+    this.initialTab = 0,
+  });
 
   @override
   State<_EnvOperationsTab> createState() => _EnvOperationsTabState();
@@ -685,12 +832,12 @@ class _EnvOperationsTab extends StatefulWidget {
 
 class _EnvOperationsTabState extends State<_EnvOperationsTab>
     with SingleTickerProviderStateMixin {
-  late TabController _tabCtrl;
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(
+    _tabController = TabController(
       length: 4,
       vsync: this,
       initialIndex: widget.initialTab.clamp(0, 3),
@@ -698,50 +845,64 @@ class _EnvOperationsTabState extends State<_EnvOperationsTab>
   }
 
   @override
+  void didUpdateWidget(covariant _EnvOperationsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextIndex = widget.initialTab.clamp(0, 3);
+    if (oldWidget.initialTab != widget.initialTab && _tabController.index != nextIndex) {
+      _tabController.animateTo(nextIndex);
+    }
+  }
+
+  @override
   void dispose() {
-    _tabCtrl.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.of(context).size.width < 430;
+
     return Column(
       children: [
-        Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabCtrl,
-            labelColor: const Color(0xFF2D7A4F),
-            unselectedLabelColor: AppTheme.darkGreen.withOpacity(0.45),
-            indicatorColor: const Color(0xFF2D7A4F),
-            indicatorWeight: 2.5,
-            labelStyle: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w700),
-            unselectedLabelStyle: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w500),
-            tabs: const [
-              Tab(
-                icon: Icon(Icons.storefront_outlined, size: 16),
-                text: 'Market',
-              ),
-              Tab(
-                icon: Icon(Icons.park_outlined, size: 16),
-                text: 'Trees',
-              ),
-              Tab(
-                icon: Icon(Icons.local_shipping_outlined, size: 16),
-                text: 'Fleet',
-              ),
-              Tab(
-                icon: Icon(Icons.verified_outlined, size: 16),
-                text: 'Verified',
-              ),
-            ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: compact,
+              labelColor: const Color(0xFF2D7A4F),
+              unselectedLabelColor: AppTheme.darkGreen.withOpacity(0.45),
+              indicatorColor: const Color(0xFF2D7A4F),
+              indicatorWeight: 2.5,
+              dividerColor: Colors.transparent,
+              labelStyle:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              unselectedLabelStyle:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              tabs: const [
+                Tab(icon: Icon(Icons.storefront_outlined, size: 16), text: 'Market'),
+                Tab(icon: Icon(Icons.park_outlined, size: 16), text: 'Trees'),
+                Tab(icon: Icon(Icons.local_shipping_outlined, size: 16), text: 'Fleet'),
+                Tab(icon: Icon(Icons.verified_outlined, size: 16), text: 'Verified'),
+              ],
+            ),
           ),
         ),
         Expanded(
           child: TabBarView(
-            controller: _tabCtrl,
+            controller: _tabController,
             children: const [
               EnvMarketScreen(),
               EnvTreesScreen(),
@@ -754,10 +915,6 @@ class _EnvOperationsTabState extends State<_EnvOperationsTab>
     );
   }
 }
-
-// ─────────────────────────��───────────────────────────────────────────────────
-// TAB 3 — PROFILE
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _EnvOpsProfileTab extends StatelessWidget {
   final WidgetBuilder? orgContextBuilder;
@@ -777,7 +934,9 @@ class _EnvOpsProfileTab extends StatelessWidget {
   });
 
   void _switchTo(BuildContext context, WidgetBuilder? builder) {
-    if (builder == null) return;
+    if (builder == null) {
+      return;
+    }
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: builder),
       (_) => false,
@@ -786,172 +945,280 @@ class _EnvOpsProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Identity header
-          Center(
-            child: Column(
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1B4332), Color(0xFF2D7A4F)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF2D7A4F).withOpacity(0.28),
-                        blurRadius: 14,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.eco_outlined,
-                      size: 34, color: Colors.white),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Environmental Ops',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.darkGreen,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Active context',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.darkGreen.withOpacity(0.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 28),
-
-          if (orgContextBuilder != null || memberContextBuilder != null) ...[
-            _sectionLabel('SWITCH CONTEXT'),
-            const SizedBox(height: 10),
-            RoleContextSwitcher(
-              activeContext: 'envOps',
-              hasMarketplace: hasMarketplace,
-              hasEnvOps: true,
-              hasCultural: hasCultural,
-              onOrgTap: () => _switchTo(context, orgContextBuilder),
-              onMemberTap: () => _switchTo(context, memberContextBuilder),
-              onMarketplaceTap: marketplaceContextBuilder != null
-                  ? () => _switchTo(context, marketplaceContextBuilder)
-                  : null,
-              onEnvOpsTap: () {},
-              onCulturalTap: culturalContextBuilder != null
-                  ? () => _switchTo(context, culturalContextBuilder)
-                  : null,
-            ),
-            const SizedBox(height: 28),
-          ],
-
-          if (orgContextBuilder != null) ...[
-            _sectionLabel('ORGANISATION'),
-            const SizedBox(height: 10),
-            _buildReturnToOrgCard(context),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionLabel(String text) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 10,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-        color: AppTheme.darkGreen.withOpacity(0.45),
-      ),
-    );
-  }
-
-  Widget _buildReturnToOrgCard(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _switchTo(context, orgContextBuilder),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border:
-              Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primary.withOpacity(0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(
-                color: AppTheme.lightGreen.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(10),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 110),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primary.withOpacity(0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
-              child: Icon(Icons.business_outlined,
-                  color: AppTheme.primary, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF173728), Color(0xFF2D7A4F)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Icon(
+                  Icons.eco_outlined,
+                  size: 36,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Environmental Ops',
+                style: TextStyle(
+                  color: AppTheme.darkGreen,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Switch context, review the current workspace, or jump back to your organisation dashboard.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppTheme.darkGreen.withOpacity(0.56),
+                  fontSize: 13,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (orgContextBuilder != null || memberContextBuilder != null) ...[
+          const _SectionLabel(
+            label: 'SWITCH CONTEXT',
+            note: 'Move between organisation, member, marketplace, and environmental surfaces.',
+          ),
+          const SizedBox(height: 12),
+          RoleContextSwitcher(
+            activeContext: 'envOps',
+            hasMarketplace: hasMarketplace,
+            hasEnvOps: true,
+            hasCultural: hasCultural,
+            onOrgTap: () => _switchTo(context, orgContextBuilder),
+            onMemberTap: () => _switchTo(context, memberContextBuilder),
+            onMarketplaceTap: marketplaceContextBuilder != null
+                ? () => _switchTo(context, marketplaceContextBuilder)
+                : null,
+            onEnvOpsTap: () {},
+            onCulturalTap: culturalContextBuilder != null
+                ? () => _switchTo(context, culturalContextBuilder)
+                : null,
+          ),
+          const SizedBox(height: 24),
+        ],
+        if (orgContextBuilder != null) ...[
+          const _SectionLabel(
+            label: 'ORGANISATION',
+            note: 'Return to the broader dashboard for people, programs, and settings.',
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () => _switchTo(context, orgContextBuilder),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppTheme.lightGreen.withOpacity(0.32)),
+              ),
+              child: Row(
                 children: [
-                  Text(
-                    'Organisation Dashboard',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: AppTheme.darkGreen,
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: AppTheme.lightGreen.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.business_outlined,
+                      color: AppTheme.primary,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'People, operations, programmes & settings',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.darkGreen.withOpacity(0.55),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Organisation Dashboard',
+                          style: TextStyle(
+                            color: AppTheme.darkGreen,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'People, operations, programmes, and organisational settings.',
+                          style: TextStyle(
+                            color: AppTheme.darkGreen.withOpacity(0.55),
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    color: AppTheme.primary.withOpacity(0.62),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right,
-                color: AppTheme.primary.withOpacity(0.6), size: 20),
-          ],
-        ),
-      ),
+          ),
+        ],
+      ],
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SMALL WIDGETS
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _TabInfo {
   final String label;
   final IconData icon;
   final IconData selectedIcon;
+
   const _TabInfo(this.label, this.icon, this.selectedIcon);
+}
+
+class _HeroPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _HeroPill({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool filled;
+  final VoidCallback onTap;
+
+  const _HeaderActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.filled = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return filled
+        ? FilledButton.icon(
+            onPressed: onTap,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.darkGreen,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: Icon(icon, size: 18),
+            label: Text(label),
+          )
+        : OutlinedButton.icon(
+            onPressed: onTap,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: BorderSide(color: Colors.white.withOpacity(0.45)),
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: Icon(icon, size: 18),
+            label: Text(label),
+          );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final String? note;
+
+  const _SectionLabel({
+    required this.label,
+    this.note,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: AppTheme.darkGreen.withOpacity(0.45),
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+          ),
+        ),
+        if (note != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            note!,
+            style: TextStyle(
+              color: AppTheme.darkGreen.withOpacity(0.58),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class _StatTile extends StatelessWidget {
@@ -961,71 +1228,85 @@ class _StatTile extends StatelessWidget {
   final Color color;
   final bool loading;
   final VoidCallback? onTap;
-  const _StatTile(
-      {required this.icon,
-      required this.value,
-      required this.label,
-      required this.color,
-      this.loading = false,
-      this.onTap});
+
+  const _StatTile({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+    this.loading = false,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, size: 18, color: color),
-                  const Spacer(),
-                  if (onTap != null)
-                    Icon(Icons.chevron_right,
-                        size: 16, color: AppTheme.darkGreen.withOpacity(0.25)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              loading
-                  ? Container(
-                      width: 28,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    )
-                  : Text(
-                      value,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.darkGreen,
-                        height: 1,
-                      ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(icon, size: 18, color: color),
+                ),
+                const Spacer(),
+                if (onTap != null)
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppTheme.darkGreen.withOpacity(0.24),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            loading
+                ? Container(
+                    width: 42,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                    fontSize: 10, color: AppTheme.darkGreen.withOpacity(0.50)),
+                  )
+                : Text(
+                    value,
+                    style: const TextStyle(
+                      color: AppTheme.darkGreen,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: AppTheme.darkGreen.withOpacity(0.52),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1038,69 +1319,80 @@ class _ActionItem {
   final String description;
   final Color color;
   final VoidCallback onTap;
-  const _ActionItem(
-      {required this.icon,
-      required this.label,
-      required this.description,
-      required this.color,
-      required this.onTap});
+
+  const _ActionItem({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.color,
+    required this.onTap,
+  });
 }
 
 class _ActionCard extends StatelessWidget {
   final _ActionItem item;
-  const _ActionCard({required this.item});
+
+  const _ActionCard({
+    required this.item,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: item.onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
+        constraints: const BoxConstraints(minHeight: 148),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
               color: item.color.withOpacity(0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: item.color.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(item.icon, size: 20, color: item.color),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
-                Text(
-                  item.label,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.darkGreen,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: item.color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Icon(item.icon, color: item.color, size: 21),
                 ),
-                Text(
-                  item.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: AppTheme.darkGreen.withOpacity(0.50),
-                    height: 1.3,
-                  ),
+                const Spacer(),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 18,
+                  color: AppTheme.darkGreen.withOpacity(0.25),
                 ),
               ],
+            ),
+            const Spacer(),
+            Text(
+              item.label,
+              style: const TextStyle(
+                color: AppTheme.darkGreen,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              item.description,
+              style: TextStyle(
+                color: AppTheme.darkGreen.withOpacity(0.56),
+                fontSize: 12,
+                height: 1.4,
+              ),
             ),
           ],
         ),
@@ -1109,80 +1401,120 @@ class _ActionCard extends StatelessWidget {
   }
 }
 
-class _ActivityRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
+class _ActivityCard extends StatelessWidget {
+  final _ActivityEntry entry;
   final String timestamp;
   final VoidCallback? onTap;
-  const _ActivityRow(
-      {required this.icon,
-      required this.title,
-      required this.subtitle,
-      required this.color,
-      required this.timestamp,
-      this.onTap});
+
+  const _ActivityCard({
+    required this.entry,
+    required this.timestamp,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2))
-          ],
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: entry.color.withOpacity(0.1)),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.10),
-                shape: BoxShape.circle,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 420;
+            final content = [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: entry.color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(entry.icon, color: entry.color, size: 20),
               ),
-              child: Icon(icon, size: 16, color: color),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
+              const SizedBox(width: 12, height: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.darkGreen)),
-                  Text(subtitle,
+                        color: AppTheme.darkGreen,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      entry.subtitle,
                       style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: color)),
-                ],
+                        color: entry.color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(timestamp,
-                style: TextStyle(
-                    fontSize: 10,
-                    color: AppTheme.darkGreen.withOpacity(0.40))),
-            if (onTap != null) ...[
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right,
-                  size: 16, color: AppTheme.darkGreen.withOpacity(0.25)),
-            ],
-          ],
+            ];
+
+            if (stacked) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: content),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text(
+                        timestamp,
+                        style: TextStyle(
+                          color: AppTheme.darkGreen.withOpacity(0.42),
+                          fontSize: 11,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (onTap != null)
+                        Icon(
+                          Icons.chevron_right,
+                          size: 18,
+                          color: AppTheme.darkGreen.withOpacity(0.25),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            }
+
+            return Row(
+              children: [
+                ...content,
+                const SizedBox(width: 12),
+                Text(
+                  timestamp,
+                  style: TextStyle(
+                    color: AppTheme.darkGreen.withOpacity(0.42),
+                    fontSize: 11,
+                  ),
+                ),
+                if (onTap != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppTheme.darkGreen.withOpacity(0.25),
+                  ),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1192,16 +1524,19 @@ class _ActivityRow extends StatelessWidget {
 class _EmptyCard extends StatelessWidget {
   final IconData icon;
   final String message;
-  const _EmptyCard({required this.icon, required this.message});
+
+  const _EmptyCard({
+    required this.icon,
+    required this.message,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade100),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
@@ -1211,9 +1546,9 @@ class _EmptyCard extends StatelessWidget {
             child: Text(
               message,
               style: TextStyle(
-                fontSize: 12,
                 color: AppTheme.darkGreen.withOpacity(0.55),
-                height: 1.4,
+                fontSize: 12,
+                height: 1.45,
               ),
             ),
           ),
