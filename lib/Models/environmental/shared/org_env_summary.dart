@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:impact_trail/models/environmental/enums/verification_tier.dart';
+import 'package:impact_trail/Models/environmental/enums/verification_tier.dart';
 
 enum EnvironmentalOrgType {
   recycler,

@@ -110,7 +110,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
         final userDoc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection('Users')
             .doc(uid)
             .get();
         _orgId = userDoc.data()?['orgId'] as String?;

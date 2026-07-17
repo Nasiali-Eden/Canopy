@@ -225,8 +225,6 @@ class _CommunityImpactTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return StreamBuilder<int>(
       stream: ImpactService().watchCommunityTotalImpactPoints(),
       builder: (context, snapshot) {

@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:impact_trail/models/environmental/enums/fleet_collector_status.dart';
+import 'package:impact_trail/Models/environmental/enums/fleet_collector_status.dart';
 
 class FleetCollectorProfile {
   final String displayName;

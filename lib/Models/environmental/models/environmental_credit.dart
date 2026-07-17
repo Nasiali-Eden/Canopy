@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:impact_trail/models/environmental/enums/credit_type.dart';
+import 'package:impact_trail/Models/environmental/enums/credit_type.dart';
 
 enum CreditQuantityUnit {
   kg,

@@ -1,4 +1,4 @@
-import 'package:impact_trail/models/environmental/enums/material_category.dart';
+import 'package:impact_trail/Models/environmental/enums/material_category.dart';
 
 class MaterialTypeLookup {
   MaterialTypeLookup._();

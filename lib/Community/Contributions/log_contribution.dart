@@ -118,9 +118,6 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
   Position? _currentPosition;
   final _locationController = TextEditingController();
 
-  final double _requiredLatitude = -1.286389;
-  final double _requiredLongitude = 36.817223;
-  final double _maxDistanceInMeters = 500;
 
   // Work type configurations.
   static const List<Map<String, dynamic>> _workTypes = [
@@ -223,32 +220,24 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
         throw Exception('Location permissions are permanently denied');
       }
 
+      // Contributions happen wherever the member is, so capture the reading
+      // as-is. This used to reject anything beyond 500m of a hardcoded point
+      // in central Nairobi, which made logging impossible everywhere else.
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      final distance = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        _requiredLatitude,
-        _requiredLongitude,
-      );
-
-      if (distance <= _maxDistanceInMeters) {
-        setState(() {
-          _currentPosition = position;
-          _locationVerified = true;
-          _locationController.text =
-              'Verified (${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)})';
-        });
-        _showSnack('Location verified successfully!', Colors.green.shade600,
-            icon: Icons.check_circle);
-      } else {
-        throw Exception(
-            'You are ${distance.toStringAsFixed(0)}m away. Please be within ${_maxDistanceInMeters.toStringAsFixed(0)}m of the location.');
-      }
+      if (!mounted) return;
+      setState(() {
+        _currentPosition = position;
+        _locationVerified = true;
+        _locationController.text =
+            '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
+      });
+      _showSnack('Location captured', Colors.green.shade600,
+          icon: Icons.check_circle);
     } catch (e) {
-      _showSnack('Location verification failed: $e', Colors.red.shade600,
+      _showSnack('Could not capture location: $e', Colors.red.shade600,
           icon: Icons.error_outline);
     } finally {
       if (mounted) setState(() => _verifyingLocation = false);
@@ -341,7 +330,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     if (!_locationVerified) {
-      _showSnack('Please verify your location first.', Colors.orange.shade700,
+      _showSnack('Please capture your location first.', Colors.orange.shade700,
           icon: Icons.location_off_outlined);
       return;
     }
@@ -865,7 +854,7 @@ class _LocationCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       verified
-                          ? 'Location verified ✓'
+                          ? 'Location captured ✓'
                           : 'Required to log a contribution',
                       style: TextStyle(
                           fontSize: 11,
@@ -894,7 +883,7 @@ class _LocationCard extends StatelessWidget {
                         child: CircularProgressIndicator(
                             strokeWidth: 2.5, color: Colors.white))
                     : const Icon(Icons.my_location, size: 18),
-                label: Text(verifying ? 'Verifying...' : 'Verify Location',
+                label: Text(verifying ? 'Capturing...' : 'Capture Location',
                     style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.w700)),
               ),

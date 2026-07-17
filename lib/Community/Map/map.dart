@@ -573,7 +573,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     if (user == null) return;
     try {
       final userDoc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection('Users')
           .doc(user.uid)
           .get();
       final orgId = userDoc.data()?['orgId'] as String?;

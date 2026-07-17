@@ -186,7 +186,7 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
       }
 
       final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          await FirebaseFirestore.instance.collection('Users').doc(uid).get();
       final orgId = userDoc.data()?['orgId'] as String?;
       Map<String, dynamic>? orgData;
       if (orgId != null) {

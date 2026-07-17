@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:impact_trail/models/environmental/enums/material_category.dart';
-import 'package:impact_trail/models/environmental/enums/material_order_status.dart';
+import 'package:impact_trail/Models/environmental/enums/material_category.dart';
+import 'package:impact_trail/Models/environmental/enums/material_order_status.dart';
 
 enum MarketOrderType {
   buy,

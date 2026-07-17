@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:impact_trail/models/environmental/enums/marker_type.dart';
-import 'package:impact_trail/models/environmental/shared/gps_coordinate.dart';
+import 'package:impact_trail/Models/environmental/enums/marker_type.dart';
+import 'package:impact_trail/Models/environmental/shared/gps_coordinate.dart';
 
 class SiteMarker {
   final String markerId;

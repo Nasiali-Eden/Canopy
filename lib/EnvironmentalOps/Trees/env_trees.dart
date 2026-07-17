@@ -904,6 +904,11 @@ class _WizardNav extends StatelessWidget {
             OutlinedButton(
               onPressed: onBack,
               style: OutlinedButton.styleFrom(
+                // The theme sets minimumSize: Size.fromHeight(48), i.e. an
+                // infinite min width. That is fine in a Column but invalid as
+                // a bare Row child (unbounded main axis) and aborts layout.
+                // Keep the height, drop the width so it hugs its label.
+                minimumSize: const Size(0, 48),
                 side: const BorderSide(color: AppTheme.primary),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),

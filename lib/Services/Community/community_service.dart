@@ -142,32 +142,32 @@ class CommunityService {
   ///
   /// Requires a Firestore composite index: scheduledAt ASC + status ASC.
   /// Create at: Firebase Console → Firestore → Indexes → Composite.
+  /// Real-time stream of activities, newest schedule first.
+  ///
+  /// Index-free by design (single orderBy on one field, no composite): status
+  /// and type are filtered client-side. The previous version combined
+  /// `status whereIn` + `type ==` + `scheduledAt >` + `orderBy`, which needs a
+  /// composite index that does not exist — that query failed outright with
+  /// FAILED_PRECONDITION and the list rendered empty.
+  ///
+  /// Past activities are intentionally included so members can review events
+  /// that have already happened. Registration is gated separately in
+  /// [canRegister] rather than by hiding them here.
   Stream<QuerySnapshot> getActivitiesStream({
     String? type,
     bool includeFull = false,
   }) {
     // Firestore: activities
-    final statuses = includeFull ? ['open', 'full'] : ['open'];
-
-    Query query = _db
+    return _db
         .collection('activities')
-        .where('status', whereIn: statuses)
-        .where('scheduledAt', isGreaterThan: Timestamp.now())
-        .orderBy('scheduledAt');
-
-    if (type != null) {
-      // Adding type filter requires a composite index:
-      // status (whereIn) + type (==) + scheduledAt (asc)
-      query = _db
-          .collection('activities')
-          .where('status', whereIn: statuses)
-          .where('type', isEqualTo: type)
-          .where('scheduledAt', isGreaterThan: Timestamp.now())
-          .orderBy('scheduledAt');
-    }
-
-    return query.limit(20).snapshots();
+        .orderBy('scheduledAt', descending: true)
+        .limit(100)
+        .snapshots();
   }
+
+  /// Statuses a member is allowed to see in the activities list.
+  static List<String> visibleStatuses({bool includeFull = false}) =>
+      includeFull ? const ['open', 'full'] : const ['open'];
 
   /// Real-time registration status for a specific user + activity combination.
   Stream<QuerySnapshot> getUserRegistrationStream({
@@ -196,18 +196,33 @@ class CommunityService {
         .get();
   }
 
-  /// Returns true if the activity is open and has available capacity.
+  /// Returns true if the activity is open, still ahead of us, and has capacity.
   Future<bool> canRegister({required String activityId}) async {
     // Firestore: activities/{activityId}
     final doc =
         await _db.collection('activities').doc(activityId).get();
     if (!doc.exists) return false;
     final data = doc.data()!;
+    if (hasEnded(data)) return false;
     final status = data['status'] as String? ?? 'open';
     if (status != 'open') return false;
     final maxP = data['maxParticipants'] as int? ?? 0;
     if (maxP == 0) return true;
     final regCount = data['registeredCount'] as int? ?? 0;
     return regCount < maxP;
+  }
+
+  /// Scheduled date of an activity, tolerant of the several aliases the
+  /// writer sets (`scheduledAt` / `dateTime` / `date`).
+  static DateTime? scheduledAt(Map<String, dynamic> data) {
+    final raw = data['scheduledAt'] ?? data['dateTime'] ?? data['date'];
+    return raw is Timestamp ? raw.toDate() : null;
+  }
+
+  /// True once the scheduled date has passed. `status` is written once at
+  /// creation and never expires, so it cannot answer this on its own.
+  static bool hasEnded(Map<String, dynamic> data) {
+    final dt = scheduledAt(data);
+    return dt != null && dt.isBefore(DateTime.now());
   }
 }

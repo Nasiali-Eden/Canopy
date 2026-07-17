@@ -73,7 +73,7 @@ class _EnvFleetScreenState extends State<EnvFleetScreen> {
       _uid = uid;
       if (uid != null) {
         final userDoc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection('Users')
             .doc(uid)
             .get();
         _orgId = userDoc.data()?['orgId'] as String?;

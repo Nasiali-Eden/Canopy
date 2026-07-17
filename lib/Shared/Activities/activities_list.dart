@@ -67,6 +67,21 @@ class _ActivitiesListScreenState extends State<ActivitiesListScreen> {
     }
   }
 
+  // Status + type are filtered here rather than in the query: the stream is
+  // deliberately index-free (see CommunityService.getActivitiesStream).
+  List<QueryDocumentSnapshot> _applyStatusAndType(
+      List<QueryDocumentSnapshot> docs) {
+    final statuses =
+        CommunityService.visibleStatuses(includeFull: widget.filter.showFull);
+    return docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final status = data['status'] as String? ?? 'open';
+      if (!statuses.contains(status)) return false;
+      if (_localType != null && data['type'] != _localType) return false;
+      return true;
+    }).toList();
+  }
+
   // Client-side timeframe filter applied after Firestore fetch
   List<QueryDocumentSnapshot> _applyTimeframe(List<QueryDocumentSnapshot> docs) {
     final tf = widget.filter.timeframe;
@@ -125,22 +140,45 @@ class _ActivitiesListScreenState extends State<ActivitiesListScreen> {
               }
 
               final allDocs = snap.data?.docs ?? [];
-              final docs = _applyTimeframe(allDocs);
+              final docs = _applyTimeframe(_applyStatusAndType(allDocs));
 
               if (docs.isEmpty) {
                 return _EmptyState(hasFilter: !widget.filter.isDefault || _localType != null);
               }
 
-              return ListView.builder(
+              // The stream arrives newest-first so past events sort correctly;
+              // upcoming ones read better soonest-first.
+              final upcoming = docs
+                  .where((d) => !CommunityService.hasEnded(
+                      d.data() as Map<String, dynamic>))
+                  .toList()
+                  .reversed
+                  .toList();
+              final past = docs
+                  .where((d) => CommunityService.hasEnded(
+                      d.data() as Map<String, dynamic>))
+                  .toList();
+
+              return ListView(
                 padding: const EdgeInsets.only(top: 8, bottom: 100),
-                itemCount: docs.length,
-                itemBuilder: (context, i) {
-                  final doc = docs[i];
-                  return ActivityCard(
-                    activityId: doc.id,
-                    activity: doc.data() as Map<String, dynamic>,
-                  );
-                },
+                children: [
+                  for (final doc in upcoming)
+                    ActivityCard(
+                      activityId: doc.id,
+                      activity: doc.data() as Map<String, dynamic>,
+                    ),
+                  if (past.isNotEmpty) ...[
+                    const _PastHeader(),
+                    for (final doc in past)
+                      Opacity(
+                        opacity: 0.6,
+                        child: ActivityCard(
+                          activityId: doc.id,
+                          activity: doc.data() as Map<String, dynamic>,
+                        ),
+                      ),
+                  ],
+                ],
               );
             },
           ),
@@ -241,6 +279,42 @@ class _TypeChipBar extends StatelessWidget {
             );
           }).toList(),
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAST SECTION HEADER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PastHeader extends StatelessWidget {
+  const _PastHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      child: Row(
+        children: [
+          Icon(Icons.history_outlined,
+              size: 16, color: AppTheme.darkGreen.withOpacity(0.45)),
+          const SizedBox(width: 8),
+          Text(
+            'PAST EVENTS',
+            style: TextStyle(
+              color: AppTheme.darkGreen.withOpacity(0.45),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+                height: 1, color: AppTheme.lightGreen.withOpacity(0.25)),
+          ),
+        ],
       ),
     );
   }

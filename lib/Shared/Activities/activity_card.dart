@@ -602,6 +602,25 @@ class _RegisterButtonState extends State<_RegisterButton> {
                 );
         }
 
+        // Past events stay visible so members can review them, but they can
+        // no longer be joined. Mirrors CommunityService.canRegister.
+        if (CommunityService.hasEnded(widget.activityData)) {
+          return OutlinedButton(
+            onPressed: null,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 0),
+              side: BorderSide(
+                  color: AppTheme.lightGreen.withOpacity(0.5)),
+            ),
+            child: Text('Ended',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.darkGreen.withOpacity(0.5))),
+          );
+        }
+
         if (activityStatus == 'full' && !wasCancelled) {
           return OutlinedButton(
             onPressed: null,

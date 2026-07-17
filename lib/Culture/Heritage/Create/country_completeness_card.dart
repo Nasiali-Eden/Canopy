@@ -172,23 +172,25 @@ class _CountryCompletenessCardState extends State<CountryCompletenessCard> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          HeritageBackgroundsScreen(orgId: widget.orgId),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            HeritageBackgroundsScreen(orgId: widget.orgId),
+                      ),
                     ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.darkGreen,
+                      side: BorderSide(color: AppTheme.tertiary.withOpacity(0.5)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.image_outlined, size: 18),
+                    label: const Text('Backgrounds',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
                   ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.darkGreen,
-                    side: BorderSide(color: AppTheme.tertiary.withOpacity(0.5)),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: const Icon(Icons.image_outlined, size: 18),
-                  label: const Text('Backgrounds',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
                 ),
               ],
             ),

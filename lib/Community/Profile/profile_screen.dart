@@ -230,7 +230,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onEnvOpsTap: () {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => const EnvOpsShell()),
+            MaterialPageRoute(
+              builder: (_) => EnvOpsShell(
+                hasMarketplace: hasMarketplace,
+                hasCultural: hasCultural,
+                orgContextBuilder: (_) => const OrganizationHome(),
+                memberContextBuilder: (_) => const ProfileScreen(),
+                marketplaceContextBuilder:
+                    hasMarketplace ? (_) => const SellerHomeScreen() : null,
+                culturalContextBuilder: hasCultural
+                    ? (_) => CultureHomeScreen(
+                          orgId: orgId,
+                          memberContextBuilder: (_) => const ProfileScreen(),
+                        )
+                    : null,
+              ),
+            ),
             (route) => false,
           );
         },

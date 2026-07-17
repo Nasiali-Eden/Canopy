@@ -232,8 +232,23 @@ class _EventsTab extends StatelessWidget {
     if (impact == 'confirmed') return 'onChain';
     if (status == 'completed' && impact == 'pending') return 'verifying';
     if (status == 'ongoing') return 'executing';
-    if (status == 'upcoming' || status == 'open') return 'active';
+    if (status == 'upcoming' || status == 'open') {
+      // 'open' is written once at creation and nothing ever clears it, so an
+      // event stays 'open' long after it has happened. Fall back to the
+      // schedule rather than trusting status to expire on its own.
+      return _isPast(d) ? 'past' : 'active';
+    }
     return 'draft';
+  }
+
+  static DateTime? _scheduledAt(Map<String, dynamic> d) {
+    final raw = d['scheduledAt'] ?? d['dateTime'] ?? d['date'];
+    return raw is Timestamp ? raw.toDate() : null;
+  }
+
+  static bool _isPast(Map<String, dynamic> d) {
+    final dt = _scheduledAt(d);
+    return dt != null && dt.isBefore(DateTime.now());
   }
 
   static String _locationLabel(Map<String, dynamic> data) {
@@ -316,6 +331,18 @@ class _EventsTab extends StatelessWidget {
           'onChain': grouped['onChain']?.length ?? 0,
         };
 
+        // Soonest first for anything still ahead; most recent first for
+        // anything already behind us.
+        for (final entry in grouped.entries) {
+          final past = entry.key == 'past';
+          entry.value.sort((a, b) {
+            final da = _scheduledAt(a);
+            final db = _scheduledAt(b);
+            if (da == null || db == null) return 0;
+            return past ? db.compareTo(da) : da.compareTo(db);
+          });
+        }
+
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
           children: [
@@ -365,6 +392,15 @@ class _EventsTab extends StatelessWidget {
                   subtitle: 'Permanently recorded'),
               ...grouped['onChain']!
                   .map((d) => _EventCard(data: d, stage: 'onChain')),
+              const SizedBox(height: 4),
+            ],
+            if ((grouped['past'] ?? []).isNotEmpty) ...[
+              _SectionHeader(
+                  icon: Icons.history_outlined,
+                  label: 'Past',
+                  color: AppTheme.darkGreen.withOpacity(0.45),
+                  subtitle: 'Date has passed — close out or verify'),
+              ...grouped['past']!.map((d) => _EventCard(data: d, stage: 'past')),
             ],
           ],
         );
@@ -496,6 +532,8 @@ class _EventCard extends StatelessWidget {
         return AppTheme.accent;
       case 'verifying':
         return AppTheme.tertiary;
+      case 'past':
+        return AppTheme.darkGreen.withOpacity(0.45);
       default:
         return Colors.teal.shade600;
     }
@@ -511,6 +549,8 @@ class _EventCard extends StatelessWidget {
         return 'Running';
       case 'verifying':
         return 'Verifying';
+      case 'past':
+        return 'Ended';
       default:
         return 'On-Chain';
     }

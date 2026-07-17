@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:impact_trail/models/environmental/enums/tree_update_status.dart';
+import 'package:impact_trail/Models/environmental/enums/tree_update_status.dart';
 
 class TreeUpdatePhoto {
   final String url;

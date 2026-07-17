@@ -179,6 +179,9 @@ class _HeritageFeedbackScreenState extends State<HeritageFeedbackScreen>
                   foregroundColor: AppTheme.tertiary,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  // Override theme's Size.fromHeight(48) which forces infinite width in a Row.
+                  minimumSize: const Size(0, 0),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 child: const Text(
                   'Reply',
