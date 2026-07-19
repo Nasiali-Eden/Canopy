@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../Home/community_home.dart';
+import '../Impact/impact_dashboard.dart';
+import 'log_contribution.dart';
 
 class ContributionConfirmationScreen extends StatelessWidget {
   final int points;
@@ -179,7 +182,14 @@ class ContributionConfirmationScreen extends StatelessWidget {
                 height: 54,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pushReplacementNamed(context, '/impact');
+                    // Direct push: the app has no `routes` table, so named
+                    // routes throw "Could not find a generator for route".
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ImpactDashboardScreen(),
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
@@ -207,7 +217,12 @@ class ContributionConfirmationScreen extends StatelessWidget {
                 height: 54,
                 child: OutlinedButton(
                   onPressed: () {
-                    Navigator.pushReplacementNamed(context, '/contributions/log');
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const LogContributionScreen(),
+                      ),
+                    );
                   },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.primary,
@@ -231,7 +246,12 @@ class ContributionConfirmationScreen extends StatelessWidget {
               
               TextButton(
                 onPressed: () {
-                  Navigator.pushReplacementNamed(context, '/home');
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CommunityHomeScreen(),
+                    ),
+                  );
                 },
                 style: TextButton.styleFrom(
                   foregroundColor: AppTheme.accent,

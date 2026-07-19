@@ -18,7 +18,17 @@ import 'activity_detail.dart';
 class CreateActivityScreen extends StatefulWidget {
   final bool returnOnSuccess;
 
-  const CreateActivityScreen({super.key, this.returnOnSuccess = false});
+  /// Org that owns the event. Callers already inside an org context (e.g. the
+  /// Operations tab) pass this explicitly — re-deriving it from the user
+  /// requires a network read that silently yields null when it fails, which
+  /// writes an event no org can see.
+  final String? orgId;
+
+  const CreateActivityScreen({
+    super.key,
+    this.returnOnSuccess = false,
+    this.orgId,
+  });
 
   @override
   State<CreateActivityScreen> createState() => _CreateActivityScreenState();
@@ -198,7 +208,21 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
         lng: _lng,
       );
 
-      final orgId = await user?.orgId;
+      // Prefer the org id the caller already resolved. Only fall back to the
+      // network read when we weren't handed one.
+      final orgId = widget.orgId ?? await user?.orgId;
+
+      // An org rep opened this from an org context but we couldn't resolve the
+      // org id (typically a dropped Firestore read). Writing the event now
+      // would set orgId: null — visible in the community feed but invisible to
+      // the org that created it. Stop rather than orphan it.
+      if (widget.returnOnSuccess && orgId == null) {
+        if (!mounted) return;
+        _showSnack(
+            'Could not confirm your organisation. Check your connection and try again.');
+        return;
+      }
+
       String? organizerName;
       if (orgId != null) {
         try {

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../Models/user.dart';
 import '../../Services/Contributions/contribution_service.dart';
 import '../../Shared/theme/app_theme.dart';
+import 'contribution_confirmation.dart';
 
 /// Maximum number of photos a single entry can carry.
 const int _kMaxPhotos = 4;
@@ -361,10 +362,14 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
       );
 
       if (!mounted) return;
-      Navigator.pushReplacementNamed(
+      // Pushed directly rather than by name: the app registers no `routes`
+      // table, so pushReplacementNamed threw *after* the contribution had
+      // already been written — surfacing as a save error for work that saved.
+      await Navigator.pushReplacement(
         context,
-        '/contributions/confirm',
-        arguments: {'points': points},
+        MaterialPageRoute(
+          builder: (_) => ContributionConfirmationScreen(points: points),
+        ),
       );
     } catch (e) {
       _showSnack('Error: $e', Colors.red.shade600, icon: Icons.error_outline);

@@ -8,10 +8,20 @@ import 'dart:io';
 import 'Services/storage/user_persistence.dart';
 import 'Community/Map/org_logo_cache.dart';
 
+import 'Community/Communication/announcements_list.dart';
+import 'Community/Contributions/log_contribution.dart';
+import 'Community/Home/community_home.dart';
+import 'Community/Impact/impact_dashboard.dart';
+import 'Community/Profile/community_info.dart';
+import 'Community/Profile/edit_profile.dart';
+import 'Community/Profile/roadmap_screen.dart';
+import 'Community/Profile/settings_screen.dart';
+import 'Community/Recognition/badges_screen.dart';
 import 'Models/user.dart';
 import 'Providers/theme_provider.dart';
 import 'Services/Authentication/auth.dart';
 import 'Shared/Pages/splash_screen.dart';
+import 'Shared/Pages/welcome_screen.dart';
 
 import 'Shared/theme/app_theme.dart';
 import 'firebase_options.dart';
@@ -194,6 +204,75 @@ void main() async {
   }
 }
 
+/// Named routes pushed from around the app. Only routes whose screen actually
+/// exists are listed; anything else falls through to [MaterialApp.onUnknownRoute].
+final Map<String, WidgetBuilder> _appRoutes = {
+  '/splash': (_) => const SplashScreen(),
+  '/welcome': (_) => const WelcomeScreen(),
+  '/home': (_) => const CommunityHomeScreen(),
+  '/impact': (_) => const ImpactDashboardScreen(),
+  '/contributions/log': (_) => const LogContributionScreen(),
+  '/settings': (_) => const SettingsScreen(),
+  '/profile/edit': (_) => const EditProfileScreen(),
+  '/community/info': (_) => const CommunityInfoScreen(),
+  '/announcements': (_) => const AnnouncementsListScreen(),
+  '/roadmap': (_) => const RoadmapScreen(),
+  '/recognition/badges': (_) => const BadgesScreen(),
+};
+
+/// Shown when a screen pushes a route that has no implementation yet. Better a
+/// readable dead-end than a red assertion mid-flow.
+class _RouteNotFoundScreen extends StatelessWidget {
+  final String? name;
+
+  const _RouteNotFoundScreen({this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Not available')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.construction_outlined,
+                  size: 44, color: AppTheme.primary.withOpacity(0.4)),
+              const SizedBox(height: 14),
+              Text(
+                'This screen is not built yet',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppTheme.darkGreen,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (name != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  name!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppTheme.darkGreen.withOpacity(0.5),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: const Text('Go back'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -226,6 +305,14 @@ class MyApp extends StatelessWidget {
             darkTheme: AppTheme.dark(),
             themeMode: themeProvider.mode,
             home: const SplashScreen(),
+            routes: _appRoutes,
+            // Screens across the app push named routes, but no table was ever
+            // registered — every one of them threw "Could not find a generator
+            // for route". Anything still unmapped lands here instead of
+            // crashing the flow it was called from.
+            onUnknownRoute: (settings) => MaterialPageRoute(
+              builder: (_) => _RouteNotFoundScreen(name: settings.name),
+            ),
           );
         },
       ),

@@ -71,7 +71,8 @@ class _OrgOperationsState extends State<OrgOperations>
       case 0:
         final createdId = await Navigator.of(context).push<String>(
           MaterialPageRoute(
-            builder: (_) => const CreateActivityScreen(returnOnSuccess: true),
+            builder: (_) =>
+                CreateActivityScreen(returnOnSuccess: true, orgId: _orgId),
           ),
         );
         if (createdId != null && mounted) {
@@ -273,7 +274,8 @@ class _EventsTab extends StatelessWidget {
   Future<void> _openCreate(BuildContext context) async {
     final createdId = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => const CreateActivityScreen(returnOnSuccess: true),
+        builder: (_) =>
+            CreateActivityScreen(returnOnSuccess: true, orgId: orgId),
       ),
     );
     if (createdId == null || !context.mounted) return;
