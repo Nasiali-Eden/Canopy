@@ -1,0 +1,14 @@
+{
+  "name": "canopy-geo-migrate",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backfills canonical geo_* fields and migrates market_listings into the unified /listings collection.",
+  "main": "backfill_geo.js",
+  "scripts": {
+    "dry": "node backfill_geo.js --dry-run",
+    "start": "node backfill_geo.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

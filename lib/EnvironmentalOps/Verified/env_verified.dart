@@ -109,9 +109,7 @@ class _EnvVerifiedScreenState extends State<EnvVerifiedScreen> {
       backgroundColor: const Color(0xFFF6F4EE),
       floatingActionButton: _context == null
           ? null
-          : Padding(
-              padding: const EdgeInsets.only(bottom: 78),
-              child: FloatingActionButton.extended(
+          : FloatingActionButton.extended(
                 onPressed: _openTransformationLogger,
                 backgroundColor: AppTheme.primary,
                 icon: const Icon(Icons.add_location_alt_outlined,
@@ -123,7 +121,6 @@ class _EnvVerifiedScreenState extends State<EnvVerifiedScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
             ),
       body: SafeArea(
         child: RefreshIndicator(

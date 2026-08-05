@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../Models/marketplace/canopy_listing.dart';
+import '../../Services/Marketplace/listing_service.dart';
 import '../../Shared/theme/app_theme.dart';
 import 'marketplace_listing.dart';
 import 'marketplace_shop_view.dart';
 import 'marketplace_checkout.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLACEHOLDER DATA
+// SAMPLE DETAIL
+//
+// Shown only when a listing id cannot be loaded. This used to be what the
+// screen ALWAYS rendered — `build()` read `_placeholderListing` unconditionally
+// with a comment saying to swap in a Firestore fetch later. Every tap in the
+// marketplace landed on this same copper bangle.
 // ─────────────────────────────────────────────────────────────────────────────
 
 final _placeholderListing = _PlaceholderDetail(
@@ -72,6 +79,8 @@ class MarketplaceItemViewScreen extends StatefulWidget {
 class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
     with SingleTickerProviderStateMixin {
   int _activeImage = 0;
+  CanopyListing? _listing;
+  bool _loading = true;
   final PageController _pageCtrl = PageController();
   bool _wishlistActive = false;
   bool _storyExpanded = false;
@@ -88,6 +97,28 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
     _wishlistScale = Tween(begin: 1.0, end: 1.35)
         .chain(CurveTween(curve: Curves.elasticOut))
         .animate(_wishlistAnim);
+    _load();
+  }
+
+  Future<void> _load() async {
+    // A caller that already has the record passes it in; otherwise fetch.
+    final preloaded = widget.listing;
+    if (preloaded != null) {
+      setState(() {
+        _listing = null; // legacy MarketplaceListing — not the unified shape
+        _loading = false;
+      });
+      return;
+    }
+    final fetched = await ListingService.instance.byId(widget.listingId);
+    if (!mounted) return;
+    setState(() {
+      _listing = fetched;
+      _loading = false;
+    });
+    if (fetched != null) {
+      ListingService.instance.incrementView(widget.listingId);
+    }
   }
 
   @override
@@ -104,8 +135,21 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Using placeholder — in production swap for Firestore fetch
-    final item = _placeholderListing;
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation(AppTheme.primary)),
+        ),
+      );
+    }
+
+    final listing = _listing;
+    final item = listing != null
+        ? _PlaceholderDetail.fromListing(listing)
+        : _placeholderListing;
+    final isSample = listing == null;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -118,6 +162,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (isSample) _buildSampleBanner(),
                     _buildIdentity(item),
                     _buildStory(item),
                     _buildMaterialDnaChain(item),
@@ -131,7 +176,16 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
               ),
             ],
           ),
-          Positioned(bottom: 0, left: 0, right: 0, child: _buildBottomBar(item)),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            // A "wanted" listing is a request, not a shelf item — offering a
+            // Buy button on one would be nonsense.
+            child: listing != null && listing.isSeeking
+                ? _buildRespondBar(listing)
+                : _buildBottomBar(item),
+          ),
         ],
       ),
     );
@@ -807,6 +861,106 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
 
   // ── Bottom bar ───────────────────────────────────────────────────────────────
 
+  // ── Sample banner ─────────────────────────────────────────────────────────
+
+  Widget _buildSampleBanner() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.tertiary.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.tertiary.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 17, color: AppTheme.darkGreen),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Sample listing — this is what a fully documented piece looks '
+              'like, not a real item for sale.',
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.darkGreen.withOpacity(0.8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Respond bar (wanted listings) ─────────────────────────────────────────
+
+  Widget _buildRespondBar(CanopyListing listing) {
+    final needed = listing.quantity.remainingKg.round();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+            top: BorderSide(color: AppTheme.lightGreen.withOpacity(0.3))),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 16,
+              offset: const Offset(0, -3)),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    listing.pricing.display,
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.tertiary,
+                        height: 1.1),
+                  ),
+                  Text(
+                    needed > 0 ? '$needed still needed' : 'Quantity open',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.darkGreen.withOpacity(0.55)),
+                  ),
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Responding to buy orders is coming soon'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              ),
+              icon: const Icon(Icons.handshake_outlined, size: 18),
+              label: const Text('I can supply this'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBottomBar(_PlaceholderDetail item) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
@@ -1153,4 +1307,53 @@ class _PlaceholderDetail {
     required this.isOnChain,
     required this.cardanoTxHash,
   });
+
+  /// Maps a real listing onto the view model this screen was built around, so
+  /// the existing layout renders live records unchanged.
+  ///
+  /// The Material DNA fields matter most here: they are what put the
+  /// collector's name, the site, and the date in front of the buyer. When a
+  /// listing has no DNA those fields come back empty and the chain section
+  /// renders as "provenance not recorded" rather than inventing a collector.
+  factory _PlaceholderDetail.fromListing(CanopyListing l) {
+    final dna = l.materialDna.isNotEmpty ? l.materialDna.first : null;
+    final collectionDate = dna?.collectionDate;
+    return _PlaceholderDetail(
+      title: l.title,
+      tagline: l.tagline,
+      story: l.story,
+      images: l.images.isNotEmpty
+          ? l.images
+          : ['https://picsum.photos/seed/${l.id}/900/700'],
+      price: l.pricing.display,
+      priceNum: l.pricing.amountKes,
+      makerName: l.seller.shopName.isNotEmpty
+          ? l.seller.shopName
+          : (l.orgName ?? ''),
+      makerCity: l.location.label,
+      makerBio: '',
+      shopName: l.seller.shopName.isNotEmpty
+          ? l.seller.shopName
+          : (l.orgName ?? ''),
+      collectorName: dna?.collectorName ?? '',
+      collectorCity: dna?.collectorCity ?? '',
+      collectionSite: dna?.collectionSite ?? '',
+      collectionDate: collectionDate == null
+          ? ''
+          : '${collectionDate.day}/${collectionDate.month}/${collectionDate.year}',
+      materialWeightKg: dna?.weightKg ?? 0,
+      material: dna?.material.label ??
+          (l.materials.isNotEmpty ? l.materials.first.label : ''),
+      kgDiverted: l.impact.kgDiverted,
+      impactScore: l.impact.impactScore,
+      royaltyKes: l.impact.royaltyPaidKes,
+      category: l.category.label,
+      tags: l.tags,
+      rating: l.averageRating,
+      reviewCount: l.reviewCount,
+      isCircularCraft: l.circularBadge == CircularBadgeTier.verified,
+      isOnChain: l.hasOnChainDna,
+      cardanoTxHash: dna?.cardanoTxHash ?? '',
+    );
+  }
 }

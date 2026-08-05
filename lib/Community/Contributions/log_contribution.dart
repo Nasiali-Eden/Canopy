@@ -13,6 +13,10 @@ import 'contribution_confirmation.dart';
 /// Maximum number of photos a single entry can carry.
 const int _kMaxPhotos = 4;
 
+/// Neutral grey for input-field accents (labels, borders) — replaces the loud
+/// green so the fields read as calm white cards.
+const Color _kFieldAccent = Color(0xFF9AA0A6);
+
 /// Project tracking modes shown as selectable cards.
 enum TrackingType {
   oneTime(
@@ -442,7 +446,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                         controller: _titleController,
                         label: 'Contribution title',
                         icon: Icons.title,
-                        accent: AppTheme.primary,
+                        accent: _kFieldAccent,
                         maxLength: 50,
                         validator: (v) =>
                             (v == null || v.trim().isEmpty) ? 'Required' : null,
@@ -463,7 +467,7 @@ class _LogContributionScreenState extends State<LogContributionScreen> {
                         controller: _descriptionController,
                         label: 'Describe the activity...',
                         icon: Icons.notes_outlined,
-                        accent: AppTheme.accent,
+                        accent: _kFieldAccent,
                         maxLines: 4,
                       ),
                       const SizedBox(height: 22),

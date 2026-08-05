@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Shared/theme/app_theme.dart';
-import 'contribution_card.dart';
-import 'contribution_detail_sheet.dart';
+import 'entry_feed_card.dart';
 
 const _kContributions = 'contributions';
 
@@ -228,27 +227,15 @@ class _AllContributionsScreenState extends State<AllContributionsScreen> {
               _EmptyState(hasFilter: hasFilter)
             else
               ...(_filtered.map((doc) {
-                final contribution = {
-                  ...(doc.data() as Map<String, dynamic>),
-                  'id': doc.id,
-                };
+                final data = doc.data() as Map<String, dynamic>;
                 return Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      backgroundColor: Colors.transparent,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(20)),
-                      ),
-                      builder: (_) =>
-                          ContributionDetailSheet(contribution: contribution),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: EntryFeedCard(
+                    editable: true,
+                    entry: FeedEntry.fromContribution(
+                      data,
+                      contributionId: doc.id,
                     ),
-                    child: ContributionCard(contribution: contribution),
                   ),
                 );
               })),

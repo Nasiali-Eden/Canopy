@@ -635,8 +635,7 @@ class _OfferingCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 18),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
               color: AppTheme.darkGreen.withOpacity(0.09),
@@ -645,111 +644,135 @@ class _OfferingCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Cover banner ────────────────────────────────────────────
-            ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(18)),
-              child: Stack(
-                children: [
-                  _CoverThumb(url: p.coverImageUrl, height: 170, fullWidth: true),
-                  // Status badge — top right, dark frosted
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: _StatusBadge(status: p.status),
-                  ),
-                ],
+        // Full-height image with the text overlaid at the bottom over a scrim.
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: AspectRatio(
+            aspectRatio: 4 / 3,
+            child: Stack(
+            children: [
+              // Cover fills the whole card.
+              Positioned.fill(
+                child: _CoverThumb(url: p.coverImageUrl, fullWidth: true),
               ),
-            ),
 
-            // ── Content ─────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Meta: type · price (inline, quiet)
-                  Text.rich(
-                    TextSpan(
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w500),
+              // Bottom scrim so overlaid text stays legible.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.15),
+                          Colors.black.withOpacity(0.78),
+                        ],
+                        stops: const [0.35, 0.6, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Status badge — top right.
+              Positioned(
+                top: 12,
+                right: 12,
+                child: _StatusBadge(status: p.status),
+              ),
+
+              // Overlaid text block, pinned to the bottom.
+              Positioned(
+                left: 16,
+                right: 14,
+                bottom: 14,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Meta: type · price
+                    Text.rich(
+                      TextSpan(
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.w500),
+                        children: [
+                          TextSpan(
+                            text: p.type.label,
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(0.8)),
+                          ),
+                          TextSpan(
+                            text: '  ·  ',
+                            style: TextStyle(
+                                color: Colors.white.withOpacity(0.5)),
+                          ),
+                          TextSpan(
+                            text: p.displayPrice,
+                            style: TextStyle(
+                              color: p.isPaid
+                                  ? const Color(0xFFFFD27A)
+                                  : Colors.white.withOpacity(0.8),
+                              fontWeight: p.isPaid
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Title + chevron
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextSpan(
-                          text: p.type.label,
-                          style: TextStyle(
-                              color: AppTheme.darkGreen.withOpacity(0.45)),
+                        Expanded(
+                          child: Text(
+                            p.title,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              height: 1.2,
+                              letterSpacing: -0.3,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        TextSpan(
-                          text: '  ·  ',
-                          style: TextStyle(
-                              color: AppTheme.darkGreen.withOpacity(0.25)),
-                        ),
-                        TextSpan(
-                          text: p.displayPrice,
-                          style: TextStyle(
-                            color: p.isPaid
-                                ? AppTheme.tertiary
-                                : AppTheme.darkGreen.withOpacity(0.45),
-                            fontWeight: p.isPaid
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                        const SizedBox(width: 6),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 12,
+                            color: Colors.white.withOpacity(0.7),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 6),
 
-                  // Title + chevron
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          p.title,
-                          style: const TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.darkGreen,
-                            height: 1.2,
-                            letterSpacing: -0.3,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                    if (p.summary.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        p.summary,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.8),
+                          height: 1.4,
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 12,
-                          color: AppTheme.darkGreen.withOpacity(0.28),
-                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
-                  ),
-
-                  if (p.summary.isNotEmpty) ...[
-                    const SizedBox(height: 5),
-                    Text(
-                      p.summary,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.darkGreen.withOpacity(0.48),
-                        height: 1.4,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ],
-                ],
+                ),
               ),
+            ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1273,18 +1296,22 @@ class _StatusBadge extends StatelessWidget {
 
 class _CoverThumb extends StatelessWidget {
   final String? url;
-  final double height;
+
+  /// Fixed height. When null the thumb fills its parent (used inside a
+  /// Positioned.fill / AspectRatio so the image is the whole card).
+  final double? height;
   final bool fullWidth;
 
   const _CoverThumb({
     this.url,
-    required this.height,
+    this.height,
     this.fullWidth = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final w = fullWidth ? double.infinity : height;
+    final double? w =
+        height == null ? null : (fullWidth ? double.infinity : height);
     if (url != null && url!.isNotEmpty) {
       return Image.network(
         url!,
@@ -1297,7 +1324,7 @@ class _CoverThumb extends StatelessWidget {
     return _placeholder(w);
   }
 
-  Widget _placeholder(double w) {
+  Widget _placeholder(double? w) {
     return Container(
       width: w,
       height: height,

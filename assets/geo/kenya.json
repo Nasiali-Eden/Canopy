@@ -1,0 +1,2654 @@
+{
+ "_schema_version": "1.0",
+ "_note": "Canonical Kenyan administrative registry. 47 counties grouped into the 8 standard regions. Supersedes assets/Cities/African/KenyaCities.json, whose 49 keys mixed counties with towns and omitted Makueni. area.legacy_city records the old key so stored free-text values remain resolvable.",
+ "country": {
+  "id": "country_kenya",
+  "name": "Kenya",
+  "iso_code": "KE",
+  "continent": "Africa",
+  "currency": "KES"
+ },
+ "regions": [
+  {
+   "id": "region_nairobi",
+   "name": "Nairobi",
+   "country_id": "country_kenya",
+   "county_ids": [
+    "county_nairobi"
+   ]
+  },
+  {
+   "id": "region_central",
+   "name": "Central",
+   "country_id": "country_kenya",
+   "county_ids": [
+    "county_kiambu",
+    "county_kirinyaga",
+    "county_murang_a",
+    "county_nyandarua",
+    "county_nyeri"
+   ]
+  },
+  {
+   "id": "region_coast",
+   "name": "Coast",
+   "country_id": "country_kenya",
+   "county_ids": [
+    "county_mombasa",
+    "county_kwale",
+    "county_kilifi",
+    "county_tana_river",
+    "county_lamu",
+    "county_taita_taveta"
+   ]
+  },
+  {
+   "id": "region_eastern",
+   "name": "Eastern",
+   "country_id": "country_kenya",
+   "county_ids": [
+    "county_marsabit",
+    "county_isiolo",
+    "county_meru",
+    "county_tharaka_nithi",
+    "county_embu",
+    "county_kitui",
+    "county_machakos",
+    "county_makueni"
+   ]
+  },
+  {
+   "id": "region_north_eastern",
+   "name": "North Eastern",
+   "country_id": "country_kenya",
+   "county_ids": [
+    "county_garissa",
+    "county_wajir",
+    "county_mandera"
+   ]
+  },
+  {
+   "id": "region_nyanza",
+   "name": "Nyanza",
+   "country_id": "country_kenya",
+   "county_ids": [
+    "county_siaya",
+    "county_kisumu",
+    "county_homa_bay",
+    "county_migori",
+    "county_kisii",
+    "county_nyamira"
+   ]
+  },
+  {
+   "id": "region_rift_valley",
+   "name": "Rift Valley",
+   "country_id": "country_kenya",
+   "county_ids": [
+    "county_turkana",
+    "county_west_pokot",
+    "county_samburu",
+    "county_trans_nzoia",
+    "county_uasin_gishu",
+    "county_elgeyo_marakwet",
+    "county_nandi",
+    "county_baringo",
+    "county_laikipia",
+    "county_nakuru",
+    "county_narok",
+    "county_kajiado",
+    "county_kericho",
+    "county_bomet"
+   ]
+  },
+  {
+   "id": "region_western",
+   "name": "Western",
+   "country_id": "country_kenya",
+   "county_ids": [
+    "county_kakamega",
+    "county_vihiga",
+    "county_bungoma",
+    "county_busia"
+   ]
+  }
+ ],
+ "counties": [
+  {
+   "id": "county_nairobi",
+   "name": "Nairobi",
+   "code": 47,
+   "region_id": "region_nairobi",
+   "region_name": "Nairobi",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_nairobi_westlands",
+     "name": "Westlands",
+     "lat": -1.2676,
+     "lng": 36.8108
+    },
+    {
+     "id": "area_nairobi_kilimani",
+     "name": "Kilimani",
+     "lat": -1.2921,
+     "lng": 36.7856
+    },
+    {
+     "id": "area_nairobi_central_business_district",
+     "name": "Central Business District",
+     "lat": -1.2864,
+     "lng": 36.8172
+    },
+    {
+     "id": "area_nairobi_runda",
+     "name": "Runda",
+     "lat": -1.2084,
+     "lng": 36.7516
+    },
+    {
+     "id": "area_nairobi_lavington",
+     "name": "Lavington",
+     "lat": -1.2833,
+     "lng": 36.7667
+    },
+    {
+     "id": "area_nairobi_upperhill",
+     "name": "Upperhill",
+     "lat": -1.2921,
+     "lng": 36.8219
+    },
+    {
+     "id": "area_nairobi_parklands",
+     "name": "Parklands",
+     "lat": -1.263,
+     "lng": 36.8581
+    },
+    {
+     "id": "area_nairobi_south_b",
+     "name": "South B",
+     "lat": -1.3158,
+     "lng": 36.8269
+    },
+    {
+     "id": "area_nairobi_south_c",
+     "name": "South C",
+     "lat": -1.3225,
+     "lng": 36.8347
+    },
+    {
+     "id": "area_nairobi_karen",
+     "name": "Karen",
+     "lat": -1.3197,
+     "lng": 36.6859
+    },
+    {
+     "id": "area_nairobi_kasarani",
+     "name": "Kasarani",
+     "lat": -1.2167,
+     "lng": 36.89
+    },
+    {
+     "id": "area_nairobi_eastleigh",
+     "name": "Eastleigh",
+     "lat": -1.2736,
+     "lng": 36.8544
+    },
+    {
+     "id": "area_nairobi_embakasi",
+     "name": "Embakasi",
+     "lat": -1.3194,
+     "lng": 36.8978
+    },
+    {
+     "id": "area_nairobi_kahawa",
+     "name": "Kahawa",
+     "lat": -1.1833,
+     "lng": 36.9167
+    },
+    {
+     "id": "area_nairobi_kileleshwa",
+     "name": "Kileleshwa",
+     "lat": -1.2667,
+     "lng": 36.7833
+    },
+    {
+     "id": "area_nairobi_kitisuru",
+     "name": "Kitisuru",
+     "lat": -1.2167,
+     "lng": 36.7667
+    },
+    {
+     "id": "area_nairobi_loresho",
+     "name": "Loresho",
+     "lat": -1.2667,
+     "lng": 36.75
+    },
+    {
+     "id": "area_nairobi_muthaiga",
+     "name": "Muthaiga",
+     "lat": -1.2333,
+     "lng": 36.8167
+    },
+    {
+     "id": "area_nairobi_ngara",
+     "name": "Ngara",
+     "lat": -1.2667,
+     "lng": 36.8333
+    },
+    {
+     "id": "area_nairobi_pangani",
+     "name": "Pangani",
+     "lat": -1.2833,
+     "lng": 36.85
+    },
+    {
+     "id": "area_nairobi_ridgeways",
+     "name": "Ridgeways",
+     "lat": -1.2167,
+     "lng": 36.8667
+    },
+    {
+     "id": "area_nairobi_spring_valley",
+     "name": "Spring Valley",
+     "lat": -1.25,
+     "lng": 36.7833
+    },
+    {
+     "id": "area_nairobi_woodley",
+     "name": "Woodley",
+     "lat": -1.2833,
+     "lng": 36.75
+    },
+    {
+     "id": "area_nairobi_adams_arcade",
+     "name": "Adams Arcade",
+     "lat": -1.3167,
+     "lng": 36.7833
+    },
+    {
+     "id": "area_nairobi_dagoretti",
+     "name": "Dagoretti",
+     "lat": -1.3,
+     "lng": 36.7333
+    },
+    {
+     "id": "area_nairobi_dandora",
+     "name": "Dandora",
+     "lat": -1.25,
+     "lng": 36.8917
+    },
+    {
+     "id": "area_nairobi_donholm",
+     "name": "Donholm",
+     "lat": -1.2833,
+     "lng": 36.8833
+    },
+    {
+     "id": "area_nairobi_fedha_estate",
+     "name": "Fedha Estate",
+     "lat": -1.3,
+     "lng": 36.9
+    },
+    {
+     "id": "area_nairobi_githurai",
+     "name": "Githurai",
+     "lat": -1.1833,
+     "lng": 36.9
+    },
+    {
+     "id": "area_nairobi_githunguri",
+     "name": "Githunguri",
+     "lat": -1.0833,
+     "lng": 36.8167
+    },
+    {
+     "id": "area_nairobi_hurlingham",
+     "name": "Hurlingham",
+     "lat": -1.3,
+     "lng": 36.7667
+    },
+    {
+     "id": "area_nairobi_imara_daima",
+     "name": "Imara Daima",
+     "lat": -1.35,
+     "lng": 36.8667
+    },
+    {
+     "id": "area_nairobi_jogoo_road",
+     "name": "Jogoo Road",
+     "lat": -1.2833,
+     "lng": 36.85
+    },
+    {
+     "id": "area_nairobi_kibera",
+     "name": "Kibera",
+     "lat": -1.3125,
+     "lng": 36.7889
+    },
+    {
+     "id": "area_nairobi_kariobangi",
+     "name": "Kariobangi",
+     "lat": -1.25,
+     "lng": 36.8833
+    },
+    {
+     "id": "area_nairobi_kawangware",
+     "name": "Kawangware",
+     "lat": -1.2833,
+     "lng": 36.7167
+    },
+    {
+     "id": "area_nairobi_kayole",
+     "name": "Kayole",
+     "lat": -1.2667,
+     "lng": 36.9167
+    },
+    {
+     "id": "area_nairobi_kiambu_road",
+     "name": "Kiambu Road",
+     "lat": -1.2,
+     "lng": 36.8167
+    },
+    {
+     "id": "area_nairobi_kamulu",
+     "name": "Kamulu",
+     "lat": -1.2667,
+     "lng": 37.0167
+    },
+    {
+     "id": "area_nairobi_kangemi",
+     "name": "Kangemi",
+     "lat": -1.2667,
+     "lng": 36.7333
+    },
+    {
+     "id": "area_nairobi_komarock",
+     "name": "Komarock",
+     "lat": -1.2833,
+     "lng": 36.9167
+    },
+    {
+     "id": "area_nairobi_kware",
+     "name": "Kware",
+     "lat": -1.3167,
+     "lng": 36.7667
+    },
+    {
+     "id": "area_nairobi_mathare",
+     "name": "Mathare",
+     "lat": -1.2597,
+     "lng": 36.8581
+    },
+    {
+     "id": "area_nairobi_milimani",
+     "name": "Milimani",
+     "lat": -1.2833,
+     "lng": 36.8
+    },
+    {
+     "id": "area_nairobi_mombasa_road",
+     "name": "Mombasa Road",
+     "lat": -1.3167,
+     "lng": 36.85
+    },
+    {
+     "id": "area_nairobi_ngong_road",
+     "name": "Ngong Road",
+     "lat": -1.3,
+     "lng": 36.7833
+    },
+    {
+     "id": "area_nairobi_nyayo_estate",
+     "name": "Nyayo Estate",
+     "lat": -1.3167,
+     "lng": 36.8167
+    },
+    {
+     "id": "area_nairobi_pipeline",
+     "name": "Pipeline",
+     "lat": -1.3333,
+     "lng": 36.8333
+    },
+    {
+     "id": "area_nairobi_riruta",
+     "name": "Riruta",
+     "lat": -1.2667,
+     "lng": 36.7167
+    },
+    {
+     "id": "area_nairobi_roysambu",
+     "name": "Roysambu",
+     "lat": -1.2167,
+     "lng": 36.8833
+    },
+    {
+     "id": "area_nairobi_satellite",
+     "name": "Satellite",
+     "lat": -1.2667,
+     "lng": 36.7
+    },
+    {
+     "id": "area_nairobi_thika_road",
+     "name": "Thika Road",
+     "lat": -1.2167,
+     "lng": 36.8833
+    },
+    {
+     "id": "area_nairobi_thome",
+     "name": "Thome",
+     "lat": -1.2333,
+     "lng": 36.8667
+    },
+    {
+     "id": "area_nairobi_umoja",
+     "name": "Umoja",
+     "lat": -1.2833,
+     "lng": 36.9
+    },
+    {
+     "id": "area_nairobi_uthiru",
+     "name": "Uthiru",
+     "lat": -1.2667,
+     "lng": 36.6833
+    },
+    {
+     "id": "area_nairobi_buru_buru",
+     "name": "Buru Buru",
+     "lat": -1.2833,
+     "lng": 36.8667
+    },
+    {
+     "id": "area_nairobi_buruburu_phase_5",
+     "name": "Buruburu Phase 5",
+     "lat": -1.29,
+     "lng": 36.87
+    },
+    {
+     "id": "area_nairobi_zimmerman",
+     "name": "Zimmerman",
+     "lat": -1.2167,
+     "lng": 36.8833
+    }
+   ],
+   "lat": -1.2685,
+   "lng": 36.82518
+  },
+  {
+   "id": "county_kiambu",
+   "name": "Kiambu",
+   "code": 22,
+   "region_id": "region_central",
+   "region_name": "Central",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kiambu_thika_town",
+     "name": "Thika Town",
+     "lat": -1.0392,
+     "lng": 37.0694,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_makongeni",
+     "name": "Makongeni",
+     "lat": -1.05,
+     "lng": 37.0833,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_section_9",
+     "name": "Section 9",
+     "lat": -1.0333,
+     "lng": 37.0833,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_kiganjo",
+     "name": "Kiganjo",
+     "lat": -1.05,
+     "lng": 37.0667,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_kilimambogo",
+     "name": "Kilimambogo",
+     "lat": -1.0333,
+     "lng": 37.0667,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_makutano",
+     "name": "Makutano",
+     "lat": -1.0167,
+     "lng": 37.0833,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_gatitu",
+     "name": "Gatitu",
+     "lat": -1.0167,
+     "lng": 37.0667,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_muguga",
+     "name": "Muguga",
+     "lat": -1.0333,
+     "lng": 37.05,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_ngoingwa",
+     "name": "Ngoingwa",
+     "lat": -1.0167,
+     "lng": 37.05,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_kiandutu",
+     "name": "Kiandutu",
+     "lat": -1.04,
+     "lng": 37.075,
+     "legacy_city": "Thika"
+    },
+    {
+     "id": "area_kiambu_kiambu_town",
+     "name": "Kiambu Town",
+     "lat": -1.1714,
+     "lng": 36.8356
+    },
+    {
+     "id": "area_kiambu_ruiru",
+     "name": "Ruiru",
+     "lat": -1.15,
+     "lng": 36.9667
+    },
+    {
+     "id": "area_kiambu_juja",
+     "name": "Juja",
+     "lat": -1.1,
+     "lng": 37.0167
+    },
+    {
+     "id": "area_kiambu_limuru",
+     "name": "Limuru",
+     "lat": -1.1167,
+     "lng": 36.65
+    },
+    {
+     "id": "area_kiambu_kikuyu",
+     "name": "Kikuyu",
+     "lat": -1.25,
+     "lng": 36.6667
+    },
+    {
+     "id": "area_kiambu_gatundu",
+     "name": "Gatundu",
+     "lat": -1.0333,
+     "lng": 37.0
+    },
+    {
+     "id": "area_kiambu_lari",
+     "name": "Lari",
+     "lat": -1.0833,
+     "lng": 36.7167
+    },
+    {
+     "id": "area_kiambu_kabete",
+     "name": "Kabete",
+     "lat": -1.2667,
+     "lng": 36.7167
+    },
+    {
+     "id": "area_kiambu_githunguri",
+     "name": "Githunguri",
+     "lat": -1.0833,
+     "lng": 36.8167
+    },
+    {
+     "id": "area_kiambu_karuri",
+     "name": "Karuri",
+     "lat": -1.1667,
+     "lng": 36.8833
+    }
+   ],
+   "lat": -1.08753,
+   "lng": 36.94817
+  },
+  {
+   "id": "county_kirinyaga",
+   "name": "Kirinyaga",
+   "code": 20,
+   "region_id": "region_central",
+   "region_name": "Central",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kirinyaga_kerugoya",
+     "name": "Kerugoya",
+     "lat": -0.4833,
+     "lng": 37.2833
+    },
+    {
+     "id": "area_kirinyaga_kutus",
+     "name": "Kutus",
+     "lat": -0.4667,
+     "lng": 37.3167
+    },
+    {
+     "id": "area_kirinyaga_sagana",
+     "name": "Sagana",
+     "lat": -0.6667,
+     "lng": 37.2167
+    },
+    {
+     "id": "area_kirinyaga_baricho",
+     "name": "Baricho",
+     "lat": -0.4167,
+     "lng": 37.4
+    }
+   ],
+   "lat": -0.50835,
+   "lng": 37.30418
+  },
+  {
+   "id": "county_murang_a",
+   "name": "Murang'a",
+   "code": 21,
+   "region_id": "region_central",
+   "region_name": "Central",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_murang_a_muranga_town",
+     "name": "Muranga Town",
+     "lat": -0.7167,
+     "lng": 37.15,
+     "legacy_city": "Muranga"
+    },
+    {
+     "id": "area_murang_a_kenol",
+     "name": "Kenol",
+     "lat": -0.9167,
+     "lng": 37.0167,
+     "legacy_city": "Muranga"
+    },
+    {
+     "id": "area_murang_a_kandara",
+     "name": "Kandara",
+     "lat": -0.8333,
+     "lng": 37.0,
+     "legacy_city": "Muranga"
+    },
+    {
+     "id": "area_murang_a_gatanga",
+     "name": "Gatanga",
+     "lat": -0.9833,
+     "lng": 36.9167,
+     "legacy_city": "Muranga"
+    }
+   ],
+   "lat": -0.8625,
+   "lng": 37.02085
+  },
+  {
+   "id": "county_nyandarua",
+   "name": "Nyandarua",
+   "code": 18,
+   "region_id": "region_central",
+   "region_name": "Central",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_nyandarua_ol_kalou",
+     "name": "Ol Kalou",
+     "lat": -0.2667,
+     "lng": 36.3833
+    },
+    {
+     "id": "area_nyandarua_nyahururu",
+     "name": "Nyahururu",
+     "lat": 0.0333,
+     "lng": 36.3667
+    },
+    {
+     "id": "area_nyandarua_engineer",
+     "name": "Engineer",
+     "lat": -0.3333,
+     "lng": 36.6
+    },
+    {
+     "id": "area_nyandarua_kipipiri",
+     "name": "Kipipiri",
+     "lat": -0.1833,
+     "lng": 36.5167
+    }
+   ],
+   "lat": -0.1875,
+   "lng": 36.46667
+  },
+  {
+   "id": "county_nyeri",
+   "name": "Nyeri",
+   "code": 19,
+   "region_id": "region_central",
+   "region_name": "Central",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_nyeri_nyeri_town",
+     "name": "Nyeri Town",
+     "lat": -0.4167,
+     "lng": 36.95
+    },
+    {
+     "id": "area_nyeri_kiganjo",
+     "name": "Kiganjo",
+     "lat": -0.4,
+     "lng": 36.9667
+    },
+    {
+     "id": "area_nyeri_karatina",
+     "name": "Karatina",
+     "lat": -0.4833,
+     "lng": 37.1333
+    },
+    {
+     "id": "area_nyeri_othaya",
+     "name": "Othaya",
+     "lat": -0.5667,
+     "lng": 36.95
+    },
+    {
+     "id": "area_nyeri_mukurweini",
+     "name": "Mukurweini",
+     "lat": -0.45,
+     "lng": 36.9167
+    },
+    {
+     "id": "area_nyeri_mathira",
+     "name": "Mathira",
+     "lat": -0.3833,
+     "lng": 36.9167
+    },
+    {
+     "id": "area_nyeri_tetu",
+     "name": "Tetu",
+     "lat": -0.5,
+     "lng": 36.9167
+    },
+    {
+     "id": "area_nyeri_kieni",
+     "name": "Kieni",
+     "lat": -0.35,
+     "lng": 37.0
+    },
+    {
+     "id": "area_nyeri_nyeri_central",
+     "name": "Nyeri Central",
+     "lat": -0.4167,
+     "lng": 36.95
+    }
+   ],
+   "lat": -0.44074,
+   "lng": 36.96668
+  },
+  {
+   "id": "county_mombasa",
+   "name": "Mombasa",
+   "code": 1,
+   "region_id": "region_coast",
+   "region_name": "Coast",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_mombasa_nyali",
+     "name": "Nyali",
+     "lat": -4.05,
+     "lng": 39.7167
+    },
+    {
+     "id": "area_mombasa_bamburi",
+     "name": "Bamburi",
+     "lat": -4.0167,
+     "lng": 39.75
+    },
+    {
+     "id": "area_mombasa_kisauni",
+     "name": "Kisauni",
+     "lat": -4.0333,
+     "lng": 39.6833
+    },
+    {
+     "id": "area_mombasa_likoni",
+     "name": "Likoni",
+     "lat": -4.1,
+     "lng": 39.65
+    },
+    {
+     "id": "area_mombasa_changamwe",
+     "name": "Changamwe",
+     "lat": -4.0167,
+     "lng": 39.6167
+    },
+    {
+     "id": "area_mombasa_mtongwe",
+     "name": "Mtongwe",
+     "lat": -4.0833,
+     "lng": 39.6167
+    },
+    {
+     "id": "area_mombasa_port_reitz",
+     "name": "Port Reitz",
+     "lat": -4.0167,
+     "lng": 39.65
+    },
+    {
+     "id": "area_mombasa_tudor",
+     "name": "Tudor",
+     "lat": -4.05,
+     "lng": 39.6833
+    },
+    {
+     "id": "area_mombasa_shanzu",
+     "name": "Shanzu",
+     "lat": -4.0167,
+     "lng": 39.75
+    },
+    {
+     "id": "area_mombasa_kongowea",
+     "name": "Kongowea",
+     "lat": -4.05,
+     "lng": 39.6833
+    },
+    {
+     "id": "area_mombasa_mikindani",
+     "name": "Mikindani",
+     "lat": -4.0833,
+     "lng": 39.65
+    },
+    {
+     "id": "area_mombasa_mvita",
+     "name": "Mvita",
+     "lat": -4.05,
+     "lng": 39.6667
+    },
+    {
+     "id": "area_mombasa_jomvu",
+     "name": "Jomvu",
+     "lat": -4.0167,
+     "lng": 39.6167
+    },
+    {
+     "id": "area_mombasa_mtwapa",
+     "name": "Mtwapa",
+     "lat": -3.9333,
+     "lng": 39.75
+    },
+    {
+     "id": "area_mombasa_kilifi",
+     "name": "Kilifi",
+     "lat": -3.6333,
+     "lng": 39.85
+    },
+    {
+     "id": "area_mombasa_old_town",
+     "name": "Old Town",
+     "lat": -4.0627,
+     "lng": 39.6682
+    },
+    {
+     "id": "area_mombasa_majengo",
+     "name": "Majengo",
+     "lat": -4.05,
+     "lng": 39.65
+    },
+    {
+     "id": "area_mombasa_shimanzi",
+     "name": "Shimanzi",
+     "lat": -4.0667,
+     "lng": 39.6333
+    },
+    {
+     "id": "area_mombasa_ganjoni",
+     "name": "Ganjoni",
+     "lat": -4.0333,
+     "lng": 39.6667
+    },
+    {
+     "id": "area_mombasa_kipevu",
+     "name": "Kipevu",
+     "lat": -4.0167,
+     "lng": 39.6
+    }
+   ],
+   "lat": -4.01897,
+   "lng": 39.67758
+  },
+  {
+   "id": "county_kwale",
+   "name": "Kwale",
+   "code": 2,
+   "region_id": "region_coast",
+   "region_name": "Coast",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kwale_kwale_town",
+     "name": "Kwale Town",
+     "lat": -4.1833,
+     "lng": 39.45
+    },
+    {
+     "id": "area_kwale_ukunda",
+     "name": "Ukunda",
+     "lat": -4.2833,
+     "lng": 39.5667
+    },
+    {
+     "id": "area_kwale_msambweni",
+     "name": "Msambweni",
+     "lat": -4.4667,
+     "lng": 39.4833
+    },
+    {
+     "id": "area_kwale_lunga_lunga",
+     "name": "Lunga Lunga",
+     "lat": -4.6333,
+     "lng": 39.1833
+    }
+   ],
+   "lat": -4.39165,
+   "lng": 39.42083
+  },
+  {
+   "id": "county_kilifi",
+   "name": "Kilifi",
+   "code": 3,
+   "region_id": "region_coast",
+   "region_name": "Coast",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kilifi_malindi_town",
+     "name": "Malindi Town",
+     "lat": -3.2167,
+     "lng": 40.1167,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_casuarina",
+     "name": "Casuarina",
+     "lat": -3.2,
+     "lng": 40.1333,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_silversands",
+     "name": "Silversands",
+     "lat": -3.1833,
+     "lng": 40.15,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_watamu",
+     "name": "Watamu",
+     "lat": -3.35,
+     "lng": 40.0167,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_kilifi",
+     "name": "Kilifi",
+     "lat": -3.6333,
+     "lng": 39.85,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_mtwapa",
+     "name": "Mtwapa",
+     "lat": -3.9333,
+     "lng": 39.75,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_vipingo",
+     "name": "Vipingo",
+     "lat": -3.8,
+     "lng": 39.8,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_kikambala",
+     "name": "Kikambala",
+     "lat": -3.9,
+     "lng": 39.75,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_diani",
+     "name": "Diani",
+     "lat": -4.3167,
+     "lng": 39.5833,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_ukunda",
+     "name": "Ukunda",
+     "lat": -4.2833,
+     "lng": 39.5667,
+     "legacy_city": "Malindi"
+    },
+    {
+     "id": "area_kilifi_kilifi_town",
+     "name": "Kilifi Town",
+     "lat": -3.6333,
+     "lng": 39.85
+    },
+    {
+     "id": "area_kilifi_malindi",
+     "name": "Malindi",
+     "lat": -3.2167,
+     "lng": 40.1167
+    },
+    {
+     "id": "area_kilifi_mariakani",
+     "name": "Mariakani",
+     "lat": -3.8667,
+     "lng": 39.4667
+    },
+    {
+     "id": "area_kilifi_kaloleni",
+     "name": "Kaloleni",
+     "lat": -3.9,
+     "lng": 39.5333
+    }
+   ],
+   "lat": -3.67381,
+   "lng": 39.83453
+  },
+  {
+   "id": "county_tana_river",
+   "name": "Tana River",
+   "code": 4,
+   "region_id": "region_coast",
+   "region_name": "Coast",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_tana_river_hola",
+     "name": "Hola",
+     "lat": -1.5,
+     "lng": 40.0333
+    },
+    {
+     "id": "area_tana_river_garsen",
+     "name": "Garsen",
+     "lat": -2.2833,
+     "lng": 40.1167
+    },
+    {
+     "id": "area_tana_river_witu",
+     "name": "Witu",
+     "lat": -2.3833,
+     "lng": 40.45
+    }
+   ],
+   "lat": -2.05553,
+   "lng": 40.2
+  },
+  {
+   "id": "county_lamu",
+   "name": "Lamu",
+   "code": 5,
+   "region_id": "region_coast",
+   "region_name": "Coast",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_lamu_lamu_town",
+     "name": "Lamu Town",
+     "lat": -2.2667,
+     "lng": 40.9
+    },
+    {
+     "id": "area_lamu_hindi",
+     "name": "Hindi",
+     "lat": -2.3167,
+     "lng": 41.0333
+    },
+    {
+     "id": "area_lamu_faza",
+     "name": "Faza",
+     "lat": -2.1833,
+     "lng": 41.0833
+    }
+   ],
+   "lat": -2.25557,
+   "lng": 41.00553
+  },
+  {
+   "id": "county_taita_taveta",
+   "name": "Taita-Taveta",
+   "code": 6,
+   "region_id": "region_coast",
+   "region_name": "Coast",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_taita_taveta_voi",
+     "name": "Voi",
+     "lat": -3.3833,
+     "lng": 38.55,
+     "legacy_city": "Taita Taveta"
+    },
+    {
+     "id": "area_taita_taveta_wundanyi",
+     "name": "Wundanyi",
+     "lat": -3.4,
+     "lng": 38.3667,
+     "legacy_city": "Taita Taveta"
+    },
+    {
+     "id": "area_taita_taveta_taveta",
+     "name": "Taveta",
+     "lat": -3.4,
+     "lng": 37.6833,
+     "legacy_city": "Taita Taveta"
+    },
+    {
+     "id": "area_taita_taveta_mwatate",
+     "name": "Mwatate",
+     "lat": -3.5,
+     "lng": 38.3833,
+     "legacy_city": "Taita Taveta"
+    }
+   ],
+   "lat": -3.42083,
+   "lng": 38.24582
+  },
+  {
+   "id": "county_marsabit",
+   "name": "Marsabit",
+   "code": 10,
+   "region_id": "region_eastern",
+   "region_name": "Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_marsabit_marsabit_town",
+     "name": "Marsabit Town",
+     "lat": 2.3333,
+     "lng": 37.9833
+    },
+    {
+     "id": "area_marsabit_moyale",
+     "name": "Moyale",
+     "lat": 3.5333,
+     "lng": 39.05
+    },
+    {
+     "id": "area_marsabit_sololo",
+     "name": "Sololo",
+     "lat": 3.4167,
+     "lng": 38.4167
+    },
+    {
+     "id": "area_marsabit_loiyangalani",
+     "name": "Loiyangalani",
+     "lat": 2.7667,
+     "lng": 36.7
+    }
+   ],
+   "lat": 3.0125,
+   "lng": 38.0375
+  },
+  {
+   "id": "county_isiolo",
+   "name": "Isiolo",
+   "code": 11,
+   "region_id": "region_eastern",
+   "region_name": "Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_isiolo_isiolo_town",
+     "name": "Isiolo Town",
+     "lat": 0.35,
+     "lng": 37.5833
+    },
+    {
+     "id": "area_isiolo_merti",
+     "name": "Merti",
+     "lat": 0.7167,
+     "lng": 38.2167
+    },
+    {
+     "id": "area_isiolo_garbatulla",
+     "name": "Garbatulla",
+     "lat": 0.2333,
+     "lng": 38.6667
+    }
+   ],
+   "lat": 0.43333,
+   "lng": 38.15557
+  },
+  {
+   "id": "county_meru",
+   "name": "Meru",
+   "code": 12,
+   "region_id": "region_eastern",
+   "region_name": "Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_meru_meru_town",
+     "name": "Meru Town",
+     "lat": 0.05,
+     "lng": 37.65
+    },
+    {
+     "id": "area_meru_makutano",
+     "name": "Makutano",
+     "lat": 0.0667,
+     "lng": 37.6667
+    },
+    {
+     "id": "area_meru_nkubu",
+     "name": "Nkubu",
+     "lat": 0.0333,
+     "lng": 37.6667
+    },
+    {
+     "id": "area_meru_maua",
+     "name": "Maua",
+     "lat": 0.2333,
+     "lng": 37.9333
+    },
+    {
+     "id": "area_meru_chuka",
+     "name": "Chuka",
+     "lat": -0.3333,
+     "lng": 37.65
+    },
+    {
+     "id": "area_meru_embu",
+     "name": "Embu",
+     "lat": -0.5333,
+     "lng": 37.45
+    },
+    {
+     "id": "area_meru_runyenjes",
+     "name": "Runyenjes",
+     "lat": -0.45,
+     "lng": 37.55
+    },
+    {
+     "id": "area_meru_siakago",
+     "name": "Siakago",
+     "lat": -0.35,
+     "lng": 37.75
+    },
+    {
+     "id": "area_meru_gachoka",
+     "name": "Gachoka",
+     "lat": -0.4,
+     "lng": 37.6
+    },
+    {
+     "id": "area_meru_kiritiri",
+     "name": "Kiritiri",
+     "lat": -0.5,
+     "lng": 37.7
+    }
+   ],
+   "lat": -0.21833,
+   "lng": 37.66167
+  },
+  {
+   "id": "county_tharaka_nithi",
+   "name": "Tharaka-Nithi",
+   "code": 13,
+   "region_id": "region_eastern",
+   "region_name": "Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_tharaka_nithi_kathwana",
+     "name": "Kathwana",
+     "lat": -0.2167,
+     "lng": 37.8833,
+     "legacy_city": "Tharaka Nithi"
+    },
+    {
+     "id": "area_tharaka_nithi_chuka",
+     "name": "Chuka",
+     "lat": -0.3333,
+     "lng": 37.65,
+     "legacy_city": "Tharaka Nithi"
+    },
+    {
+     "id": "area_tharaka_nithi_marimanti",
+     "name": "Marimanti",
+     "lat": -0.0833,
+     "lng": 38.0167,
+     "legacy_city": "Tharaka Nithi"
+    }
+   ],
+   "lat": -0.2111,
+   "lng": 37.85
+  },
+  {
+   "id": "county_embu",
+   "name": "Embu",
+   "code": 14,
+   "region_id": "region_eastern",
+   "region_name": "Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_embu_embu_town",
+     "name": "Embu Town",
+     "lat": -0.5333,
+     "lng": 37.45
+    },
+    {
+     "id": "area_embu_siakago",
+     "name": "Siakago",
+     "lat": -0.35,
+     "lng": 37.75
+    },
+    {
+     "id": "area_embu_runyenjes",
+     "name": "Runyenjes",
+     "lat": -0.45,
+     "lng": 37.55
+    }
+   ],
+   "lat": -0.44443,
+   "lng": 37.58333
+  },
+  {
+   "id": "county_kitui",
+   "name": "Kitui",
+   "code": 15,
+   "region_id": "region_eastern",
+   "region_name": "Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kitui_kitui_town",
+     "name": "Kitui Town",
+     "lat": -1.3667,
+     "lng": 38.0167
+    },
+    {
+     "id": "area_kitui_mwingi",
+     "name": "Mwingi",
+     "lat": -0.9333,
+     "lng": 38.0667
+    },
+    {
+     "id": "area_kitui_mutomo",
+     "name": "Mutomo",
+     "lat": -1.8,
+     "lng": 38.1333
+    },
+    {
+     "id": "area_kitui_ikutha",
+     "name": "Ikutha",
+     "lat": -1.6167,
+     "lng": 38.5167
+    },
+    {
+     "id": "area_kitui_kyuso",
+     "name": "Kyuso",
+     "lat": -0.6833,
+     "lng": 38.2167
+    }
+   ],
+   "lat": -1.28,
+   "lng": 38.19002
+  },
+  {
+   "id": "county_machakos",
+   "name": "Machakos",
+   "code": 16,
+   "region_id": "region_eastern",
+   "region_name": "Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_machakos_machakos_town",
+     "name": "Machakos Town",
+     "lat": -1.5167,
+     "lng": 37.2667
+    },
+    {
+     "id": "area_machakos_athi_river",
+     "name": "Athi River",
+     "lat": -1.45,
+     "lng": 36.9833
+    },
+    {
+     "id": "area_machakos_mavoko",
+     "name": "Mavoko",
+     "lat": -1.3833,
+     "lng": 36.95
+    },
+    {
+     "id": "area_machakos_kangundo",
+     "name": "Kangundo",
+     "lat": -1.3167,
+     "lng": 37.35
+    },
+    {
+     "id": "area_machakos_matungulu",
+     "name": "Matungulu",
+     "lat": -1.4,
+     "lng": 37.1833
+    },
+    {
+     "id": "area_machakos_kathiani",
+     "name": "Kathiani",
+     "lat": -1.35,
+     "lng": 37.2167
+    },
+    {
+     "id": "area_machakos_mlolongo",
+     "name": "Mlolongo",
+     "lat": -1.3833,
+     "lng": 36.9167
+    },
+    {
+     "id": "area_machakos_syokimau",
+     "name": "Syokimau",
+     "lat": -1.3667,
+     "lng": 36.9333
+    }
+   ],
+   "lat": -1.39584,
+   "lng": 37.1
+  },
+  {
+   "id": "county_makueni",
+   "name": "Makueni",
+   "code": 17,
+   "region_id": "region_eastern",
+   "region_name": "Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_makueni_wote",
+     "name": "Wote",
+     "lat": -1.7808,
+     "lng": 37.6289
+    },
+    {
+     "id": "area_makueni_makindu",
+     "name": "Makindu",
+     "lat": -2.2833,
+     "lng": 37.825
+    },
+    {
+     "id": "area_makueni_emali",
+     "name": "Emali",
+     "lat": -2.0833,
+     "lng": 37.45
+    },
+    {
+     "id": "area_makueni_kibwezi",
+     "name": "Kibwezi",
+     "lat": -2.4133,
+     "lng": 37.97
+    },
+    {
+     "id": "area_makueni_sultan_hamud",
+     "name": "Sultan Hamud",
+     "lat": -2.0333,
+     "lng": 37.35
+    }
+   ],
+   "lat": -2.1188,
+   "lng": 37.64478
+  },
+  {
+   "id": "county_garissa",
+   "name": "Garissa",
+   "code": 7,
+   "region_id": "region_north_eastern",
+   "region_name": "North Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_garissa_garissa_town",
+     "name": "Garissa Town",
+     "lat": -0.4667,
+     "lng": 39.65
+    },
+    {
+     "id": "area_garissa_dadaab",
+     "name": "Dadaab",
+     "lat": 0.05,
+     "lng": 40.3167
+    },
+    {
+     "id": "area_garissa_ijara",
+     "name": "Ijara",
+     "lat": -1.5833,
+     "lng": 40.5167
+    },
+    {
+     "id": "area_garissa_balambala",
+     "name": "Balambala",
+     "lat": -0.0833,
+     "lng": 39.8833
+    }
+   ],
+   "lat": -0.52082,
+   "lng": 40.09168
+  },
+  {
+   "id": "county_wajir",
+   "name": "Wajir",
+   "code": 8,
+   "region_id": "region_north_eastern",
+   "region_name": "North Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_wajir_wajir_town",
+     "name": "Wajir Town",
+     "lat": 1.75,
+     "lng": 40.0667
+    },
+    {
+     "id": "area_wajir_habaswein",
+     "name": "Habaswein",
+     "lat": 1.0833,
+     "lng": 39.9167
+    },
+    {
+     "id": "area_wajir_tarbaj",
+     "name": "Tarbaj",
+     "lat": 2.2833,
+     "lng": 40.5167
+    }
+   ],
+   "lat": 1.70553,
+   "lng": 40.1667
+  },
+  {
+   "id": "county_mandera",
+   "name": "Mandera",
+   "code": 9,
+   "region_id": "region_north_eastern",
+   "region_name": "North Eastern",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_mandera_mandera_town",
+     "name": "Mandera Town",
+     "lat": 3.9167,
+     "lng": 41.85
+    },
+    {
+     "id": "area_mandera_banissa",
+     "name": "Banissa",
+     "lat": 3.1667,
+     "lng": 41.1667
+    },
+    {
+     "id": "area_mandera_lafey",
+     "name": "Lafey",
+     "lat": 2.6167,
+     "lng": 40.8833
+    }
+   ],
+   "lat": 3.23337,
+   "lng": 41.3
+  },
+  {
+   "id": "county_siaya",
+   "name": "Siaya",
+   "code": 41,
+   "region_id": "region_nyanza",
+   "region_name": "Nyanza",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_siaya_siaya_town",
+     "name": "Siaya Town",
+     "lat": 0.0667,
+     "lng": 34.2833
+    },
+    {
+     "id": "area_siaya_bondo",
+     "name": "Bondo",
+     "lat": 0.2333,
+     "lng": 34.2667
+    },
+    {
+     "id": "area_siaya_ukwala",
+     "name": "Ukwala",
+     "lat": 0.0167,
+     "lng": 34.3167
+    },
+    {
+     "id": "area_siaya_ugunja",
+     "name": "Ugunja",
+     "lat": 0.1167,
+     "lng": 34.3
+    }
+   ],
+   "lat": 0.10835,
+   "lng": 34.29167
+  },
+  {
+   "id": "county_kisumu",
+   "name": "Kisumu",
+   "code": 42,
+   "region_id": "region_nyanza",
+   "region_name": "Nyanza",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kisumu_milimani",
+     "name": "Milimani",
+     "lat": -0.0833,
+     "lng": 34.7667
+    },
+    {
+     "id": "area_kisumu_mamboleo",
+     "name": "Mamboleo",
+     "lat": -0.1,
+     "lng": 34.75
+    },
+    {
+     "id": "area_kisumu_kondele",
+     "name": "Kondele",
+     "lat": -0.0833,
+     "lng": 34.75
+    },
+    {
+     "id": "area_kisumu_dunga",
+     "name": "Dunga",
+     "lat": -0.0667,
+     "lng": 34.7667
+    },
+    {
+     "id": "area_kisumu_kakamega_road",
+     "name": "Kakamega Road",
+     "lat": -0.0833,
+     "lng": 34.7333
+    },
+    {
+     "id": "area_kisumu_kibuye",
+     "name": "Kibuye",
+     "lat": -0.1,
+     "lng": 34.7667
+    },
+    {
+     "id": "area_kisumu_nyalenda",
+     "name": "Nyalenda",
+     "lat": -0.0833,
+     "lng": 34.7833
+    },
+    {
+     "id": "area_kisumu_manyatta",
+     "name": "Manyatta",
+     "lat": -0.1,
+     "lng": 34.7833
+    },
+    {
+     "id": "area_kisumu_riat",
+     "name": "Riat",
+     "lat": -0.0667,
+     "lng": 34.75
+    },
+    {
+     "id": "area_kisumu_tom_mboya_estate",
+     "name": "Tom Mboya Estate",
+     "lat": -0.09,
+     "lng": 34.76
+    },
+    {
+     "id": "area_kisumu_obunga",
+     "name": "Obunga",
+     "lat": -0.07,
+     "lng": 34.74
+    },
+    {
+     "id": "area_kisumu_bandani",
+     "name": "Bandani",
+     "lat": -0.095,
+     "lng": 34.755
+    }
+   ],
+   "lat": -0.08513,
+   "lng": 34.75875
+  },
+  {
+   "id": "county_homa_bay",
+   "name": "Homa Bay",
+   "code": 43,
+   "region_id": "region_nyanza",
+   "region_name": "Nyanza",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_homa_bay_homa_bay_town",
+     "name": "Homa Bay Town",
+     "lat": -0.5167,
+     "lng": 34.45
+    },
+    {
+     "id": "area_homa_bay_oyugis",
+     "name": "Oyugis",
+     "lat": -0.5,
+     "lng": 34.7
+    },
+    {
+     "id": "area_homa_bay_ndhiwa",
+     "name": "Ndhiwa",
+     "lat": -0.75,
+     "lng": 34.4167
+    },
+    {
+     "id": "area_homa_bay_mbita",
+     "name": "Mbita",
+     "lat": -0.4333,
+     "lng": 34.2
+    }
+   ],
+   "lat": -0.55,
+   "lng": 34.44168
+  },
+  {
+   "id": "county_migori",
+   "name": "Migori",
+   "code": 44,
+   "region_id": "region_nyanza",
+   "region_name": "Nyanza",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_migori_migori_town",
+     "name": "Migori Town",
+     "lat": -1.0667,
+     "lng": 34.4667
+    },
+    {
+     "id": "area_migori_rongo",
+     "name": "Rongo",
+     "lat": -0.8333,
+     "lng": 34.6167
+    },
+    {
+     "id": "area_migori_awendo",
+     "name": "Awendo",
+     "lat": -0.9833,
+     "lng": 34.4833
+    },
+    {
+     "id": "area_migori_kehancha",
+     "name": "Kehancha",
+     "lat": -1.0833,
+     "lng": 34.2333
+    }
+   ],
+   "lat": -0.99165,
+   "lng": 34.45
+  },
+  {
+   "id": "county_kisii",
+   "name": "Kisii",
+   "code": 45,
+   "region_id": "region_nyanza",
+   "region_name": "Nyanza",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kisii_kisii_town",
+     "name": "Kisii Town",
+     "lat": -0.6833,
+     "lng": 34.7667
+    },
+    {
+     "id": "area_kisii_keroka",
+     "name": "Keroka",
+     "lat": -0.7833,
+     "lng": 34.95
+    },
+    {
+     "id": "area_kisii_ogembo",
+     "name": "Ogembo",
+     "lat": -0.8,
+     "lng": 34.7167
+    },
+    {
+     "id": "area_kisii_suneka",
+     "name": "Suneka",
+     "lat": -0.6167,
+     "lng": 34.6167
+    }
+   ],
+   "lat": -0.72083,
+   "lng": 34.76253
+  },
+  {
+   "id": "county_nyamira",
+   "name": "Nyamira",
+   "code": 46,
+   "region_id": "region_nyanza",
+   "region_name": "Nyanza",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_nyamira_nyamira_town",
+     "name": "Nyamira Town",
+     "lat": -0.5667,
+     "lng": 34.9333
+    },
+    {
+     "id": "area_nyamira_keroka",
+     "name": "Keroka",
+     "lat": -0.7833,
+     "lng": 34.95
+    },
+    {
+     "id": "area_nyamira_manga",
+     "name": "Manga",
+     "lat": -0.6333,
+     "lng": 34.8667
+    }
+   ],
+   "lat": -0.6611,
+   "lng": 34.91667
+  },
+  {
+   "id": "county_turkana",
+   "name": "Turkana",
+   "code": 23,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_turkana_lodwar",
+     "name": "Lodwar",
+     "lat": 3.1167,
+     "lng": 35.5833
+    },
+    {
+     "id": "area_turkana_kakuma",
+     "name": "Kakuma",
+     "lat": 3.7333,
+     "lng": 34.85
+    },
+    {
+     "id": "area_turkana_lokichoggio",
+     "name": "Lokichoggio",
+     "lat": 4.2167,
+     "lng": 34.35
+    },
+    {
+     "id": "area_turkana_lokitaung",
+     "name": "Lokitaung",
+     "lat": 4.5833,
+     "lng": 34.6833
+    }
+   ],
+   "lat": 3.9125,
+   "lng": 34.86665
+  },
+  {
+   "id": "county_west_pokot",
+   "name": "West Pokot",
+   "code": 24,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_west_pokot_kapenguria",
+     "name": "Kapenguria",
+     "lat": 1.2333,
+     "lng": 35.1167
+    },
+    {
+     "id": "area_west_pokot_makutano",
+     "name": "Makutano",
+     "lat": 1.1167,
+     "lng": 35.0167
+    },
+    {
+     "id": "area_west_pokot_sigor",
+     "name": "Sigor",
+     "lat": 1.2833,
+     "lng": 35.5167
+    }
+   ],
+   "lat": 1.2111,
+   "lng": 35.2167
+  },
+  {
+   "id": "county_samburu",
+   "name": "Samburu",
+   "code": 25,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_samburu_maralal",
+     "name": "Maralal",
+     "lat": 1.1,
+     "lng": 36.7
+    },
+    {
+     "id": "area_samburu_baragoi",
+     "name": "Baragoi",
+     "lat": 1.7833,
+     "lng": 36.7833
+    },
+    {
+     "id": "area_samburu_wamba",
+     "name": "Wamba",
+     "lat": 0.9333,
+     "lng": 37.0667
+    }
+   ],
+   "lat": 1.2722,
+   "lng": 36.85
+  },
+  {
+   "id": "county_trans_nzoia",
+   "name": "Trans Nzoia",
+   "code": 26,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_trans_nzoia_kitale",
+     "name": "Kitale",
+     "lat": 1.0167,
+     "lng": 35.0167
+    },
+    {
+     "id": "area_trans_nzoia_endebess",
+     "name": "Endebess",
+     "lat": 0.9333,
+     "lng": 34.9333
+    },
+    {
+     "id": "area_trans_nzoia_kiminini",
+     "name": "Kiminini",
+     "lat": 0.9833,
+     "lng": 34.9667
+    }
+   ],
+   "lat": 0.97777,
+   "lng": 34.97223
+  },
+  {
+   "id": "county_uasin_gishu",
+   "name": "Uasin Gishu",
+   "code": 27,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_uasin_gishu_milimani",
+     "name": "Milimani",
+     "lat": 0.5167,
+     "lng": 35.2833,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_kapsoya",
+     "name": "Kapsoya",
+     "lat": 0.5,
+     "lng": 35.3,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_langas",
+     "name": "Langas",
+     "lat": 0.5333,
+     "lng": 35.2667,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_huruma",
+     "name": "Huruma",
+     "lat": 0.5167,
+     "lng": 35.2667,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_kipkaren",
+     "name": "Kipkaren",
+     "lat": 0.5,
+     "lng": 35.2833,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_kimumu",
+     "name": "Kimumu",
+     "lat": 0.5333,
+     "lng": 35.3,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_moi_university",
+     "name": "Moi University",
+     "lat": 0.5167,
+     "lng": 35.3,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_sosiani",
+     "name": "Sosiani",
+     "lat": 0.5,
+     "lng": 35.2667,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_west_indies",
+     "name": "West Indies",
+     "lat": 0.5333,
+     "lng": 35.2833,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_ziwa",
+     "name": "Ziwa",
+     "lat": 0.5167,
+     "lng": 35.25,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_pioneer",
+     "name": "Pioneer",
+     "lat": 0.52,
+     "lng": 35.27,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_kapseret",
+     "name": "Kapseret",
+     "lat": 0.51,
+     "lng": 35.29,
+     "legacy_city": "Eldoret"
+    },
+    {
+     "id": "area_uasin_gishu_eldoret",
+     "name": "Eldoret",
+     "lat": 0.5167,
+     "lng": 35.2833
+    },
+    {
+     "id": "area_uasin_gishu_burnt_forest",
+     "name": "Burnt Forest",
+     "lat": 0.2167,
+     "lng": 35.3833
+    },
+    {
+     "id": "area_uasin_gishu_turbo",
+     "name": "Turbo",
+     "lat": 0.5833,
+     "lng": 35.15
+    },
+    {
+     "id": "area_uasin_gishu_moiben",
+     "name": "Moiben",
+     "lat": 0.6,
+     "lng": 35.35
+    }
+   ],
+   "lat": 0.50709,
+   "lng": 35.28291
+  },
+  {
+   "id": "county_elgeyo_marakwet",
+   "name": "Elgeyo-Marakwet",
+   "code": 28,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_elgeyo_marakwet_iten",
+     "name": "Iten",
+     "lat": 0.6667,
+     "lng": 35.5,
+     "legacy_city": "Elgeyo Marakwet"
+    },
+    {
+     "id": "area_elgeyo_marakwet_kapcherop",
+     "name": "Kapcherop",
+     "lat": 0.8833,
+     "lng": 35.6167,
+     "legacy_city": "Elgeyo Marakwet"
+    },
+    {
+     "id": "area_elgeyo_marakwet_kapsowar",
+     "name": "Kapsowar",
+     "lat": 0.9833,
+     "lng": 35.6,
+     "legacy_city": "Elgeyo Marakwet"
+    }
+   ],
+   "lat": 0.84443,
+   "lng": 35.57223
+  },
+  {
+   "id": "county_nandi",
+   "name": "Nandi",
+   "code": 29,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_nandi_kapsabet",
+     "name": "Kapsabet",
+     "lat": 0.2,
+     "lng": 35.1167
+    },
+    {
+     "id": "area_nandi_nandi_hills",
+     "name": "Nandi Hills",
+     "lat": 0.1,
+     "lng": 35.1833
+    },
+    {
+     "id": "area_nandi_kobujoi",
+     "name": "Kobujoi",
+     "lat": 0.3333,
+     "lng": 35.0833
+    }
+   ],
+   "lat": 0.2111,
+   "lng": 35.12777
+  },
+  {
+   "id": "county_baringo",
+   "name": "Baringo",
+   "code": 30,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_baringo_kabarnet",
+     "name": "Kabarnet",
+     "lat": 0.4833,
+     "lng": 35.7333
+    },
+    {
+     "id": "area_baringo_marigat",
+     "name": "Marigat",
+     "lat": 0.4667,
+     "lng": 36.0
+    },
+    {
+     "id": "area_baringo_eldama_ravine",
+     "name": "Eldama Ravine",
+     "lat": 0.05,
+     "lng": 35.7167
+    }
+   ],
+   "lat": 0.33333,
+   "lng": 35.81667
+  },
+  {
+   "id": "county_laikipia",
+   "name": "Laikipia",
+   "code": 31,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_laikipia_nanyuki",
+     "name": "Nanyuki",
+     "lat": 0.0167,
+     "lng": 37.0833
+    },
+    {
+     "id": "area_laikipia_nyahururu",
+     "name": "Nyahururu",
+     "lat": 0.0333,
+     "lng": 36.3667
+    },
+    {
+     "id": "area_laikipia_rumuruti",
+     "name": "Rumuruti",
+     "lat": 0.2667,
+     "lng": 36.5333
+    },
+    {
+     "id": "area_laikipia_doldol",
+     "name": "Doldol",
+     "lat": 0.1,
+     "lng": 36.9
+    }
+   ],
+   "lat": 0.10417,
+   "lng": 36.72082
+  },
+  {
+   "id": "county_nakuru",
+   "name": "Nakuru",
+   "code": 32,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_nakuru_milimani",
+     "name": "Milimani",
+     "lat": -0.2833,
+     "lng": 36.0833
+    },
+    {
+     "id": "area_nakuru_section_58",
+     "name": "Section 58",
+     "lat": -0.3,
+     "lng": 36.0833
+    },
+    {
+     "id": "area_nakuru_ponda_mali",
+     "name": "Ponda Mali",
+     "lat": -0.2833,
+     "lng": 36.1
+    },
+    {
+     "id": "area_nakuru_kiamunyi",
+     "name": "Kiamunyi",
+     "lat": -0.2667,
+     "lng": 36.0833
+    },
+    {
+     "id": "area_nakuru_lanet",
+     "name": "Lanet",
+     "lat": -0.25,
+     "lng": 36.1
+    },
+    {
+     "id": "area_nakuru_freehold",
+     "name": "Freehold",
+     "lat": -0.3,
+     "lng": 36.1
+    },
+    {
+     "id": "area_nakuru_kaptembwa",
+     "name": "Kaptembwa",
+     "lat": -0.2833,
+     "lng": 36.0667
+    },
+    {
+     "id": "area_nakuru_rhoda",
+     "name": "Rhoda",
+     "lat": -0.2667,
+     "lng": 36.1
+    },
+    {
+     "id": "area_nakuru_shabab",
+     "name": "Shabab",
+     "lat": -0.3,
+     "lng": 36.0667
+    },
+    {
+     "id": "area_nakuru_menengai",
+     "name": "Menengai",
+     "lat": -0.25,
+     "lng": 36.0833
+    },
+    {
+     "id": "area_nakuru_bondeni",
+     "name": "Bondeni",
+     "lat": -0.29,
+     "lng": 36.07
+    },
+    {
+     "id": "area_nakuru_london",
+     "name": "London",
+     "lat": -0.295,
+     "lng": 36.075
+    },
+    {
+     "id": "area_nakuru_afraha",
+     "name": "Afraha",
+     "lat": -0.28,
+     "lng": 36.09
+    }
+   ],
+   "lat": -0.28064,
+   "lng": 36.08474
+  },
+  {
+   "id": "county_narok",
+   "name": "Narok",
+   "code": 33,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_narok_narok_town",
+     "name": "Narok Town",
+     "lat": -1.0833,
+     "lng": 35.8667
+    },
+    {
+     "id": "area_narok_kilgoris",
+     "name": "Kilgoris",
+     "lat": -1.0,
+     "lng": 34.8667
+    },
+    {
+     "id": "area_narok_olkejuado",
+     "name": "Olkejuado",
+     "lat": -1.4,
+     "lng": 35.2667
+    }
+   ],
+   "lat": -1.1611,
+   "lng": 35.33337
+  },
+  {
+   "id": "county_kajiado",
+   "name": "Kajiado",
+   "code": 34,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kajiado_kajiado_town",
+     "name": "Kajiado Town",
+     "lat": -1.85,
+     "lng": 36.7833
+    },
+    {
+     "id": "area_kajiado_ngong",
+     "name": "Ngong",
+     "lat": -1.35,
+     "lng": 36.6667
+    },
+    {
+     "id": "area_kajiado_ongata_rongai",
+     "name": "Ongata Rongai",
+     "lat": -1.3833,
+     "lng": 36.7333
+    },
+    {
+     "id": "area_kajiado_kitengela",
+     "name": "Kitengela",
+     "lat": -1.4667,
+     "lng": 36.95
+    },
+    {
+     "id": "area_kajiado_loitokitok",
+     "name": "Loitokitok",
+     "lat": -2.8833,
+     "lng": 37.5333
+    },
+    {
+     "id": "area_kajiado_bisil",
+     "name": "Bisil",
+     "lat": -2.0,
+     "lng": 36.9833
+    }
+   ],
+   "lat": -1.82222,
+   "lng": 36.94165
+  },
+  {
+   "id": "county_kericho",
+   "name": "Kericho",
+   "code": 35,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kericho_kericho_town",
+     "name": "Kericho Town",
+     "lat": -0.3667,
+     "lng": 35.2833
+    },
+    {
+     "id": "area_kericho_litein",
+     "name": "Litein",
+     "lat": -0.5833,
+     "lng": 35.2167
+    },
+    {
+     "id": "area_kericho_sosiot",
+     "name": "Sosiot",
+     "lat": -0.3,
+     "lng": 35.1667
+    },
+    {
+     "id": "area_kericho_fort_ternan",
+     "name": "Fort Ternan",
+     "lat": -0.2,
+     "lng": 35.35
+    }
+   ],
+   "lat": -0.3625,
+   "lng": 35.25417
+  },
+  {
+   "id": "county_bomet",
+   "name": "Bomet",
+   "code": 36,
+   "region_id": "region_rift_valley",
+   "region_name": "Rift Valley",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_bomet_bomet_town",
+     "name": "Bomet Town",
+     "lat": -0.7833,
+     "lng": 35.35
+    },
+    {
+     "id": "area_bomet_sotik",
+     "name": "Sotik",
+     "lat": -0.6833,
+     "lng": 35.1167
+    },
+    {
+     "id": "area_bomet_longisa",
+     "name": "Longisa",
+     "lat": -0.8333,
+     "lng": 35.2
+    }
+   ],
+   "lat": -0.76663,
+   "lng": 35.22223
+  },
+  {
+   "id": "county_kakamega",
+   "name": "Kakamega",
+   "code": 37,
+   "region_id": "region_western",
+   "region_name": "Western",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_kakamega_kakamega_town",
+     "name": "Kakamega Town",
+     "lat": 0.2833,
+     "lng": 34.75
+    },
+    {
+     "id": "area_kakamega_milimani",
+     "name": "Milimani",
+     "lat": 0.3,
+     "lng": 34.7667
+    },
+    {
+     "id": "area_kakamega_shinyalu",
+     "name": "Shinyalu",
+     "lat": 0.2667,
+     "lng": 34.7333
+    },
+    {
+     "id": "area_kakamega_lurambi",
+     "name": "Lurambi",
+     "lat": 0.3,
+     "lng": 34.7333
+    },
+    {
+     "id": "area_kakamega_ikolomani",
+     "name": "Ikolomani",
+     "lat": 0.2667,
+     "lng": 34.7667
+    },
+    {
+     "id": "area_kakamega_mumias",
+     "name": "Mumias",
+     "lat": 0.3333,
+     "lng": 34.4833
+    },
+    {
+     "id": "area_kakamega_butere",
+     "name": "Butere",
+     "lat": 0.2,
+     "lng": 34.5
+    },
+    {
+     "id": "area_kakamega_khwisero",
+     "name": "Khwisero",
+     "lat": 0.35,
+     "lng": 34.7
+    },
+    {
+     "id": "area_kakamega_lugari",
+     "name": "Lugari",
+     "lat": 0.4,
+     "lng": 34.8
+    },
+    {
+     "id": "area_kakamega_matungu",
+     "name": "Matungu",
+     "lat": 0.25,
+     "lng": 34.6
+    }
+   ],
+   "lat": 0.295,
+   "lng": 34.68333
+  },
+  {
+   "id": "county_vihiga",
+   "name": "Vihiga",
+   "code": 38,
+   "region_id": "region_western",
+   "region_name": "Western",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_vihiga_mbale",
+     "name": "Mbale",
+     "lat": 0.1667,
+     "lng": 34.7333
+    },
+    {
+     "id": "area_vihiga_luanda",
+     "name": "Luanda",
+     "lat": 0.3167,
+     "lng": 34.6167
+    },
+    {
+     "id": "area_vihiga_majengo",
+     "name": "Majengo",
+     "lat": 0.0833,
+     "lng": 34.7167
+    }
+   ],
+   "lat": 0.1889,
+   "lng": 34.6889
+  },
+  {
+   "id": "county_bungoma",
+   "name": "Bungoma",
+   "code": 39,
+   "region_id": "region_western",
+   "region_name": "Western",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_bungoma_bungoma_town",
+     "name": "Bungoma Town",
+     "lat": 0.5667,
+     "lng": 34.5667
+    },
+    {
+     "id": "area_bungoma_webuye",
+     "name": "Webuye",
+     "lat": 0.6,
+     "lng": 34.7667
+    },
+    {
+     "id": "area_bungoma_kimilili",
+     "name": "Kimilili",
+     "lat": 0.8,
+     "lng": 34.6667
+    },
+    {
+     "id": "area_bungoma_sirisia",
+     "name": "Sirisia",
+     "lat": 0.65,
+     "lng": 34.5167
+    }
+   ],
+   "lat": 0.65418,
+   "lng": 34.6292
+  },
+  {
+   "id": "county_busia",
+   "name": "Busia",
+   "code": 40,
+   "region_id": "region_western",
+   "region_name": "Western",
+   "country_id": "country_kenya",
+   "areas": [
+    {
+     "id": "area_busia_busia_town",
+     "name": "Busia Town",
+     "lat": 0.4667,
+     "lng": 34.1167
+    },
+    {
+     "id": "area_busia_malaba",
+     "name": "Malaba",
+     "lat": 0.6333,
+     "lng": 34.2833
+    },
+    {
+     "id": "area_busia_funyula",
+     "name": "Funyula",
+     "lat": 0.5167,
+     "lng": 34.05
+    },
+    {
+     "id": "area_busia_nambale",
+     "name": "Nambale",
+     "lat": 0.4333,
+     "lng": 34.1833
+    }
+   ],
+   "lat": 0.5125,
+   "lng": 34.15833
+  }
+ ]
+}

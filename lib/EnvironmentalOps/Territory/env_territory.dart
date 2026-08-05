@@ -107,14 +107,8 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
 
   Future<void> _loadOrgThenZones() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('Users')
-            .doc(uid)
-            .get();
-        _orgId = userDoc.data()?['orgId'] as String?;
-      }
+      final contextData = await EnvironmentOpsService.instance.resolveContext();
+      _orgId = contextData?.orgId;
     } catch (_) {
       // Fall back to an unscoped load below.
     }

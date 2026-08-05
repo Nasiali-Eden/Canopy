@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -69,15 +68,9 @@ class _EnvFleetScreenState extends State<EnvFleetScreen> {
 
   Future<void> _loadOrg() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      _uid = uid;
-      if (uid != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('Users')
-            .doc(uid)
-            .get();
-        _orgId = userDoc.data()?['orgId'] as String?;
-      }
+      final contextData = await EnvironmentOpsService.instance.resolveContext();
+      _uid = contextData?.uid;
+      _orgId = contextData?.orgId;
     } catch (_) {
       // Fall through to no-org state.
     }
@@ -96,17 +89,13 @@ class _EnvFleetScreenState extends State<EnvFleetScreen> {
       backgroundColor: const Color(0xFFF7F5F0),
       floatingActionButton: (_orgId == null)
           ? null
-          // Lifted clear of the shell's floating nav pill (body is extendBody).
-          : Padding(
-              padding: const EdgeInsets.only(bottom: 78),
-              child: FloatingActionButton.extended(
+          : FloatingActionButton.extended(
                 onPressed: _openLogHandoff,
                 backgroundColor: AppTheme.primary,
                 icon: const Icon(Icons.add_box_outlined, color: Colors.white),
                 label: const Text('Log Handoff',
                     style: TextStyle(
                         color: Colors.white, fontWeight: FontWeight.w700)),
-              ),
             ),
       body: SafeArea(
         child: _loading

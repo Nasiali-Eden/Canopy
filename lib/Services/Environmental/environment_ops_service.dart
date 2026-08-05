@@ -18,6 +18,10 @@ import 'package:impact_trail/Models/environmental/models/market_order.dart';
 import 'package:impact_trail/Models/environmental/models/transformation_record_summary.dart';
 import 'package:impact_trail/Models/environmental/models/tree_record.dart';
 import 'package:impact_trail/Models/environmental/shared/gps_coordinate.dart';
+import 'package:impact_trail/Models/geo/canopy_location.dart';
+import 'package:impact_trail/Models/marketplace/canopy_listing.dart';
+import 'package:impact_trail/Services/Geo/geo_registry.dart';
+import 'package:impact_trail/Services/Marketplace/listing_service.dart';
 
 class EnvironmentOpsContext {
   final String uid;
@@ -80,7 +84,10 @@ class EnvironmentOpsService {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return null;
 
-    final userDoc = await _db.collection('Users').doc(uid).get();
+    var userDoc = await _db.collection('Users').doc(uid).get();
+    if (!userDoc.exists) {
+      userDoc = await _db.collection('users').doc(uid).get();
+    }
     final orgId = userDoc.data()?['orgId'] as String?;
     if (orgId == null || orgId.isEmpty) return null;
 
@@ -212,13 +219,86 @@ class EnvironmentOpsService {
       createdBy: uid,
     );
 
+    // Resolve the free-text location onto the canonical registry so this
+    // order is reachable from the county / region / country tiers of the
+    // location switch. Falls back to the org's own registered location, then
+    // to keeping the raw string as a display-only venue.
+    await GeoRegistry.instance.ensureLoaded();
+    var location = GeoRegistry.instance.resolve(freeText: locationText);
+    if (location.countyId == null) {
+      try {
+        final orgSnap = await _orgs.doc(orgId).get();
+        final orgData = orgSnap.data();
+        if (orgData != null) {
+          location = GeoRegistry.instance.resolveFromDocument(orgData);
+        }
+      } catch (_) {/* keep the unresolved location */}
+    }
+    if (location.venue == null && locationText.isNotEmpty) {
+      location = location.copyWith(venue: locationText);
+    }
+
+    // The public, browsable record. This is what every member sees in the
+    // marketplace — including buy orders, which were previously visible only
+    // to the posting organisation because env_market filtered on org_id.
+    final publicRef = _db.collection(ListingService.collectionPath).doc(orderRef.id);
+    final listing = CanopyListing(
+      id: orderRef.id,
+      side: ListingSide.supply,
+      intent: orderType == MarketOrderType.buy
+          ? ListingIntent.seeking
+          : ListingIntent.offering,
+      status: ListingStatus.active,
+      title: materialType.isNotEmpty ? materialType : categoryLabel,
+      story: notes ?? '',
+      tagline: categoryLabel,
+      category: ListingCategory.materials,
+      materialSubTypeId: materialSubTypeId,
+      materialGrade: grade,
+      images: [if (imageUrl != null && imageUrl.isNotEmpty) imageUrl],
+      seller: SellerSnapshot(
+        sellerId: uid,
+        shopName: orgName,
+        city: location.countyName ?? '',
+        country: location.countryName ?? 'Kenya',
+      ),
+      orgId: orgId,
+      orgName: orgName,
+      postedByUid: uid,
+      pricing: ListingPricing(
+        amountKes: pricePerUnit,
+        unit: unit.toLowerCase() == 'kg' ? PriceUnit.perKg : PriceUnit.perItem,
+      ),
+      quantity: ListingQuantity(
+        quantityKg: quantityKg,
+        minimumKg: quantityKg,
+        filledKg: 0,
+        stockCount: 1,
+      ),
+      fulfilment: ListingFulfilment(
+        willCollect: canCollect,
+        acceptsDelivery: canDeliver,
+        isRecurring: isRecurring,
+      ),
+      location: location,
+      createdAt: now,
+      updatedAt: now,
+      // Recurring buy orders are standing requests and never go stale.
+      expiresAt: isRecurring ? null : now.add(const Duration(days: 30)),
+    );
+
     final batch = _db.batch();
     batch.set(orderRef, order.toFirestore());
+    batch.set(publicRef, listing.toFirestore());
     batch.set(legacyRef, {
       'listing_type': switch (orderType) {
         MarketOrderType.buy => isRecurring ? 'recurring_buy' : 'buy_order',
         MarketOrderType.sell => 'sell_listing',
       },
+      // Written so the retired collection stays readable during migration.
+      // Nothing reads market_listings after the backfill — delete this block
+      // and legacyRef together once the corpus is converted.
+      ...location.toFirestore(),
       'is_recurring': isRecurring,
       'category_id': category.firestoreKey,
       'category_label': categoryLabel,

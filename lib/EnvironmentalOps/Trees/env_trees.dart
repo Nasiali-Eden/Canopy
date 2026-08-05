@@ -139,10 +139,7 @@ class _EnvTreesScreenState extends State<EnvTreesScreen> {
           ],
         ),
       ),
-      // Lifted clear of the shell's floating nav pill (body is extendBody).
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 78),
-        child: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _openPostWizard(),
           backgroundColor: AppTheme.primary,
           icon: const Icon(Icons.add, color: Colors.white),
@@ -150,7 +147,6 @@ class _EnvTreesScreenState extends State<EnvTreesScreen> {
               style: TextStyle(
                   color: Colors.white, fontWeight: FontWeight.w700)),
         ),
-      ),
     );
   }
 

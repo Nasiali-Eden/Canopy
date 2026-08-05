@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 
 import '../../MarketPlace/The Market/eco_shop.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/widgets/location_switcher.dart';
 import '../../Shared/utils/rich_body.dart';
 import '../Articles/article_view_screen.dart';
 import '../Communication/notification_center.dart';
@@ -41,67 +42,6 @@ String timeAgo(Timestamp timestamp) {
   return DateFormat('d MMM yyyy').format(timestamp.toDate());
 }
 
-// ── Feed placeholders ─────────────────────────────────────────────────────────
-// Temporary sample entries for the new feed-card design — three different types
-// with online images. Swap in a Firestore stream once entries go live.
-const List<FeedEntry> _placeholderEntries = [
-  FeedEntry(
-    type: 'Cleanup',
-    orgName: 'Nairobi Green Collective',
-    socials: {
-      'facebook': 'facebook.com/nairobigreen',
-      'instagram': 'instagram.com/nairobigreen',
-      'tiktok': 'tiktok.com/@nairobigreen',
-      'linkedin': 'linkedin.com/company/nairobigreen',
-    },
-    title: 'Kibera Street Cleanup Initiative',
-    description:
-        'Over the weekend more than forty volunteers came together to clear '
-        'plastic and debris from three blocks along the main road. We filled '
-        '60 bags, sorted recyclables for the local processor, and painted the '
-        'drainage covers so they stay visible. The change in the street was '
-        'immediate and the community is already organising a monthly rota.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?w=600',
-      'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=600',
-      'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=600',
-    ],
-  ),
-  FeedEntry(
-    type: 'Tree Planting',
-    orgName: 'Mathare Roots Initiative',
-    socials: {
-      'instagram': 'instagram.com/mathareroots',
-      'tiktok': 'tiktok.com/@mathareroots',
-    },
-    title: 'Mathare Green Spaces Project',
-    description:
-        'We planted 120 indigenous seedlings along the riverbank to stabilise '
-        'the soil and bring shade back to the footpath. Each tree is tagged so '
-        'we can trace its growth month by month.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600',
-      'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?w=600',
-      'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=600',
-    ],
-  ),
-  FeedEntry(
-    type: 'School Upgrading',
-    orgName: 'Bidii Community Trust',
-    socials: {
-      'facebook': 'facebook.com/bidiitrust',
-      'linkedin': 'linkedin.com/company/bidiitrust',
-    },
-    title: 'Community School Renovation',
-    description:
-        'Fresh paint, repaired desks and a new reading corner for the lower '
-        'primary classrooms.',
-    imageUrls: [
-      'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=600',
-      'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=600',
-    ],
-  ),
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME FEED
@@ -203,6 +143,17 @@ class HomeFeed extends StatelessWidget {
       child: CustomScrollView(
         slivers: [
           _sliverAppBar(context),
+          // ── Location switch ───────────────────────────────────────────────
+          // Sits directly under the app bar, above the hero, because it frames
+          // everything below it: a member is looking at THEIR county unless
+          // they say otherwise. Defaults to their registered county; one tap
+          // widens to region, country, or everywhere.
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: LocationSwitcher(),
+            ),
+          ),
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -640,15 +591,54 @@ class HomeFeed extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      // Feed entries — new card design (full-width 1:1 carousel,
-                      // colour-coded type line, expandable description). Seeded
-                      // with placeholders for testing; swap in a Firestore stream
-                      // when entries go live.
-                      for (int i = 0; i < _placeholderEntries.length; i++) ...[
-                        EntryFeedCard(entry: _placeholderEntries[i]),
-                        if (i < _placeholderEntries.length - 1)
-                          const SizedBox(height: 24),
-                      ],
+                      // Feed entries — real contributions rendered with the new
+                      // card design (full-width 1:1 carousel, colour-coded type
+                      // line, expandable description). Index-free: a single
+                      // orderBy on createdAt, newest first.
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('contributions')
+                            .orderBy('createdAt', descending: true)
+                            .limit(20)
+                            .snapshots(),
+                        builder: (context, snap) {
+                          if (snap.hasError) {
+                            return const _ErrorCard(onRetry: null);
+                          }
+                          if (snap.connectionState ==
+                              ConnectionState.waiting) {
+                            return const _ArticlePlaceholderCard();
+                          }
+                          final docs = snap.data?.docs ?? [];
+                          if (docs.isEmpty) {
+                            return Container(
+                              padding: const EdgeInsets.all(24),
+                              alignment: Alignment.center,
+                              child: Text(
+                                'No contributions yet. Be the first to log one!',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: AppTheme.darkGreen.withOpacity(0.55),
+                                    fontSize: 13),
+                              ),
+                            );
+                          }
+                          return Column(
+                            children: [
+                              for (int i = 0; i < docs.length; i++) ...[
+                                EntryFeedCard(
+                                  entry: FeedEntry.fromContribution(
+                                    docs[i].data()
+                                        as Map<String, dynamic>,
+                                  ),
+                                ),
+                                if (i < docs.length - 1)
+                                  const SizedBox(height: 24),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),

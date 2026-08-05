@@ -1,13 +1,28 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 
+import '../../Models/marketplace/canopy_listing.dart';
+import '../../Providers/location_provider.dart';
+import '../../Services/Marketplace/listing_service.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/widgets/location_switcher.dart';
 import 'marketplace_item_view.dart';
 import 'marketplace_shop_view.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLACEHOLDER DATA — rich editorial content for empty states
+// SAMPLE DATA — shown ONLY when a location genuinely has no listings yet.
+//
+// These used to be the entire screen: eco_shop had zero Firestore calls and
+// rendered these fixtures as though they were the marketplace. They are now
+// what they claim to be — an empty state — and every surface that shows them
+// is labelled "Sample" so a demo can never be mistaken for live inventory.
+//
+// Note what the fixtures cannot express: no story, no material DNA, no named
+// collector, no provenance chain. That is the distinction the real model
+// carries and the placeholders never did.
 // ─────────────────────────────────────────────────────────────────────────────
 
 final _featuredPlaceholders = [
@@ -115,6 +130,16 @@ class _EcoShopScreenState extends State<EcoShopScreen>
   bool _showSearch = false;
   bool _onlyCircularBadge = false;
 
+  // ── Live data ──────────────────────────────────────────────────────────────
+  StreamSubscription<List<CanopyListing>>? _sub;
+  List<CanopyListing> _offering = const [];
+  List<CanopyListing> _wanted = const [];
+  MarketplaceTotals? _totals;
+  bool _loading = true;
+  LocationFilter? _boundFilter;
+
+  bool get _isEmpty => _offering.isEmpty && _wanted.isEmpty;
+
   static const _categories = [
     'All',
     'Jewellery',
@@ -134,20 +159,10 @@ class _EcoShopScreenState extends State<EcoShopScreen>
     'Asia',
   ];
 
-  // African countries — location filter chips
-  static const _africaLocations = [
-    'All',
-    'Nairobi',
-    'Lagos',
-    'Accra',
-    'Cape Town',
-    'Addis Ababa',
-    'Kampala',
-    'Dar es Salaam',
-    'Mombasa',
-  ];
-
-  String _selectedLocation = 'All';
+  // The hardcoded city chip list that used to live here (Nairobi, Lagos,
+  // Accra, Cape Town…) filtered nothing — it was decoration over placeholder
+  // data. Location is now the canonical LocationSwitcher, backed by the
+  // 47-county registry, and it drives the actual Firestore query.
 
   @override
   void initState() {
@@ -157,10 +172,85 @@ class _EcoShopScreenState extends State<EcoShopScreen>
       vsync: this,
     )..forward();
     _heroFade = CurvedAnimation(parent: _heroAnim, curve: Curves.easeOut);
+    _searchController.addListener(() {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Re-subscribe whenever the location switch moves. Guarded on equality so
+    // an unrelated provider rebuild does not tear down a healthy stream.
+    final filter = context.watch<LocationProvider>().filter;
+    if (_boundFilter != filter) {
+      _boundFilter = filter;
+      _subscribe(filter);
+    }
+  }
+
+  void _subscribe(LocationFilter filter) {
+    _sub?.cancel();
+    // Assigned directly rather than via setState: this runs from
+    // didChangeDependencies, which is already inside the build phase.
+    _loading = true;
+
+    final service = ListingService.instance;
+    _sub = service
+        .watch(ListingQuery(
+          // Geography is the only predicate pushed to Firestore. Category,
+          // badge and search are applied by _visible() over the result, so
+          // toggling them never needs a new subscription.
+          location: filter,
+        ))
+        .listen((all) {
+      if (!mounted) return;
+      setState(() {
+        _offering = all.where((l) => l.isOffering).toList();
+        _wanted = all.where((l) => l.isSeeking).toList();
+        _loading = false;
+      });
+    }, onError: (Object _) {
+      if (mounted) setState(() => _loading = false);
+    });
+
+    service.totals(filter).then((t) {
+      if (mounted) setState(() => _totals = t);
+    });
+  }
+
+  /// Client-side narrowing on top of the geo-scoped stream: category chips,
+  /// the Circular Craft toggle, and the search field.
+  List<CanopyListing> _visible(List<CanopyListing> source) {
+    final q = _searchController.text.trim().toLowerCase();
+    return source.where((l) {
+      if (_selectedCategory != 'All' &&
+          l.category.label.toLowerCase() != _selectedCategory.toLowerCase()) {
+        return false;
+      }
+      if (_onlyCircularBadge &&
+          l.circularBadge != CircularBadgeTier.verified) return false;
+      if (_selectedContinent != 'All' &&
+          (l.location.countryName ?? '').isNotEmpty &&
+          _selectedContinent != 'Africa') {
+        // Continent is only meaningful once non-African sellers exist; until
+        // then treat anything other than Africa as a no-match rather than
+        // silently ignoring the filter.
+        return false;
+      }
+      if (q.isNotEmpty) {
+        final hay = '${l.title} ${l.tagline} ${l.story} '
+                '${l.seller.shopName} ${l.location.label}'
+            .toLowerCase();
+        if (!hay.contains(q)) return false;
+      }
+      return true;
+    }).toList();
   }
 
   @override
   void dispose() {
+    _sub?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     _heroAnim.dispose();
@@ -181,8 +271,27 @@ class _EcoShopScreenState extends State<EcoShopScreen>
             _buildAppBar(),
             SliverToBoxAdapter(child: _buildSearchBar()),
             SliverToBoxAdapter(child: _buildCategoryRail()),
-            SliverToBoxAdapter(child: _buildLocationRail()),
+            const SliverToBoxAdapter(child: LocationSwitcher()),
+            if (_loading)
+              const SliverToBoxAdapter(child: _LoadingStrip())
+            else if (_isEmpty)
+              SliverToBoxAdapter(child: _buildEmptyNotice()),
             SliverToBoxAdapter(child: _buildHeroCarousel()),
+
+            // ── WANTED ────────────────────────────────────────────────────
+            // Materials an environmental participant needs bought. This is
+            // the half of the marketplace that previously had no public
+            // surface anywhere in the app.
+            if (_visible(_wanted).isNotEmpty) ...[
+              SliverToBoxAdapter(
+                  child: _buildSectionHeader(
+                label: 'Wanted Near You',
+                sub: 'Collectors and processors looking to buy — fill an order',
+                icon: Icons.campaign_outlined,
+              )),
+              SliverToBoxAdapter(child: _buildWantedRail()),
+            ],
+
             SliverToBoxAdapter(
                 child: _buildSectionHeader(
               label: 'Stories from the Ground',
@@ -407,58 +516,74 @@ class _EcoShopScreenState extends State<EcoShopScreen>
 
   // ── Location rail ──────────────────────────────────────────────────────────
 
-  Widget _buildLocationRail() {
+  // ── Empty / sample notice ─────────────────────────────────────────────────
+
+  Widget _buildEmptyNotice() {
+    final location = context.read<LocationProvider>();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.tertiary.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.tertiary.withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 18, color: AppTheme.darkGreen),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No listings in ${location.filter.label} yet',
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.darkGreen),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Everything below is sample content, shown so the layout '
+                  'makes sense. Widen your location to find real listings.',
+                  style: TextStyle(
+                      fontSize: 11,
+                      height: 1.4,
+                      color: AppTheme.darkGreen.withOpacity(0.7)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: location.showEverywhere,
+            style: TextButton.styleFrom(
+              foregroundColor: AppTheme.darkGreen,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Everywhere',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Wanted rail ───────────────────────────────────────────────────────────
+
+  Widget _buildWantedRail() {
+    final wanted = _visible(_wanted);
     return SizedBox(
-      height: 42,
+      height: 158,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-        itemCount: _africaLocations.length,
-        itemBuilder: (context, i) {
-          final loc = _africaLocations[i];
-          final selected = _selectedLocation == loc;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedLocation = loc),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppTheme.accent.withOpacity(0.12)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: selected
-                      ? AppTheme.accent
-                      : AppTheme.lightGreen.withOpacity(0.3),
-                  width: selected ? 1.5 : 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (selected)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child:
-                          Icon(Icons.place, size: 10, color: AppTheme.accent),
-                    ),
-                  Text(
-                    loc,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: selected
-                          ? AppTheme.accent
-                          : AppTheme.darkGreen.withOpacity(0.55),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        itemCount: wanted.length,
+        itemBuilder: (context, i) => _WantedCard(listing: wanted[i]),
       ),
     );
   }
@@ -466,6 +591,12 @@ class _EcoShopScreenState extends State<EcoShopScreen>
   // ── Hero carousel ──────────────────────────────────────────────────────────
 
   Widget _buildHeroCarousel() {
+    final live = _visible(_offering.where((l) => l.isCreative).toList());
+    final items = live.isNotEmpty
+        ? live.take(6).map(_PlaceholderItem.fromListing).toList()
+        : _featuredPlaceholders;
+    final ids = live.isNotEmpty ? live.take(6).map((l) => l.id).toList() : null;
+
     return FadeTransition(
       opacity: _heroFade,
       child: Column(
@@ -477,11 +608,12 @@ class _EcoShopScreenState extends State<EcoShopScreen>
             child: PageView.builder(
               padEnds: false,
               controller: PageController(viewportFraction: 0.88),
-              itemCount: _featuredPlaceholders.length,
-              itemBuilder: (context, i) {
-                final item = _featuredPlaceholders[i];
-                return _HeroCard(item: item, index: i);
-              },
+              itemCount: items.length,
+              itemBuilder: (context, i) => _HeroCard(
+                item: items[i],
+                index: i,
+                listingId: ids?[i],
+              ),
             ),
           ),
         ],
@@ -492,12 +624,27 @@ class _EcoShopScreenState extends State<EcoShopScreen>
   // ── Story grid ─────────────────────────────────────────────────────────────
 
   Widget _buildStoryGrid() {
+    // Only listings that actually carry a story earn this treatment — the
+    // section is called "Stories from the Ground" and should not be padded
+    // out with specification-only supply listings.
+    final live = _visible(_offering)
+        .where((l) => l.story.trim().length >= 40)
+        .take(6)
+        .toList();
+    final items = live.isNotEmpty
+        ? live.map(_StoryItem.fromListing).toList()
+        : _storyPlaceholders;
+    final ids = live.isNotEmpty ? live.map((l) => l.id).toList() : null;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       child: Column(
-        children: List.generate(_storyPlaceholders.length, (i) {
-          final item = _storyPlaceholders[i];
-          return _StoryCard(item: item, isReversed: i.isOdd);
+        children: List.generate(items.length, (i) {
+          return _StoryCard(
+            item: items[i],
+            isReversed: i.isOdd,
+            listingId: ids?[i],
+          );
         }),
       ),
     );
@@ -650,16 +797,36 @@ class _EcoShopScreenState extends State<EcoShopScreen>
       ),
       child: Row(
         children: [
-          _ImpactStat(value: '2.4t', label: 'Diverted'),
+          // Read-only aggregates derived from listing records — never typed
+          // in by hand. Same rule the Dashboard follows: impact figures are
+          // computed from operational data or they are not shown.
+          _ImpactStat(
+              value: _totals == null
+                  ? '—'
+                  : _formatKg(_totals!.kgDiverted),
+              label: 'Diverted'),
           _divider(),
-          _ImpactStat(value: '187', label: 'Makers'),
+          _ImpactStat(
+              value: _totals == null ? '—' : '${_totals!.creative}',
+              label: 'Made items'),
           _divider(),
-          _ImpactStat(value: '43', label: 'Collectors paid'),
+          _ImpactStat(
+              value: _totals == null
+                  ? '—'
+                  : '${_totals!.collectorsCredited}',
+              label: 'Collectors named'),
           _divider(),
-          _ImpactStat(value: 'KSh 84k', label: 'Royalties'),
+          _ImpactStat(
+              value: _totals == null ? '—' : '${_totals!.seeking}',
+              label: 'Open requests'),
         ],
       ),
     );
+  }
+
+  static String _formatKg(double kg) {
+    if (kg >= 1000) return '${(kg / 1000).toStringAsFixed(1)}t';
+    return '${kg.round()}kg';
   }
 
   Widget _divider() => Container(
@@ -670,6 +837,16 @@ class _EcoShopScreenState extends State<EcoShopScreen>
       );
 
   // ── New listings grid ──────────────────────────────────────────────────────
+
+  /// (card model, listing id) pairs — id is null for sample content, which is
+  /// how the cards know not to navigate into a listing that does not exist.
+  List<(_StoryItem, String?)> get _newestItems {
+    final live = _visible(_offering).take(8).toList();
+    if (live.isEmpty) {
+      return _storyPlaceholders.map((p) => (p, null as String?)).toList();
+    }
+    return live.map((l) => (_StoryItem.fromListing(l), l.id)).toList();
+  }
 
   Widget _buildNewListingsGrid() {
     return Padding(
@@ -683,10 +860,10 @@ class _EcoShopScreenState extends State<EcoShopScreen>
           crossAxisSpacing: 12,
           childAspectRatio: 0.72,
         ),
-        itemCount: _storyPlaceholders.length,
+        itemCount: _newestItems.length,
         itemBuilder: (context, i) {
-          final item = _storyPlaceholders[i % _storyPlaceholders.length];
-          return _GridCard(item: item);
+          final entry = _newestItems[i];
+          return _GridCard(item: entry.$1, listingId: entry.$2);
         },
       ),
     );
@@ -770,18 +947,29 @@ class _HeroCard extends StatelessWidget {
   final _PlaceholderItem item;
   final int index;
 
-  const _HeroCard({required this.item, required this.index});
+  /// Real /listings document id. Null means this card is sample content and
+  /// must not navigate — the old code always pushed 'placeholder_$index' into
+  /// the item view, which then had nothing to load.
+  final String? listingId;
+
+  const _HeroCard({
+    required this.item,
+    required this.index,
+    this.listingId,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              MarketplaceItemViewScreen(listingId: 'placeholder_$index'),
-        ),
-      ),
+      onTap: listingId == null
+          ? () => _sampleTapNotice(context)
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      MarketplaceItemViewScreen(listingId: listingId!),
+                ),
+              ),
       child: Container(
         margin: const EdgeInsets.only(right: 14, left: 4, bottom: 8, top: 4),
         decoration: BoxDecoration(
@@ -959,19 +1147,26 @@ class _HeroCard extends StatelessWidget {
 class _StoryCard extends StatelessWidget {
   final _StoryItem item;
   final bool isReversed;
+  final String? listingId;
 
-  const _StoryCard({required this.item, required this.isReversed});
+  const _StoryCard({
+    required this.item,
+    required this.isReversed,
+    this.listingId,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              MarketplaceItemViewScreen(listingId: 'story_${item.title}'),
-        ),
-      ),
+      onTap: listingId == null
+          ? () => _sampleTapNotice(context)
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      MarketplaceItemViewScreen(listingId: listingId!),
+                ),
+              ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
@@ -1129,19 +1324,22 @@ class _StoryCard extends StatelessWidget {
 
 class _GridCard extends StatelessWidget {
   final _StoryItem item;
+  final String? listingId;
 
-  const _GridCard({required this.item});
+  const _GridCard({required this.item, this.listingId});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              MarketplaceItemViewScreen(listingId: 'grid_${item.title}'),
-        ),
-      ),
+      onTap: listingId == null
+          ? () => _sampleTapNotice(context)
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      MarketplaceItemViewScreen(listingId: listingId!),
+                ),
+              ),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1629,7 +1827,30 @@ class _PlaceholderItem {
     required this.badge,
     required this.category,
   });
+
+  /// Adapter so the existing editorial cards can render real records without
+  /// being rewritten. The listing's own fields carry more than this view model
+  /// can express — story, material DNA, credited collectors — which the item
+  /// view surfaces in full.
+  factory _PlaceholderItem.fromListing(CanopyListing l) => _PlaceholderItem(
+        imageUrl: l.coverImage ?? _fallbackImage(l),
+        title: l.title,
+        tagline: l.tagline.isNotEmpty
+            ? l.tagline
+            : (l.story.length > 90 ? '${l.story.substring(0, 87)}…' : l.story),
+        price: l.pricing.display,
+        maker: l.seller.shopName.isNotEmpty
+            ? l.seller.shopName
+            : (l.orgName ?? 'Canopy maker'),
+        makerCity: l.location.label,
+        kgDiverted: l.impact.kgDiverted,
+        badge: l.circularBadge.label,
+        category: l.category.label,
+      );
 }
+
+String _fallbackImage(CanopyListing l) =>
+    'https://picsum.photos/seed/${l.id}/900/700';
 
 class _StoryItem {
   final String imageUrl;
@@ -1649,6 +1870,18 @@ class _StoryItem {
     required this.kgDiverted,
     required this.category,
   });
+
+  factory _StoryItem.fromListing(CanopyListing l) => _StoryItem(
+        imageUrl: l.coverImage ?? _fallbackImage(l),
+        title: l.title,
+        price: l.pricing.display,
+        maker: l.seller.shopName.isNotEmpty
+            ? l.seller.shopName
+            : (l.orgName ?? 'Canopy maker'),
+        city: l.location.shortLabel,
+        kgDiverted: l.impact.kgDiverted,
+        category: l.category.label,
+      );
 }
 
 class _ShopPreview {
@@ -1667,4 +1900,190 @@ class _ShopPreview {
     required this.listings,
     required this.kgDiverted,
   });
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+void _sampleTapNotice(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: const Text('Sample item — no listing behind this yet'),
+      backgroundColor: AppTheme.darkGreen,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 2),
+    ),
+  );
+}
+
+class _LoadingStrip extends StatelessWidget {
+  const _LoadingStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.2,
+            valueColor: AlwaysStoppedAnimation(AppTheme.primary.withOpacity(0.6)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WANTED CARD
+//
+// A buy request from someone on the environmental side — a processor needing
+// PET, a maker needing copper wire for a commission. Distinct visual language
+// from a for-sale card because the action is inverted: you respond to it, you
+// do not purchase it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _WantedCard extends StatelessWidget {
+  final CanopyListing listing;
+
+  const _WantedCard({required this.listing});
+
+  @override
+  Widget build(BuildContext context) {
+    final needed = listing.quantity.remainingKg.round();
+    final unit = listing.pricing.unit == PriceUnit.perKg ? 'kg' : 'units';
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MarketplaceItemViewScreen(listingId: listing.id),
+        ),
+      ),
+      child: Container(
+        width: 260,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.tertiary.withOpacity(0.55), width: 1.4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.tertiary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text('WANTED',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.7)),
+                ),
+                if (listing.fulfilment.isRecurring) ...[
+                  const SizedBox(width: 6),
+                  Text('Standing order',
+                      style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.accent.withOpacity(0.85))),
+                ],
+                const Spacer(),
+                Icon(Icons.place_outlined,
+                    size: 11, color: AppTheme.darkGreen.withOpacity(0.4)),
+                const SizedBox(width: 2),
+                Flexible(
+                  child: Text(
+                    listing.location.shortLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: AppTheme.darkGreen.withOpacity(0.5)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              listing.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.darkGreen,
+                  letterSpacing: -0.3),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              listing.orgName ?? listing.seller.shopName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 11,
+                  color: AppTheme.darkGreen.withOpacity(0.55),
+                  fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  listing.pricing.display,
+                  style: const TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w900,
+                      color: AppTheme.tertiary,
+                      height: 1),
+                ),
+                const SizedBox(width: 5),
+                Text('offered',
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        color: AppTheme.darkGreen.withOpacity(0.5))),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (needed > 0) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: listing.quantity.fillProgress,
+                  minHeight: 4,
+                  backgroundColor: AppTheme.lightGreen.withOpacity(0.22),
+                  valueColor:
+                      const AlwaysStoppedAnimation(AppTheme.tertiary),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$needed $unit still needed',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.darkGreen.withOpacity(0.55)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

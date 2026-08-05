@@ -1,0 +1,66 @@
+{
+  "_comment": [
+    "Composite indexes required by the geo-scoped marketplace.",
+    "",
+    "Deliberately short. The query strategy in lib/Services/Marketplace/listing_service.dart",
+    "pushes exactly ONE equality predicate to Firestore — the geo tier, which is the most",
+    "selective and the one that actually bounds document count. Side, intent, category,",
+    "badge, search text and ordering are all applied client-side over that bounded result.",
+    "",
+    "Without that rule the filter space (4 geo tiers x 2 sides x 2 intents x 10 categories)",
+    "would need an unmaintainable number of composite indexes. The Heritage service already",
+    "follows the same equality-only convention.",
+    "",
+    "The indexes below cover the two cases where geo is combined with status + ordering,",
+    "should those be promoted to server-side. Everything else runs index-free on Firestore's",
+    "automatic single-field indexes.",
+    "",
+    "Deploy: firebase deploy --only firestore:indexes"
+  ],
+  "indexes": [
+    {
+      "collectionGroup": "listings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "geo_county_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "listings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "geo_country_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "listings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "geo_region_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "listings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "postedByUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "listings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "orgId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

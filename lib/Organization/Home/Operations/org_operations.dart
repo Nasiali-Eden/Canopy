@@ -58,9 +58,37 @@ class _OrgOperationsState extends State<OrgOperations>
         _orgId = orgId;
         _orgLoaded = true;
       });
+      if (orgId != null) {
+        _adoptOrphanedEvents(user.uid, orgId);
+      }
     } catch (e) {
       debugPrint('OrgOperations._loadOrgId error: $e');
       if (mounted) setState(() => _orgLoaded = true);
+    }
+  }
+
+  /// Self-heal: events this user created while their org id couldn't be
+  /// resolved (a dropped read) were written with a null/empty orgId. They show
+  /// in the community feed but never here. Reclaim them for this org.
+  Future<void> _adoptOrphanedEvents(String uid, String orgId) async {
+    try {
+      final mine = await FirebaseFirestore.instance
+          .collection('activities')
+          .where('createdBy', isEqualTo: uid)
+          .get();
+      final orphans = mine.docs.where((d) {
+        final v = d.data()['orgId'];
+        return v == null || (v is String && v.isEmpty);
+      }).toList();
+      if (orphans.isEmpty) return;
+      final batch = FirebaseFirestore.instance.batch();
+      for (final d in orphans) {
+        batch.update(d.reference, {'orgId': orgId});
+      }
+      await batch.commit();
+      debugPrint('OrgOperations: adopted ${orphans.length} orphaned event(s)');
+    } catch (e) {
+      debugPrint('OrgOperations._adoptOrphanedEvents error: $e');
     }
   }
 
@@ -228,18 +256,20 @@ class _EventsTab extends StatelessWidget {
   const _EventsTab({super.key, required this.orgId});
 
   static String _stage(Map<String, dynamic> d) {
-    final status = d['status'] as String? ?? '';
+    final status = (d['status'] as String? ?? '').toLowerCase();
     final impact = d['impactStatus'] as String? ?? '';
     if (impact == 'confirmed') return 'onChain';
     if (status == 'completed' && impact == 'pending') return 'verifying';
     if (status == 'ongoing') return 'executing';
-    if (status == 'upcoming' || status == 'open') {
-      // 'open' is written once at creation and nothing ever clears it, so an
-      // event stays 'open' long after it has happened. Fall back to the
-      // schedule rather than trusting status to expire on its own.
-      return _isPast(d) ? 'past' : 'active';
-    }
-    return 'draft';
+
+    // Only a row explicitly marked draft (or one with neither a status nor a
+    // date) is a draft. 'closed' means registration is closed, NOT that the
+    // event is unpublished — such events are live and were wrongly landing
+    // here. Everything real is staged by its schedule instead of its status,
+    // which is written once at creation and never expires.
+    if (status == 'draft') return 'draft';
+    if (status.isEmpty && _scheduledAt(d) == null) return 'draft';
+    return _isPast(d) ? 'past' : 'active';
   }
 
   static DateTime? _scheduledAt(Map<String, dynamic> d) {

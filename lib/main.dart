@@ -18,6 +18,8 @@ import 'Community/Profile/roadmap_screen.dart';
 import 'Community/Profile/settings_screen.dart';
 import 'Community/Recognition/badges_screen.dart';
 import 'Models/user.dart';
+import 'Providers/location_provider.dart';
+import 'Services/Geo/geo_registry.dart';
 import 'Providers/theme_provider.dart';
 import 'Services/Authentication/auth.dart';
 import 'Shared/Pages/splash_screen.dart';
@@ -195,6 +197,11 @@ void main() async {
     // instantly when the map opens (fire-and-forget — never block startup).
     OrgLogoCache.instance.warmUp();
 
+    // Load the geography registry before the first frame. It backs the
+    // location switch, every geo-scoped query, and the legacy-location
+    // resolver, so having it cold on first paint causes a visible flicker.
+    await GeoRegistry.instance.ensureLoaded();
+
     debugPrint('[App] ✅ App initialization completed successfully');
     runApp(const MyApp());
   } catch (e) {
@@ -273,6 +280,43 @@ class _RouteNotFoundScreen extends StatelessWidget {
   }
 }
 
+/// Resolves the member's home county once auth settles, and again whenever the
+/// signed-in user changes. Sits above the app's home so every screen reached
+/// from it already has a resolved location scope.
+class _LocationBinder extends StatefulWidget {
+  final Widget child;
+  const _LocationBinder({required this.child});
+
+  @override
+  State<_LocationBinder> createState() => _LocationBinderState();
+}
+
+class _LocationBinderState extends State<_LocationBinder> {
+  String? _boundUid;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final user = Provider.of<F_User?>(context);
+    final uid = user?.uid;
+    if (uid == _boundUid) return;
+    _boundUid = uid;
+
+    final provider = context.read<LocationProvider>();
+    // Fire and forget — the switch renders "Finding your area…" until this
+    // settles, and falls back to Everywhere if the profile has no location.
+    user?.orgId.then((orgId) {
+      if (mounted) provider.initialise(uid: uid, orgId: orgId);
+    }).catchError((Object _) {
+      if (mounted) provider.initialise(uid: uid);
+    });
+    if (uid == null) provider.initialise();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -295,6 +339,10 @@ class MyApp extends StatelessWidget {
             return p;
           },
         ),
+        // Location scope for every localized surface — feed, marketplace,
+        // activities. Defaults to the member's own county once auth resolves;
+        // see _LocationBinder below, which re-initialises on account change.
+        ChangeNotifierProvider(create: (_) => LocationProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
@@ -304,7 +352,7 @@ class MyApp extends StatelessWidget {
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: themeProvider.mode,
-            home: const SplashScreen(),
+            home: const _LocationBinder(child: SplashScreen()),
             routes: _appRoutes,
             // Screens across the app push named routes, but no table was ever
             // registered — every one of them threw "Could not find a generator

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../Shared/theme/app_theme.dart';
+import '../Shared/theme/app_theme.dart';
+import '../Shared/widgets/canopy_bottom_bar.dart';
 import 'Feed/seller_feed.dart';
 import 'Shop/seller_shop.dart';
 import 'Learn/learn.dart';
@@ -89,79 +90,35 @@ class _SellerHomeScreenState extends State<SellerHomeScreen> {
           children: pages,
         ),
         
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 12,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: SafeArea(
-            child: NavigationBarTheme(
-              data: NavigationBarThemeData(
-                labelTextStyle: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return TextStyle(
-                      color: _index == 1 ? AppTheme.tertiary : AppTheme.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    );
-                  }
-                  return TextStyle(
-                    color: AppTheme.darkGreen.withOpacity(0.7),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  );
-                }),
-              ),
-              child: NavigationBar(
-                backgroundColor: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                selectedIndex: _index,
-                onDestinationSelected: (i) => setState(() => _index = i),
-                indicatorColor: _index == 1
-                    ? AppTheme.tertiary.withOpacity(0.15)
-                    : AppTheme.primary.withOpacity(0.15),
-                height: 70,
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-                destinations: [
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon:
-                        Icon(Icons.home_rounded, color: AppTheme.primary),
-                    label: 'Feed',
-                  ),
-                  // Centre tab — Shop, gold accent
-                  NavigationDestination(
-                    icon: Icon(Icons.storefront_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon: Icon(Icons.storefront_rounded,
-                        color: AppTheme.tertiary),
-                    label: 'Shop',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.school_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon:
-                        Icon(Icons.school_rounded, color: AppTheme.primary),
-                    label: 'Learn',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline_rounded,
-                        color: AppTheme.darkGreen.withOpacity(0.5)),
-                    selectedIcon:
-                        Icon(Icons.person_rounded, color: AppTheme.primary),
-                    label: 'Profile',
-                  ),
-                ],
-              ),
+        bottomNavigationBar: CanopyBottomBar(
+          currentIndex: _index,
+          onTap: (i) => setState(() => _index = i),
+          // Shop is the centre of gravity for a seller — gold when it is the
+          // active tab, brand green elsewhere. Same rule the old bar used, now
+          // expressed once instead of across three theme callbacks.
+          selectedColor: _index == 1 ? AppTheme.tertiary : AppTheme.primary,
+          destinations: const [
+            CanopyNavDestination(
+              icon: Icons.home_outlined,
+              activeIcon: Icons.home_rounded,
+              label: 'Feed',
             ),
-          ),
+            CanopyNavDestination(
+              icon: Icons.storefront_outlined,
+              activeIcon: Icons.storefront_rounded,
+              label: 'Shop',
+            ),
+            CanopyNavDestination(
+              icon: Icons.school_outlined,
+              activeIcon: Icons.school_rounded,
+              label: 'Learn',
+            ),
+            CanopyNavDestination(
+              icon: Icons.person_outline_rounded,
+              activeIcon: Icons.person_rounded,
+              label: 'Profile',
+            ),
+          ],
         ),
       ),
     );

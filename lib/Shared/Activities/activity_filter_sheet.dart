@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../Models/geo/canopy_location.dart';
+import '../../Providers/location_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/location_switcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FILTER MODEL
@@ -10,24 +15,48 @@ class ActivityFilter {
   final String? timeframe;  // 'today', 'this_week', 'this_month', null = any
   final bool showFull;      // include full events
 
+  /// When true, activities are narrowed to the app-wide location scope. This
+  /// dimension did not exist before — the sheet offered type and timeframe
+  /// only, so a member in Kisumu saw cleanups in Mombasa with no way to say
+  /// otherwise.
+  final bool useLocationScope;
+
   const ActivityFilter({
     this.type,
     this.timeframe,
     this.showFull = false,
+    this.useLocationScope = true,
   });
 
-  bool get isDefault => type == null && timeframe == null && !showFull;
+  bool get isDefault =>
+      type == null && timeframe == null && !showFull && useLocationScope;
 
   ActivityFilter copyWith({
     Object? type = _sentinel,
     Object? timeframe = _sentinel,
     bool? showFull,
+    bool? useLocationScope,
   }) {
     return ActivityFilter(
       type: type == _sentinel ? this.type : type as String?,
       timeframe: timeframe == _sentinel ? this.timeframe : timeframe as String?,
       showFull: showFull ?? this.showFull,
+      useLocationScope: useLocationScope ?? this.useLocationScope,
     );
+  }
+
+  /// True when [location] passes this filter. Documents written before the geo
+  /// migration have no canonical ids; they are KEPT rather than hidden, since
+  /// silently dropping a community's existing activities would be worse than
+  /// showing one that is slightly out of scope.
+  bool matchesLocation(CanopyLocation location, LocationFilter scope) {
+    if (!useLocationScope || scope.isEverywhere) return true;
+    final wanted = scope.value;
+    final field = scope.scope;
+    if (wanted == null) return true;
+    final actual = location.idForScope(field);
+    if (actual == null) return true; // un-migrated document
+    return actual == wanted;
   }
 
   @override
@@ -35,10 +64,12 @@ class ActivityFilter {
       other is ActivityFilter &&
       other.type == type &&
       other.timeframe == timeframe &&
-      other.showFull == showFull;
+      other.showFull == showFull &&
+      other.useLocationScope == useLocationScope;
 
   @override
-  int get hashCode => Object.hash(type, timeframe, showFull);
+  int get hashCode =>
+      Object.hash(type, timeframe, showFull, useLocationScope);
 }
 
 // Sentinel for copyWith nullable params
@@ -81,6 +112,7 @@ class _ActivityFilterSheetState extends State<ActivityFilterSheet> {
   late String? _type;
   late String? _timeframe;
   late bool _showFull;
+  late bool _useLocationScope;
 
   @override
   void initState() {
@@ -88,6 +120,7 @@ class _ActivityFilterSheetState extends State<ActivityFilterSheet> {
     _type = widget.current.type;
     _timeframe = widget.current.timeframe;
     _showFull = widget.current.showFull;
+    _useLocationScope = widget.current.useLocationScope;
   }
 
   @override
@@ -126,6 +159,38 @@ class _ActivityFilterSheetState extends State<ActivityFilterSheet> {
             ),
 
             const SizedBox(height: 20),
+
+            // ── Where section ─────────────────────────────────────────────
+            // The location scope is app-wide, not per-sheet: changing it here
+            // changes it on the feed and in the marketplace too. The switch is
+            // embedded rather than duplicated so there is exactly one notion
+            // of "where am I looking".
+            _SectionLabel('Where'),
+            const SizedBox(height: 6),
+            const LocationSwitcher(padding: EdgeInsets.symmetric(vertical: 4)),
+            SwitchListTile(
+              title: const Text(
+                'Limit to my location',
+                style: TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.darkGreen,
+                    fontWeight: FontWeight.w500),
+              ),
+              subtitle: Text(
+                _useLocationScope
+                    ? 'Only activities in ${context.watch<LocationProvider>().filter.label}'
+                    : 'Activities everywhere, ignoring the location switch',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.darkGreen.withOpacity(0.55)),
+              ),
+              value: _useLocationScope,
+              onChanged: (v) => setState(() => _useLocationScope = v),
+              activeColor: AppTheme.primary,
+              contentPadding: EdgeInsets.zero,
+            ),
+
+            const SizedBox(height: 12),
 
             // ── Type section ──────────────────────────────────────────────
             _SectionLabel('Type'),
@@ -208,6 +273,7 @@ class _ActivityFilterSheetState extends State<ActivityFilterSheet> {
                       type: _type,
                       timeframe: _timeframe,
                       showFull: _showFull,
+                      useLocationScope: _useLocationScope,
                     ),
                   );
                 },
@@ -231,6 +297,7 @@ class _ActivityFilterSheetState extends State<ActivityFilterSheet> {
                   _type = null;
                   _timeframe = null;
                   _showFull = false;
+                  _useLocationScope = true;
                 }),
                 child: Text(
                   'Clear All',

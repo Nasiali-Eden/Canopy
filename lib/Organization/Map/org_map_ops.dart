@@ -134,6 +134,30 @@ const _allPinTypes = <_PinType>[
     role: _PinRole.envOps,
   ),
   _PinType(
+    id: 'collection_site',
+    label: 'Collection Site',
+    description: 'Waste or recyclable aggregation point',
+    icon: Icons.inventory_2_outlined,
+    color: Color(0xFF2D7A4F),
+    role: _PinRole.envOps,
+  ),
+  _PinType(
+    id: 'scrap_buying_site',
+    label: 'Scrap Buying Site',
+    description: 'Buy-back partner, yard, or trading point',
+    icon: Icons.point_of_sale_outlined,
+    color: Color(0xFF8B5E34),
+    role: _PinRole.envOps,
+  ),
+  _PinType(
+    id: 'sorting_hub',
+    label: 'Sorting Hub',
+    description: 'Sorting, baling, staging, or recovery hub',
+    icon: Icons.warehouse_outlined,
+    color: Color(0xFF4B6A88),
+    role: _PinRole.envOps,
+  ),
+  _PinType(
     id: 'tree_site',
     label: 'Tree Planting Site',
     description: 'Active or planned tree planting location',
@@ -167,8 +191,13 @@ const _allPinTypes = <_PinType>[
 
 class OrgMapOpsScreen extends StatefulWidget {
   final Map<String, dynamic> orgData;
+  final String? initialPinTypeId;
 
-  const OrgMapOpsScreen({required this.orgData, Key? key}) : super(key: key);
+  const OrgMapOpsScreen({
+    required this.orgData,
+    this.initialPinTypeId,
+    Key? key,
+  }) : super(key: key);
 
   @override
   State<OrgMapOpsScreen> createState() => _OrgMapOpsScreenState();
@@ -225,6 +254,20 @@ class _OrgMapOpsScreenState extends State<OrgMapOpsScreen> {
     target: LatLng(-1.2921, 36.8219),
     zoom: 13,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    final initialId = widget.initialPinTypeId;
+    if (initialId != null && initialId.isNotEmpty) {
+      for (final type in _availableTypes) {
+        if (type.id == initialId) {
+          _selectedType = type;
+          break;
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {

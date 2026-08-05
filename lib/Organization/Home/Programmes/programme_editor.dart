@@ -201,6 +201,45 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
 
   // ── Save ───────────────────────────────────────────────────────────────────
 
+  Future<void> _confirmDelete() async {
+    final id = widget.existing?.id;
+    if (id == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete programme?'),
+        content: const Text(
+            'This permanently removes the programme. This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _saving = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('programmes')
+          .doc(id)
+          .delete();
+      if (!mounted) return;
+      Navigator.pop(context, 'deleted');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      _snack('Could not delete: $e');
+    }
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_type == ProgrammeType.onlineCourse && _linkCtrl.text.trim().isEmpty) {
@@ -395,6 +434,15 @@ class _ProgrammeEditorState extends State<ProgrammeEditor> {
               color: AppTheme.darkGreen,
               fontSize: 18),
         ),
+        actions: [
+          if (_isEdit && !_saving)
+            IconButton(
+              tooltip: 'Delete programme',
+              onPressed: _confirmDelete,
+              icon: Icon(Icons.delete_outline_rounded,
+                  color: Colors.red.shade400, size: 22),
+            ),
+        ],
       ),
       body: Form(
         key: _formKey,

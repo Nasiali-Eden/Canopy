@@ -12,6 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../Services/Geo/geo_registry.dart';
 import '../../Shared/theme/app_theme.dart';
 import '../../Services/Environmental/environment_ops_service.dart';
 import '../../Models/environmental/enums/material_category.dart';
@@ -187,6 +188,27 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     if (xFile != null) setState(() => _imageFile = File(xFile.path));
   }
 
+  // ── Location ─────────────────────────────────────────────────────────────
+
+  /// Opens the county / area registry and writes the canonical name back into
+  /// the free-text field. Typing is still allowed — this just guarantees a
+  /// resolvable value for people who want one.
+  Future<void> _pickCounty() async {
+    await GeoRegistry.instance.ensureLoaded();
+    if (!mounted) return;
+
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _CountyPickerSheet(),
+    );
+    if (picked != null && mounted) {
+      setState(() => _locationCtrl.text = picked);
+    }
+  }
+
   // ── Submit ───────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
@@ -358,6 +380,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               onDeliverChanged: (v) => setState(() => _canDeliver = v),
               imageFile: _imageFile,
               onPickImage: _pickImage,
+              onPickCounty: _pickCounty,
             ),
             _StepReview(
               listingType: _listingType,
@@ -535,6 +558,7 @@ class _StepDetails extends StatelessWidget {
   final ValueChanged<bool> onDeliverChanged;
   final File? imageFile;
   final VoidCallback onPickImage;
+  final VoidCallback onPickCounty;
 
   const _StepDetails({
     required this.listingType,
@@ -551,6 +575,7 @@ class _StepDetails extends StatelessWidget {
     required this.onDeliverChanged,
     required this.imageFile,
     required this.onPickImage,
+    required this.onPickCounty,
   });
 
   List<String> get _grades {
@@ -738,23 +763,85 @@ class _StepDetails extends StatelessWidget {
         const SizedBox(height: 16),
 
         // Location
+        //
+        // This was a bare free-text box. Whatever was typed went into
+        // `location_text` and was never queryable — which is why nothing in
+        // the marketplace could be filtered by county. It now resolves live
+        // against the 47-county registry, and the picker guarantees a match.
         _SectionLabel(label: 'Collection / delivery area'),
         const SizedBox(height: 8),
         _FieldBox(
-          child: TextFormField(
-            controller: locationCtrl,
-            style: const TextStyle(fontSize: 14, color: AppTheme.darkGreen),
-            decoration: InputDecoration(
-              hintText: 'e.g. Kibera, Nairobi',
-              hintStyle: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.darkGreen.withOpacity(0.35)),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.all(0),
-              prefixIcon: Icon(Icons.location_on_outlined,
-                  size: 18, color: color),
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: locationCtrl,
+                  style: const TextStyle(
+                      fontSize: 14, color: AppTheme.darkGreen),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Kibera, Nairobi',
+                    hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.darkGreen.withOpacity(0.35)),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(0),
+                    prefixIcon: Icon(Icons.location_on_outlined,
+                        size: 18, color: color),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: onPickCounty,
+                style: TextButton.styleFrom(
+                  foregroundColor: color,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('Pick',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w800)),
+              ),
+            ],
           ),
+        ),
+        const SizedBox(height: 6),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: locationCtrl,
+          builder: (context, value, _) {
+            final resolved =
+                GeoRegistry.instance.resolve(freeText: value.text.trim());
+            final ok = resolved.countyId != null;
+            if (value.text.trim().isEmpty) return const SizedBox.shrink();
+            return Row(
+              children: [
+                Icon(
+                    ok
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.error_outline_rounded,
+                    size: 13,
+                    color: ok ? AppTheme.primary : AppTheme.tertiary),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    ok
+                        ? 'Matched to ${resolved.label} — buyers filtering by '
+                            'county will find this'
+                        : 'Not matched to a county. Tap Pick so this listing '
+                            'shows up in local searches.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                      color: ok
+                          ? AppTheme.primary.withOpacity(0.85)
+                          : AppTheme.darkGreen.withOpacity(0.6),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 16),
 
@@ -1461,6 +1548,208 @@ class _LogisticsToggle extends StatelessWidget {
                   color: AppTheme.darkGreen.withOpacity(0.40),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COUNTY PICKER
+//
+// Deliberately narrow: pick a county, optionally an area inside it. Returns
+// the canonical display string ("Kibera, Nairobi") which GeoRegistry.resolve()
+// is guaranteed to match, so the listing lands in the right county bucket.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CountyPickerSheet extends StatefulWidget {
+  const _CountyPickerSheet();
+
+  @override
+  State<_CountyPickerSheet> createState() => _CountyPickerSheetState();
+}
+
+class _CountyPickerSheetState extends State<_CountyPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  GeoCounty? _county;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(
+        () => setState(() => _query = _searchCtrl.text.trim()));
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final geo = GeoRegistry.instance;
+    final county = _county;
+
+    final rows = <Widget>[];
+    if (county == null) {
+      for (final c in geo.searchCounties(_query)) {
+        rows.add(_row(
+          title: c.name,
+          subtitle: '${c.regionName} · ${c.areas.length} areas',
+          onTap: () => setState(() {
+            _county = c;
+            _searchCtrl.clear();
+          }),
+        ));
+      }
+    } else {
+      rows.add(_row(
+        title: 'All of ${county.name}',
+        subtitle: 'County-wide',
+        onTap: () => Navigator.pop(context, county.name),
+      ));
+      for (final a in geo.searchAreas(_query, countyId: county.id)) {
+        rows.add(_row(
+          title: a.name,
+          subtitle: county.name,
+          onTap: () => Navigator.pop(context, '${a.name}, ${county.name}'),
+        ));
+      }
+    }
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.45,
+      maxChildSize: 0.94,
+      expand: false,
+      builder: (context, controller) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.lightGreen.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 16, 6),
+              child: Row(
+                children: [
+                  if (county != null)
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 32, minHeight: 32),
+                      icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                      onPressed: () => setState(() {
+                        _county = null;
+                        _searchCtrl.clear();
+                      }),
+                    ),
+                  Expanded(
+                    child: Text(
+                      county == null
+                          ? 'Choose a county'
+                          : 'Areas in ${county.name}',
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.darkGreen),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText:
+                      county == null ? 'Search 47 counties' : 'Search areas',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                        color: AppTheme.lightGreen.withOpacity(0.4)),
+                  ),
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: rows.isEmpty
+                  ? Center(
+                      child: Text('No match for "$_query"',
+                          style: TextStyle(
+                              color: AppTheme.darkGreen.withOpacity(0.5),
+                              fontSize: 13)),
+                    )
+                  : ListView(
+                      controller: controller,
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+                      children: rows,
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row({
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border:
+                Border.all(color: AppTheme.lightGreen.withOpacity(0.25)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.darkGreen)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.darkGreen.withOpacity(0.55))),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  size: 18, color: AppTheme.darkGreen.withOpacity(0.35)),
             ],
           ),
         ),

@@ -13,6 +13,11 @@ import '../theme/app_theme.dart';
 import 'activity.dart';
 import 'activity_detail.dart';
 
+/// Neutral grey used for input-field accents (labels, prefix-icon chips,
+/// borders). Replaces the previous loud green so the fields read as calm
+/// white cards.
+const Color _kFieldAccent = Color(0xFF9AA0A6);
+
 /// When true, pops back to the caller on success instead of opening the detail
 /// screen. Used from org Operations so the event appears in the Events tab.
 class CreateActivityScreen extends StatefulWidget {
@@ -51,6 +56,20 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   // Location
   String? _selectedCity;
   String? _selectedArea;
+
+  /// Activity category. Stored in the doc's `type` field and what the
+  /// community event filters match on — so it must use the same keys as the
+  /// filter chips (cleanup / tree_planting / …). 'event' is intentionally not
+  /// an option: it was the old hardcoded value that no filter chip matched.
+  static const Map<String, String> _categoryOptions = {
+    'cleanup': 'Cleanup',
+    'tree_planting': 'Tree Planting',
+    'awareness': 'Awareness',
+    'training': 'Training',
+    'monitoring': 'Monitoring',
+    'other': 'Other',
+  };
+  String _selectedType = 'cleanup';
   double _lat = 0, _lng = 0;
   Map<String, List<Map<String, dynamic>>> _kenyaCities = {};
 
@@ -237,7 +256,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
       }
 
       final id = await ActivityService().createActivity(
-        type: 'event',
+        type: _selectedType,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         location: location.toMap(),
@@ -345,7 +364,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         controller: _titleController,
                         label: 'Title',
                         icon: Icons.title,
-                        accentColor: AppTheme.primary,
+                        accentColor: _kFieldAccent,
                         validator: (v) => (v == null || v.trim().isEmpty)
                             ? 'Title is required'
                             : null,
@@ -354,7 +373,22 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                       _StyledTextArea(
                         controller: _descriptionController,
                         label: 'Description',
-                        accentColor: AppTheme.primary,
+                        accentColor: _kFieldAccent,
+                      ),
+                      const SizedBox(height: 12),
+                      _StyledDropdown(
+                        value: _categoryOptions[_selectedType],
+                        items: _categoryOptions.values.toList(),
+                        label: 'Category',
+                        icon: Icons.category_outlined,
+                        accentColor: _kFieldAccent,
+                        onChanged: (label) {
+                          if (label == null) return;
+                          final key = _categoryOptions.entries
+                              .firstWhere((e) => e.value == label)
+                              .key;
+                          setState(() => _selectedType = key);
+                        },
                       ),
 
                       const SizedBox(height: 22),
@@ -371,7 +405,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         items: cities,
                         label: 'City / County',
                         icon: Icons.location_city_outlined,
-                        accentColor: AppTheme.accent,
+                        accentColor: _kFieldAccent,
                         onChanged: (val) => setState(() {
                           _selectedCity = val;
                           _selectedArea = null;
@@ -388,7 +422,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         items: _areas.map((a) => a['area'] as String).toList(),
                         label: 'Area / Neighbourhood',
                         icon: Icons.pin_drop_outlined,
-                        accentColor: AppTheme.lightGreen,
+                        accentColor: _kFieldAccent,
                         onChanged: _onAreaSelected,
                       ),
                       const SizedBox(height: 12),
@@ -396,7 +430,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         controller: _venueController,
                         label: 'Venue (e.g. Gate 2, Karura Forest)',
                         icon: Icons.place_outlined,
-                        accentColor: AppTheme.accent,
+                        accentColor: _kFieldAccent,
                       ),
 
                       if (_lat != 0 || _lng != 0) ...[
@@ -454,7 +488,7 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
                         controller: _requiredParticipantsController,
                         label: 'Required Participants',
                         icon: Icons.people_outline,
-                        accentColor: AppTheme.secondary,
+                        accentColor: _kFieldAccent,
                         keyboardType: TextInputType.number,
                         validator: (v) {
                           final n = int.tryParse((v ?? '').trim());

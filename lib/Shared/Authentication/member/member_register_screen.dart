@@ -92,6 +92,11 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen>
         email: _emailController.text.trim(),
         password: _passwordController.text,
         role: 'Member',
+        // Collected and validated by this screen since it was written; it just
+        // was never passed through. A member's county is what the location
+        // switch defaults their whole experience to.
+        city: _selectedCity,
+        area: _selectedArea,
       );
       if (!mounted) return;
       if (user == null) {

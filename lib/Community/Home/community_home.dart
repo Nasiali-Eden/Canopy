@@ -11,6 +11,8 @@ import 'package:provider/provider.dart';
 
 import '../../Models/user.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/widgets/canopy_bottom_bar.dart';
+import '../../Shared/widgets/location_switcher.dart';
 import '../../Shared/Activities/activity_home_logic.dart';
 import '../../Shared/Activities/activity_filter_sheet.dart';
 import '../../Services/Contributions/contribution_service.dart';
@@ -44,23 +46,23 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
   ActivityFilter _activityFilter = const ActivityFilter();
 
   static const _destinations = [
-    _NavDestination(
+    CanopyNavDestination(
         icon: Icons.home_outlined,
         activeIcon: Icons.home_rounded,
         label: 'Home'),
-    _NavDestination(
+    CanopyNavDestination(
         icon: Icons.event_note_outlined,
         activeIcon: Icons.event_note_rounded,
         label: 'Activities'),
-    _NavDestination(
+    CanopyNavDestination(
         icon: Icons.map_outlined,
         activeIcon: Icons.map_rounded,
         label: 'Map'),
-    _NavDestination(
+    CanopyNavDestination(
         icon: Icons.auto_stories_outlined,
         activeIcon: Icons.auto_stories_rounded,
         label: 'Heritage'),
-    _NavDestination(
+    CanopyNavDestination(
         icon: Icons.person_outline,
         activeIcon: Icons.person_rounded,
         label: 'Profile'),
@@ -197,135 +199,14 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: _index == 1 ? _buildActivitiesAppBar(context) : null,
-        extendBody: true,
         body: IndexedStack(index: _index, children: pages),
         floatingActionButton: _index == 1
             ? ActivityHomeLogic.buildFloatingActionButton(context, user)
             : null,
-        bottomNavigationBar: _FloatingNavBar(
+        bottomNavigationBar: CanopyBottomBar(
           currentIndex: _index,
           destinations: _destinations,
           onTap: (i) => setState(() => _index = i),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FLOATING NAV BAR — clean white / glass pill (mirrors org_home.dart)
-// ─────────────────────────────────────────────────────────────────────────────
-
-@immutable
-class _NavDestination {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-
-  const _NavDestination({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-  });
-}
-
-class _FloatingNavBar extends StatelessWidget {
-  final int currentIndex;
-  final List<_NavDestination> destinations;
-  final ValueChanged<int> onTap;
-
-  const _FloatingNavBar({
-    required this.currentIndex,
-    required this.destinations,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      minimum: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-          // Both the fill and the outline at 30% opacity.
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.80),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: AppTheme.darkGreen.withOpacity(0.30),
-              width: 0.8,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(destinations.length, (i) {
-              final dest = destinations[i];
-              return Expanded(
-                child: _NavItem(
-                  icon: dest.icon,
-                  activeIcon: dest.activeIcon,
-                  label: dest.label,
-                  isSelected: i == currentIndex,
-                  onTap: () => onTap(i),
-                ),
-              );
-            }),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isSelected ? activeIcon : icon,
-              size: 26,
-              color: isSelected
-                  ? AppTheme.tertiary
-                  : AppTheme.darkGreen,
-            ),
-            const SizedBox(height: 3),
-            if (isSelected)
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.darkGreen,
-                  letterSpacing: -0.1,
-                ),
-              )
-            else
-              const SizedBox(height: 14),
-          ],
         ),
       ),
     );

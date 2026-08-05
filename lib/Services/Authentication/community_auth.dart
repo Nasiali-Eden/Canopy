@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../Models/user.dart';
+import '../Geo/geo_registry.dart';
 
 class CommunityAuthService {
   final FirebaseAuth _auth;
@@ -80,8 +81,16 @@ class CommunityAuthService {
         }
       }
 
+      // Canonical location, resolved once and written to every document this
+      // registration creates. Without it a seller's listings cannot be found
+      // by county — the free-text 'city' field alone was never queryable.
+      await GeoRegistry.instance.ensureLoaded();
+      final sellerGeo =
+          GeoRegistry.instance.resolve(area: area, county: city, country: 'Kenya');
+
       // Primary document in marketplace_sellers collection
       final sellerData = {
+        ...sellerGeo.toFirestore(),
         'uid': user.uid,
         'email': email,
         'name': name,
@@ -126,6 +135,7 @@ class CommunityAuthService {
           'marketplace_role': marketplaceRole,
           'shop_name': shopName,
           'city': city,
+          ...sellerGeo.toFirestore(),
           'impact_points': 0,
           'createdAt': FieldValue.serverTimestamp(),
           'guidelinesAcceptedAt': null,
@@ -216,12 +226,27 @@ class CommunityAuthService {
       };
       await _db.collection('org_rep').doc(user.uid).set(orgRepData);
 
+      // Canonical location for the organisation. Note the bug this closes:
+      // Organization.city defaults to the string 'Kenya', so an org that never
+      // set a city was filed under a country name in a city field. resolve()
+      // recognises that case and files it at the country tier instead of
+      // inventing a county.
+      await GeoRegistry.instance.ensureLoaded();
+      final orgGeo = GeoRegistry.instance.resolve(
+        area: area,
+        county: city,
+        country: country,
+        lat: lat,
+        lng: lng,
+      );
+
       final organizationsData = {
         'orgId': orgId,
         'org_name': orgName,
         'org_rep_name': orgRepName,
         'org_rep_uid': user.uid,
         'email': email,
+        ...orgGeo.toFirestore(),
         'background': background,
         'mainFunctions': mainFunctions,
         'orgDesignation': orgDesignation,
@@ -286,11 +311,18 @@ class CommunityAuthService {
   //  Community Member Registration
   // ─────────────────────────────────────────────────────────────────────────
 
+  /// [city] and [area] were collected by the member registration screen — and
+  /// required by its validator — but this method never accepted them, so every
+  /// member document was written with no location at all. That is why the
+  /// location switch had no home county to resolve for members. They are now
+  /// captured and stored canonically.
   Future<F_User?> registerWithEmail({
     required String name,
     required String email,
     required String password,
     required String role,
+    String? city,
+    String? area,
   }) async {
     try {
       debugPrint('[CommunityAuth] registerWithEmail start');
@@ -306,11 +338,21 @@ class CommunityAuthService {
       }
       debugPrint('[CommunityAuth] registered uid=${user.uid}');
 
+      await GeoRegistry.instance.ensureLoaded();
+      final memberGeo = GeoRegistry.instance
+          .resolve(area: area, county: city, country: 'Kenya');
+
       final data = {
         'name': name,
         'email': email,
         'role': role,
         if (role == 'Volunteer') 'volunteer': true,
+        // Kept as free text for anything still reading the legacy fields.
+        if (city != null && city.isNotEmpty) 'city': city,
+        if (area != null && area.isNotEmpty) 'area': area,
+        // Canonical, queryable form — this is what the location switch reads
+        // to work out which county a member calls home.
+        ...memberGeo.toFirestore(),
         'createdAt': FieldValue.serverTimestamp(),
         'guidelinesAcceptedAt': null,
         'impact_points': 0,

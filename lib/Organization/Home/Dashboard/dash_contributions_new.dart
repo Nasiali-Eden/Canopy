@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../Shared/theme/app_theme.dart';
-import '../../../Community/Contributions/contribution_card.dart';
+import '../../../Community/Contributions/entry_feed_card.dart';
 import 'dash_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -79,11 +79,15 @@ class DashContributions extends StatelessWidget {
               }
 
               return Column(
-                children: contributions
-                    .map(
-                      (data) => ContributionCard(contribution: data),
-                    )
-                    .toList(),
+                children: [
+                  for (int i = 0; i < contributions.length; i++) ...[
+                    EntryFeedCard(
+                      entry: FeedEntry.fromContribution(contributions[i]),
+                    ),
+                    if (i < contributions.length - 1)
+                      const SizedBox(height: 16),
+                  ],
+                ],
               );
             },
           ),

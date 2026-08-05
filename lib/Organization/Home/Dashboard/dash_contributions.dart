@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../Shared/theme/app_theme.dart';
-import '../../../Community/Contributions/contribution_card.dart';
+import '../../../Community/Contributions/entry_feed_card.dart';
 import 'dash_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,11 +70,18 @@ class DashContributions extends StatelessWidget {
               if (visible.isEmpty) return _emptyState();
 
               return Column(
-                children: visible.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return ContributionCard(
-                      contribution: {...data, 'id': doc.id});
-                }).toList(),
+                children: [
+                  for (int i = 0; i < visible.length; i++) ...[
+                    EntryFeedCard(
+                      editable: true,
+                      entry: FeedEntry.fromContribution(
+                        visible[i].data() as Map<String, dynamic>,
+                        contributionId: visible[i].id,
+                      ),
+                    ),
+                    if (i < visible.length - 1) const SizedBox(height: 16),
+                  ],
+                ],
               );
             },
           ),

@@ -115,6 +115,10 @@ flutter:
     - assets/organization_taxonomy.json
     - assets/environmental/material_types.json
     - assets/WorldCountries.json
+    # Canonical administrative registry — 47 counties, 8 regions, 321 areas.
+    # Supersedes KenyaCities.json, which is kept only so the migration can
+    # still resolve legacy free-text values written against it.
+    - assets/geo/kenya.json
     - assets/Cities/African/KenyaCities.json
 
     # Cultural hierarchy — butterfly folder structure

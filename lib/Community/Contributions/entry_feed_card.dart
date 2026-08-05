@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../Organization/Explorer/org_view_screen.dart';
+import '../../Services/Contributions/contribution_service.dart';
 import '../../Shared/theme/app_theme.dart';
 
 /// Number of characters of [FeedEntry.description] shown before "Show more".
@@ -52,6 +54,10 @@ class FeedEntry {
   /// linkedin). Only the platforms present here render an icon.
   final Map<String, String> socials;
 
+  /// Firestore document id of the backing contribution, when this entry was
+  /// built from one. Needed to persist edits.
+  final String? contributionId;
+
   const FeedEntry({
     required this.title,
     required this.description,
@@ -60,7 +66,45 @@ class FeedEntry {
     this.orgName = '',
     this.orgId,
     this.socials = const {},
+    this.contributionId,
   });
+
+  /// Build a feed entry from a `contributions` Firestore document map.
+  ///
+  /// Tolerant of the field aliases the writer uses: images come from `photos`
+  /// (falling back to the legacy `beforeImages`), the type line from
+  /// `workType` (falling back to `type`), and socials from `socialLinks`.
+  factory FeedEntry.fromContribution(Map<String, dynamic> d,
+      {String orgName = '', String? contributionId}) {
+    List<String> images(dynamic v) => (v is List)
+        ? v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
+        : const [];
+
+    var photos = images(d['photos']);
+    if (photos.isEmpty) photos = images(d['beforeImages']);
+
+    final socialsRaw = d['socialLinks'];
+    final socials = <String, String>{};
+    if (socialsRaw is Map) {
+      socialsRaw.forEach((k, v) {
+        if (v != null && v.toString().trim().isNotEmpty) {
+          socials[k.toString()] = v.toString();
+        }
+      });
+    }
+
+    return FeedEntry(
+      title: (d['title'] as String?)?.trim().isNotEmpty == true
+          ? d['title'] as String
+          : (d['workType'] as String? ?? 'Contribution'),
+      description: d['description'] as String? ?? '',
+      type: d['workType'] as String? ?? d['type'] as String? ?? '',
+      imageUrls: photos,
+      orgName: orgName,
+      socials: socials,
+      contributionId: contributionId ?? d['id'] as String?,
+    );
+  }
 }
 
 /// Accent colour for a work type — the small line above the title.
@@ -92,7 +136,11 @@ Color feedTypeColor(String type) {
 class EntryFeedCard extends StatefulWidget {
   final FeedEntry entry;
 
-  const EntryFeedCard({super.key, required this.entry});
+  /// When true, shows an edit affordance that lets the owner change the title
+  /// and description only. Requires [FeedEntry.contributionId] to be set.
+  final bool editable;
+
+  const EntryFeedCard({super.key, required this.entry, this.editable = false});
 
   @override
   State<EntryFeedCard> createState() => _EntryFeedCardState();
@@ -104,6 +152,13 @@ class _EntryFeedCardState extends State<EntryFeedCard>
   late final AnimationController _progress;
   int _current = 0;
   bool _active = false;
+
+  // Local copies so an edit reflects immediately, before the Firestore stream
+  // round-trips. Only title and description are editable.
+  late String _title = widget.entry.title;
+  late String _description = widget.entry.description;
+  bool _savingEdit = false;
+  bool _deleted = false;
 
   ScrollPosition? _position;
 
@@ -195,6 +250,92 @@ class _EntryFeedCardState extends State<EntryFeedCard>
     } catch (_) {/* ignore — org profile just won't open */}
   }
 
+  Future<void> _openEditSheet() async {
+    final id = widget.entry.contributionId;
+    if (id == null) return;
+
+    final result = await showModalBottomSheet<(String, String)>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditContributionSheet(
+        initialTitle: _title,
+        initialDescription: _description,
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    final (newTitle, newDescription) = result;
+    setState(() => _savingEdit = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('contributions')
+          .doc(id)
+          .update({
+        'title': newTitle,
+        'description': newDescription,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
+      setState(() {
+        _title = newTitle;
+        _description = newDescription;
+        _savingEdit = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _savingEdit = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save changes: $e')),
+      );
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final id = widget.entry.contributionId;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (id == null || uid == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete contribution?'),
+        content: const Text(
+            'This permanently removes the contribution and its points. This '
+            'cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _savingEdit = true);
+    try {
+      await ContributionService()
+          .deleteContribution(contributionId: id, userId: uid);
+      if (!mounted) return;
+      setState(() {
+        _deleted = true;
+        _savingEdit = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _savingEdit = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete: $e')),
+      );
+    }
+  }
+
   Future<void> _openUrl(String raw) async {
     var url = raw.trim();
     if (url.isEmpty) return;
@@ -214,6 +355,7 @@ class _EntryFeedCardState extends State<EntryFeedCard>
 
   @override
   Widget build(BuildContext context) {
+    if (_deleted) return const SizedBox.shrink();
     final accent = feedTypeColor(widget.entry.type);
     final orgName = widget.entry.orgName.trim();
     final socials = <(String, IconData, String)>[
@@ -304,10 +446,51 @@ class _EntryFeedCardState extends State<EntryFeedCard>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _TitleWithAccent(title: widget.entry.title, accent: accent),
-                if (widget.entry.description.trim().isNotEmpty) ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _TitleWithAccent(title: _title, accent: accent),
+                    ),
+                    if (widget.editable &&
+                        widget.entry.contributionId != null) ...[
+                      const SizedBox(width: 8),
+                      if (_savingEdit)
+                        const Padding(
+                          padding: EdgeInsets.all(4),
+                          child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      else ...[
+                        InkWell(
+                          onTap: _openEditSheet,
+                          customBorder: const CircleBorder(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(Icons.edit_outlined,
+                                size: 18,
+                                color: AppTheme.darkGreen.withOpacity(0.55)),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: _confirmDelete,
+                          customBorder: const CircleBorder(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(Icons.delete_outline_rounded,
+                                size: 18, color: Colors.red.shade300),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+                if (_description.trim().isNotEmpty) ...[
                   const SizedBox(height: 6),
-                  _ExpandableText(text: widget.entry.description.trim()),
+                  _ExpandableText(text: _description.trim()),
                 ],
                 if (socials.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -560,6 +743,135 @@ class _ExpandableTextState extends State<_ExpandableText> {
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: AppTheme.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDIT SHEET — title + description only
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EditContributionSheet extends StatefulWidget {
+  final String initialTitle;
+  final String initialDescription;
+
+  const _EditContributionSheet({
+    required this.initialTitle,
+    required this.initialDescription,
+  });
+
+  @override
+  State<_EditContributionSheet> createState() => _EditContributionSheetState();
+}
+
+class _EditContributionSheetState extends State<_EditContributionSheet> {
+  late final TextEditingController _title =
+      TextEditingController(text: widget.initialTitle);
+  late final TextEditingController _description =
+      TextEditingController(text: widget.initialDescription);
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final title = _title.text.trim();
+    if (title.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Title cannot be empty')),
+      );
+      return;
+    }
+    Navigator.of(context).pop((title, _description.text.trim()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.darkGreen.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text('Edit contribution',
+                style: TextStyle(
+                    color: AppTheme.darkGreen,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text('You can update the title and description.',
+                style: TextStyle(
+                    color: AppTheme.darkGreen.withOpacity(0.55),
+                    fontSize: 13)),
+            const SizedBox(height: 18),
+            const Text('Title',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _title,
+              maxLength: 50,
+              decoration: InputDecoration(
+                hintText: 'Contribution title',
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text('Description',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _description,
+              maxLines: 5,
+              minLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Describe the work…',
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: _save,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Save changes',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
               ),
             ),
           ],

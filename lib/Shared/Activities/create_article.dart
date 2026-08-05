@@ -12,6 +12,9 @@ import '../utils/rich_body.dart';
 
 const _kBg = Color(0xFFF7F5F0);
 
+/// Neutral grey for editor borders/dividers/tints — replaces the loud green.
+const Color _kFieldAccent = Color(0xFF9AA0A6);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Article categories — must match the reader filters in
 // articles_list_screen.dart / community_home.dart.
@@ -310,6 +313,44 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
     return true;
   }
 
+  Future<void> _confirmDelete() async {
+    final id = _articleId;
+    if (id == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete article?'),
+        content: const Text(
+            'This permanently removes the article. This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _saving = true);
+    try {
+      await _service.deleteArticle(id);
+      if (!mounted) return;
+      Navigator.pop(context, 'deleted');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete: $e')),
+      );
+    }
+  }
+
   Future<void> _save({required bool publish}) async {
     if (!_validate()) return;
     setState(() => _saving = true);
@@ -381,7 +422,7 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: AppTheme.lightGreen.withOpacity(0.18),
+              color: _kFieldAccent.withOpacity(0.18),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.arrow_back_ios_new,
@@ -398,6 +439,13 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
               fontSize: 18),
         ),
         actions: [
+          if (_isEdit && !_saving)
+            IconButton(
+              tooltip: 'Delete article',
+              onPressed: _confirmDelete,
+              icon: Icon(Icons.delete_outline_rounded,
+                  color: Colors.red.shade400, size: 22),
+            ),
           if (!_saving)
             TextButton(
               onPressed: () => _save(publish: false),
@@ -461,7 +509,7 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
           border: Border.all(
             color: hasImage
                 ? AppTheme.primary.withOpacity(0.35)
-                : AppTheme.lightGreen.withOpacity(0.4),
+                : _kFieldAccent.withOpacity(0.4),
             width: hasImage ? 1.5 : 1,
           ),
           boxShadow: [
@@ -583,7 +631,7 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        Divider(height: 1, color: AppTheme.lightGreen.withOpacity(0.25)),
+        Divider(height: 1, color: _kFieldAccent.withOpacity(0.25)),
         const SizedBox(height: 14),
         Text(
           'CATEGORY',
@@ -669,7 +717,7 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(
-        color: AppTheme.lightGreen.withOpacity(0.10),
+        color: _kFieldAccent.withOpacity(0.10),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -779,7 +827,7 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.35)),
+        border: Border.all(color: _kFieldAccent.withOpacity(0.35)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
@@ -867,7 +915,7 @@ class _BlockEditor extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFBFAF7),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.25)),
+        border: Border.all(color: _kFieldAccent.withOpacity(0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

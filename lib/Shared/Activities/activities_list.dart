@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
+import '../../Models/geo/canopy_location.dart';
 import '../../Models/user.dart';
+import '../../Providers/location_provider.dart';
 import '../../Services/Community/community_service.dart';
+import '../../Services/Geo/geo_registry.dart';
 import '../theme/app_theme.dart';
 import 'activity_card.dart';
 import 'activity_filter_sheet.dart';
@@ -82,6 +85,25 @@ class _ActivitiesListScreenState extends State<ActivitiesListScreen> {
     }).toList();
   }
 
+  // Location filter. Applied client-side for the same reason status and type
+  // are: CommunityService.getActivitiesStream is deliberately index-free, and
+  // adding geo as a second server-side equality predicate alongside its
+  // existing orderBy would require a composite index per tier.
+  //
+  // Documents written before the geo migration carry no canonical ids. Those
+  // are resolved on the fly from their legacy {area, city} fields so a
+  // community's existing activities do not vanish the moment the filter ships.
+  List<QueryDocumentSnapshot> _applyLocation(
+      List<QueryDocumentSnapshot> docs, LocationFilter scope) {
+    if (!widget.filter.useLocationScope || scope.isEverywhere) return docs;
+    return docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final raw = (data['location'] as Map<String, dynamic>?) ?? data;
+      final resolved = GeoRegistry.instance.resolveFromDocument(raw);
+      return widget.filter.matchesLocation(resolved, scope);
+    }).toList();
+  }
+
   // Client-side timeframe filter applied after Firestore fetch
   List<QueryDocumentSnapshot> _applyTimeframe(List<QueryDocumentSnapshot> docs) {
     final tf = widget.filter.timeframe;
@@ -139,11 +161,21 @@ class _ActivitiesListScreenState extends State<ActivitiesListScreen> {
                 );
               }
 
+              final scope = context.watch<LocationProvider>().filter;
               final allDocs = snap.data?.docs ?? [];
-              final docs = _applyTimeframe(_applyStatusAndType(allDocs));
+              final docs = _applyLocation(
+                  _applyTimeframe(_applyStatusAndType(allDocs)), scope);
 
               if (docs.isEmpty) {
-                return _EmptyState(hasFilter: !widget.filter.isDefault || _localType != null);
+                return _EmptyState(
+                  hasFilter: !widget.filter.isDefault || _localType != null,
+                  locationLabel: widget.filter.useLocationScope &&
+                          !scope.isEverywhere
+                      ? scope.label
+                      : null,
+                  onShowEverywhere:
+                      context.read<LocationProvider>().showEverywhere,
+                );
               }
 
               // The stream arrives newest-first so past events sort correctly;
@@ -402,7 +434,17 @@ class _ErrorCard extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final bool hasFilter;
 
-  const _EmptyState({required this.hasFilter});
+  /// Set when the emptiness is caused by the location scope specifically —
+  /// "nothing in Kiambu" is a different message from "nothing at all", and
+  /// deserves a way out rather than a dead end.
+  final String? locationLabel;
+  final VoidCallback? onShowEverywhere;
+
+  const _EmptyState({
+    required this.hasFilter,
+    this.locationLabel,
+    this.onShowEverywhere,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -427,23 +469,40 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            hasFilter
-                ? 'No activities match your filters'
-                : 'No upcoming activities',
+            locationLabel != null
+                ? 'Nothing happening in $locationLabel'
+                : hasFilter
+                    ? 'No activities match your filters'
+                    : 'No upcoming activities',
+            textAlign: TextAlign.center,
             style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: AppTheme.darkGreen),
           ),
           const SizedBox(height: 6),
-          Text(
-            hasFilter
-                ? 'Try adjusting the type or time filter'
-                : 'Activities will appear here once organisers create them',
-            style: TextStyle(
-                fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.55)),
-            textAlign: TextAlign.center,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              locationLabel != null
+                  ? 'Widen your location to see activities nearby'
+                  : hasFilter
+                      ? 'Try adjusting the type or time filter'
+                      : 'Activities will appear here once organisers create them',
+              style: TextStyle(
+                  fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.55)),
+              textAlign: TextAlign.center,
+            ),
           ),
+          if (locationLabel != null && onShowEverywhere != null) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: onShowEverywhere,
+              icon: const Icon(Icons.public_rounded, size: 16),
+              label: const Text('Show everywhere'),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
+            ),
+          ],
         ],
       ),
     );

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../Shared/theme/app_theme.dart';
-import '../Shared/widgets/floating_nav_bar.dart';
+import '../Shared/widgets/canopy_bottom_bar.dart';
 import 'Heritage/Archive/heritage_archive_screen.dart';
 import 'Heritage/Create/create_entry_screen.dart';
 import 'Heritage/Feedback/heritage_feedback_screen.dart';
@@ -107,26 +107,26 @@ class _CultureHomeScreenState extends State<CultureHomeScreen> {
     }
   }
 
-  FloatingNavDestination _destFor(String key) {
+  CanopyNavDestination _destFor(String key) {
     switch (key) {
       case 'add':
-        return const FloatingNavDestination(
+        return const CanopyNavDestination(
             icon: Icons.add_circle_outline,
             activeIcon: Icons.add_circle,
             label: 'Add Entry');
       case 'feedback':
-        return const FloatingNavDestination(
+        return const CanopyNavDestination(
             icon: Icons.forum_outlined,
             activeIcon: Icons.forum,
             label: 'Feedback');
       case 'profile':
-        return const FloatingNavDestination(
+        return const CanopyNavDestination(
             icon: Icons.person_outline,
             activeIcon: Icons.person,
             label: 'Profile');
       case 'archive':
       default:
-        return const FloatingNavDestination(
+        return const CanopyNavDestination(
             icon: Icons.archive_outlined,
             activeIcon: Icons.archive,
             label: 'Archive');
@@ -182,9 +182,8 @@ class _CultureHomeScreenState extends State<CultureHomeScreen> {
             ],
           ),
         ),
-        extendBody: true,
         body: _buildCurrentPage(),
-        bottomNavigationBar: FloatingNavBar(
+        bottomNavigationBar: CanopyBottomBar(
           currentIndex: currentIndex,
           onTap: _handleNavTap,
           destinations: keys.map(_destFor).toList(),

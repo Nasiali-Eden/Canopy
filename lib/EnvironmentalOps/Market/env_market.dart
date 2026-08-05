@@ -1,12 +1,34 @@
+// lib/EnvironmentalOps/Market/env_market.dart
+//
+// The materials market — supply side of the Canopy Marketplace.
+//
+// What changed, and why it matters:
+//
+// This screen used to query `market_listings where org_id == myOrg` on BOTH
+// tabs. That made it an inventory screen wearing a marketplace's clothes: an
+// organisation could only ever see its own posts. A processor's buy order for
+// 500kg of PET was invisible to every collector in the county who could have
+// filled it — the single largest functional gap in the app, because the whole
+// premise of Layer 2 is removing the broker by letting the two sides see each
+// other.
+//
+// It now reads the unified /listings collection scoped by the LOCATION SWITCH,
+// with an explicit Everyone / Mine toggle. Buy orders ("Wanted") and sell
+// listings ("Offered") are both public within the active geography.
+
 import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../../Models/marketplace/canopy_listing.dart';
+import '../../Providers/location_provider.dart';
+import '../../Services/Environmental/environment_ops_service.dart';
+import '../../Services/Marketplace/listing_service.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/widgets/location_switcher.dart';
 import 'create_listing_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,7 +41,11 @@ class EnvMarketScreen extends StatefulWidget {
 }
 
 class _EnvMarketScreenState extends State<EnvMarketScreen> {
-  bool _showBuying = true;
+  /// Wanted (buy orders) vs Offered (sell listings).
+  ListingIntent _intent = ListingIntent.seeking;
+
+  /// Everyone in the active geography, or only this org's own posts.
+  bool _onlyMine = false;
 
   // org state
   String? _orgId;
@@ -37,20 +63,14 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
 
   Future<void> _loadOrg() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
-      final userDoc =
-          await FirebaseFirestore.instance.collection('Users').doc(uid).get();
-      final orgId = userDoc.data()?['orgId'] as String?;
-      if (orgId == null) return;
-      final orgDoc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(orgId)
-          .get();
+      final contextData = await EnvironmentOpsService.instance.resolveContext();
+      final orgId = contextData?.orgId;
+      final orgDoc = contextData?.orgData;
+      if (orgId == null || orgDoc == null) return;
       if (mounted) {
         setState(() {
           _orgId = orgId;
-          _orgData = orgDoc.data();
+          _orgData = orgDoc;
         });
       }
     } catch (_) {}
@@ -75,33 +95,43 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
     } catch (_) {}
   }
 
-  String _imageForListing(Map<String, dynamic> data) {
-    final uploaded = data['image_url'] as String?;
-    if (uploaded != null && uploaded.isNotEmpty) return uploaded;
-    final subId = data['sub_type_id'] as String? ?? '';
+  String _imageForListing(CanopyListing l) {
+    if (l.coverImage != null && l.coverImage!.isNotEmpty) return l.coverImage!;
+    final subId = l.materialSubTypeId ?? '';
     return _sampleImages[subId] ??
         'https://picsum.photos/seed/${subId.isEmpty ? 'material' : subId}/400/250';
   }
 
+  ListingQuery _query(LocationProvider location) => ListingQuery(
+        // Scoping by geography rather than by org is the whole change.
+        location: _onlyMine ? LocationFilter.everywhere : location.filter,
+        side: ListingSide.supply,
+        intent: _intent,
+        orgId: _onlyMine ? _orgId : null,
+      );
+
   @override
   Widget build(BuildContext context) {
+    final location = context.watch<LocationProvider>();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F5F0),
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 16),
-            _buildStatStrip(),
+            const SizedBox(height: 8),
+            if (!_onlyMine) const LocationSwitcher(),
+            _buildStatStrip(location),
             const SizedBox(height: 12),
             _buildTabSwitcher(),
+            const SizedBox(height: 8),
+            _buildScopeToggle(location),
             const SizedBox(height: 4),
-            Expanded(child: _buildListings()),
+            Expanded(child: _buildListings(location)),
           ],
         ),
       ),
       floatingActionButton: Container(
-        // Lifted clear of the shell's floating nav pill (body is extendBody).
-        margin: const EdgeInsets.only(bottom: 78),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [AppTheme.darkGreen, AppTheme.primary],
@@ -143,45 +173,31 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
 
   // ── Stats ────────────────────────────────────────────────────────────────
 
-  Widget _buildStatStrip() {
-    if (_orgId == null) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            Expanded(child: _StatCard(label: 'Active Orders', value: '—')),
-            const SizedBox(width: 10),
-            Expanded(child: _StatCard(label: 'Kg This Month', value: '—')),
-            const SizedBox(width: 10),
-            Expanded(child: _StatCard(label: 'Avg KSh/kg', value: '—')),
-          ],
-        ),
-      );
-    }
-    return StreamBuilder<QuerySnapshot>(
-      // Index-free: single equality filter; active count derived client-side.
-      stream: FirebaseFirestore.instance
-          .collection('market_listings')
-          .where('org_id', isEqualTo: _orgId)
-          .snapshots(),
+  Widget _buildStatStrip(LocationProvider location) {
+    return FutureBuilder<MarketplaceTotals>(
+      future: ListingService.instance.totals(location.filter),
       builder: (context, snap) {
-        final docs = snap.data?.docs ?? [];
-        final activeCount = docs.where((d) {
-          final m = d.data() as Map<String, dynamic>;
-          return (m['status'] as String? ?? 'active') == 'active';
-        }).length;
+        final t = snap.data;
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
               Expanded(
                   child: _StatCard(
-                      label: 'Active Orders',
-                      value: '$activeCount')),
+                      label: 'Wanted here',
+                      value: t == null ? '—' : '${t.seeking}')),
               const SizedBox(width: 10),
-              Expanded(child: _StatCard(label: 'Kg This Month', value: '—')),
+              Expanded(
+                  child: _StatCard(
+                      label: 'Offered here',
+                      value: t == null ? '—' : '${t.offering}')),
               const SizedBox(width: 10),
-              Expanded(child: _StatCard(label: 'Avg KSh/kg', value: '—')),
+              Expanded(
+                  child: _StatCard(
+                      label: 'Kg diverted',
+                      value: t == null
+                          ? '—'
+                          : t.kgDiverted.round().toString())),
             ],
           ),
         );
@@ -197,14 +213,70 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
       child: Row(
         children: [
           _Tab(
-              label: 'Buying',
-              active: _showBuying,
-              onTap: () => setState(() => _showBuying = true)),
+              label: 'Wanted',
+              active: _intent == ListingIntent.seeking,
+              onTap: () =>
+                  setState(() => _intent = ListingIntent.seeking)),
           const SizedBox(width: 8),
           _Tab(
               label: 'Offered',
-              active: !_showBuying,
-              onTap: () => setState(() => _showBuying = false)),
+              active: _intent == ListingIntent.offering,
+              onTap: () =>
+                  setState(() => _intent = ListingIntent.offering)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScopeToggle(LocationProvider location) {
+    if (_orgId == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Text(
+            _onlyMine
+                ? 'Your organisation only'
+                : 'Everyone in ${location.filter.label}',
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.darkGreen.withOpacity(0.55),
+            ),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => setState(() => _onlyMine = !_onlyMine),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _onlyMine
+                    ? AppTheme.primary.withOpacity(0.12)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: AppTheme.primary.withOpacity(0.35), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                      _onlyMine
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                      size: 14,
+                      color: AppTheme.primary),
+                  const SizedBox(width: 5),
+                  const Text('Only mine',
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primary)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -212,24 +284,9 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
 
   // ── Live listings ─────────────────────────────────────────────────────────
 
-  Widget _buildListings() {
-    if (_orgId == null) {
-      return const Center(
-        child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation(AppTheme.primary)),
-      );
-    }
-
-    final targetType = _showBuying
-        ? ['buy_order', 'recurring_buy']
-        : ['sell_listing'];
-
-    return StreamBuilder<QuerySnapshot>(
-      // Index-free: single equality filter; type-filter + sort client-side.
-      stream: FirebaseFirestore.instance
-          .collection('market_listings')
-          .where('org_id', isEqualTo: _orgId)
-          .snapshots(),
+  Widget _buildListings(LocationProvider location) {
+    return StreamBuilder<List<CanopyListing>>(
+      stream: ListingService.instance.watch(_query(location)),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -237,36 +294,23 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
                 valueColor: AlwaysStoppedAnimation(AppTheme.primary)),
           );
         }
-
-        final allDocs = snap.data?.docs ?? [];
-        final filtered = allDocs.where((d) {
-          final data = d.data() as Map<String, dynamic>;
-          final type = data['listing_type'] as String? ?? '';
-          return targetType.contains(type);
-        }).toList()
-          ..sort((a, b) {
-            final ta = (a.data() as Map<String, dynamic>)['created_at']
-                as Timestamp?;
-            final tb = (b.data() as Map<String, dynamic>)['created_at']
-                as Timestamp?;
-            return (tb ?? Timestamp(0, 0)).compareTo(ta ?? Timestamp(0, 0));
-          });
-
-        if (filtered.isEmpty) {
-          return _buildEmptyState();
+        if (snap.hasError) {
+          return _buildErrorState(snap.error.toString());
         }
+
+        final listings = snap.data ?? const <CanopyListing>[];
+        if (listings.isEmpty) return _buildEmptyState(location);
 
         return ListView.separated(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-          itemCount: filtered.length,
+          itemCount: listings.length,
           separatorBuilder: (_, __) => const SizedBox(height: 14),
           itemBuilder: (context, i) {
-            final data =
-                filtered[i].data() as Map<String, dynamic>;
+            final l = listings[i];
             return _ListingCard(
-              data: data,
-              imageUrl: _imageForListing(data),
-              isBuy: _showBuying,
+              listing: l,
+              imageUrl: _imageForListing(l),
+              isOwn: l.orgId != null && l.orgId == _orgId,
             );
           },
         );
@@ -274,39 +318,95 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(LocationProvider location) {
+    final wanted = _intent == ListingIntent.seeking;
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.08),
-              shape: BoxShape.circle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 36),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                  wanted
+                      ? Icons.search_outlined
+                      : Icons.storefront_outlined,
+                  size: 34,
+                  color: AppTheme.primary.withOpacity(0.5)),
             ),
-            child: Icon(Icons.storefront_outlined,
-                size: 34, color: AppTheme.primary.withOpacity(0.5)),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _showBuying ? 'No buy orders yet' : 'No sell listings yet',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.darkGreen.withOpacity(0.65),
+            const SizedBox(height: 16),
+            Text(
+              wanted
+                  ? 'Nobody is buying in ${location.filter.label} yet'
+                  : 'Nothing offered in ${location.filter.label} yet',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.darkGreen.withOpacity(0.65),
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Tap Post Listing to get started',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppTheme.darkGreen.withOpacity(0.40),
+            const SizedBox(height: 6),
+            Text(
+              // A dense marketplace is local; an empty one should point you
+              // outward rather than look broken.
+              location.filter.isEverywhere
+                  ? 'Post the first listing and start the market here'
+                  : 'Widen to a region or country to see more',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.darkGreen.withOpacity(0.40),
+              ),
             ),
-          ),
-        ],
+            if (!location.filter.isEverywhere) ...[
+              const SizedBox(height: 14),
+              TextButton.icon(
+                onPressed: location.showEverywhere,
+                icon: const Icon(Icons.public_rounded, size: 16),
+                label: const Text('Show everywhere'),
+                style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.primary),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String message) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cloud_off_rounded,
+                size: 34, color: AppTheme.darkGreen.withOpacity(0.3)),
+            const SizedBox(height: 12),
+            Text(
+              'Could not load listings',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.darkGreen.withOpacity(0.7)),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 11,
+                  color: AppTheme.darkGreen.withOpacity(0.45)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -317,42 +417,42 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ListingCard extends StatelessWidget {
-  final Map<String, dynamic> data;
+  final CanopyListing listing;
   final String imageUrl;
-  final bool isBuy;
+  final bool isOwn;
 
   const _ListingCard({
-    required this.data,
+    required this.listing,
     required this.imageUrl,
-    required this.isBuy,
+    required this.isOwn,
   });
 
   @override
   Widget build(BuildContext context) {
-    final material =
-        data['sub_type_label'] as String? ?? 'Material';
-    final grade = data['grade'] as String? ?? '';
-    final price = (data['price_per_unit'] as num?)?.toInt() ?? 0;
-    final unit = data['unit'] as String? ?? 'kg';
-    final quantity = (data['quantity_kg'] as num?)?.toInt() ?? 0;
-    final location = data['location_text'] as String? ?? '';
-    final status = data['status'] as String? ?? 'active';
-    final isRecurring = data['is_recurring'] as bool? ?? false;
-    final catLabel =
-        data['category_label'] as String? ?? '';
-    final weCollect = data['can_collect'] as bool? ?? false;
-    final notes = data['notes'] as String? ?? '';
+    final isSeeking = listing.isSeeking;
+    final grade = listing.materialGrade ?? '';
+    final quantity = listing.quantity.quantityKg?.round() ?? 0;
+    final unitWord = listing.pricing.unit == PriceUnit.perKg ? 'kg' : 'unit';
+    final locationLabel = listing.location.label;
+    final catLabel = listing.tagline;
+    final notes = listing.story;
 
-    final statusColor = status == 'active'
-        ? const Color(0xFF2D7A4F)
-        : status == 'paused'
-            ? Colors.amber
-            : Colors.grey;
+    final statusColor = switch (listing.status) {
+      ListingStatus.active => const Color(0xFF2D7A4F),
+      ListingStatus.paused => Colors.amber,
+      ListingStatus.fulfilled => AppTheme.accent,
+      ListingStatus.closed => Colors.grey,
+    };
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
+        border: isSeeking
+            // Wanted posts read differently from offers at a glance — they are
+            // a call to action, not a shelf item.
+            ? Border.all(color: AppTheme.tertiary.withOpacity(0.55), width: 1.4)
+            : null,
         boxShadow: [
           BoxShadow(
             color: AppTheme.primary.withOpacity(0.07),
@@ -393,7 +493,6 @@ class _ListingCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                // gradient overlay
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
@@ -409,13 +508,23 @@ class _ListingCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                // material name over image
+                // Intent is the first thing you read on the card.
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: _Badge(
+                    label: isSeeking ? 'WANTED' : 'FOR SALE',
+                    color: isSeeking ? AppTheme.tertiary : AppTheme.primary,
+                  ),
+                ),
                 Positioned(
                   bottom: 10,
                   left: 14,
                   right: 14,
                   child: Text(
-                    material,
+                    listing.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 17,
@@ -426,17 +535,19 @@ class _ListingCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                // badges top-right
                 Positioned(
                   top: 10,
                   right: 10,
                   child: Row(
                     children: [
-                      if (isRecurring)
-                        _Badge(label: 'Recurring', color: const Color(0xFF6A1B9A)),
-                      if (isRecurring) const SizedBox(width: 5),
+                      if (listing.fulfilment.isRecurring)
+                        _Badge(
+                            label: 'Recurring',
+                            color: const Color(0xFF6A1B9A)),
+                      if (listing.fulfilment.isRecurring)
+                        const SizedBox(width: 5),
                       _Badge(
-                        label: status.toUpperCase(),
+                        label: listing.status.label.toUpperCase(),
                         color: statusColor,
                       ),
                     ],
@@ -452,7 +563,6 @@ class _ListingCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // grade + category row
                 Row(
                   children: [
                     if (grade.isNotEmpty) ...[
@@ -460,34 +570,38 @@ class _ListingCard extends StatelessWidget {
                       const SizedBox(width: 6),
                     ],
                     if (catLabel.isNotEmpty)
-                      Text(
-                        catLabel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.darkGreen.withOpacity(0.50),
+                      Expanded(
+                        child: Text(
+                          catLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.darkGreen.withOpacity(0.50),
+                          ),
                         ),
                       ),
+                    if (isOwn) _GradeChip(label: 'Yours'),
                   ],
                 ),
                 const SizedBox(height: 10),
 
-                // price + unit
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
                     Text(
-                      'KSh $price',
+                      listing.pricing.display,
                       style: const TextStyle(
                         color: AppTheme.tertiary,
                         fontWeight: FontWeight.w900,
-                        fontSize: 28,
+                        fontSize: 26,
                         height: 1,
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Text(
-                      'per $unit${isBuy ? ' needed' : ' asking'}',
+                      isSeeking ? 'offered' : 'asking',
                       style: TextStyle(
                         color: AppTheme.darkGreen.withOpacity(0.50),
                         fontSize: 12,
@@ -497,7 +611,6 @@ class _ListingCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
 
-                // quantity + logistics row
                 Row(
                   children: [
                     Icon(Icons.scale_outlined,
@@ -505,21 +618,21 @@ class _ListingCard extends StatelessWidget {
                         color: AppTheme.darkGreen.withOpacity(0.45)),
                     const SizedBox(width: 4),
                     Text(
-                      '$quantity $unit',
+                      '$quantity $unitWord',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.darkGreen.withOpacity(0.65),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (weCollect) ...[
+                    if (listing.fulfilment.willCollect) ...[
                       const SizedBox(width: 10),
                       Icon(Icons.local_shipping_outlined,
                           size: 13,
                           color: AppTheme.accent.withOpacity(0.7)),
                       const SizedBox(width: 4),
                       Text(
-                        'We collect',
+                        'They collect',
                         style: TextStyle(
                           fontSize: 11,
                           color: AppTheme.accent.withOpacity(0.7),
@@ -527,7 +640,8 @@ class _ListingCard extends StatelessWidget {
                         ),
                       ),
                     ],
-                    if (location.isNotEmpty) ...[
+                    if (locationLabel.isNotEmpty &&
+                        locationLabel != 'Unknown location') ...[
                       const Spacer(),
                       Icon(Icons.place_outlined,
                           size: 13,
@@ -535,7 +649,7 @@ class _ListingCard extends StatelessWidget {
                       const SizedBox(width: 2),
                       Flexible(
                         child: Text(
-                          location,
+                          locationLabel,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -547,6 +661,31 @@ class _ListingCard extends StatelessWidget {
                     ],
                   ],
                 ),
+
+                // Fill progress makes a buy order feel live rather than static.
+                if (isSeeking && (listing.quantity.quantityKg ?? 0) > 0) ...[
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: listing.quantity.fillProgress,
+                      minHeight: 5,
+                      backgroundColor: AppTheme.lightGreen.withOpacity(0.22),
+                      valueColor: const AlwaysStoppedAnimation(
+                          AppTheme.tertiary),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${listing.quantity.remainingKg.round()} $unitWord still needed'
+                    '${listing.responseCount > 0 ? ' · ${listing.responseCount} responded' : ''}',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: AppTheme.darkGreen.withOpacity(0.5),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
 
                 if (notes.isNotEmpty) ...[
                   const SizedBox(height: 8),
@@ -567,28 +706,26 @@ class _ListingCard extends StatelessWidget {
                 const Divider(height: 1),
                 const SizedBox(height: 10),
 
-                // actions
                 Row(
                   children: [
-                    _ActionBtn(
-                      label: isBuy ? 'View Responses' : 'View Interest',
-                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Coming soon'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
+                    if (isOwn)
+                      _ActionBtn(
+                        label:
+                            'Responses${listing.responseCount > 0 ? ' (${listing.responseCount})' : ''}',
+                        onTap: () => _soon(context),
+                      )
+                    else
+                      _ActionBtn(
+                        // The action the old screen could never offer, because
+                        // you only ever saw your own posts.
+                        label: isSeeking ? 'I have this' : 'I want this',
+                        onTap: () => _soon(context),
                       ),
-                    ),
                     const SizedBox(width: 8),
                     _ActionBtn(
-                      label: 'Edit',
+                      label: isOwn ? 'Edit' : 'Contact',
                       outlined: true,
-                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Edit coming soon'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      ),
+                      onTap: () => _soon(context),
                     ),
                   ],
                 ),
@@ -596,6 +733,15 @@ class _ListingCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _soon(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Coming soon'),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

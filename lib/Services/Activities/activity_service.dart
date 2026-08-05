@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../Shared/Activities/activity.dart';
+import '../Geo/geo_registry.dart';
 
 class ActivityService {
   final FirebaseFirestore _db;
@@ -72,7 +73,21 @@ class ActivityService {
         registrationState == RegistrationState.closed ? 'closed' : 'open';
     final locationName = _locationLabel(location);
 
+    // Resolve the picked {area, city} onto the canonical registry and write
+    // the flat geo_* fields alongside the existing nested `location` map.
+    // Nothing that reads `location` changes; the new fields are what make the
+    // activity reachable from the county / region / country location switch.
+    await GeoRegistry.instance.ensureLoaded();
+    final geo = GeoRegistry.instance.resolve(
+      area: location['area'] as String?,
+      county: location['city'] as String?,
+      freeText: location['venue'] as String?,
+      lat: (location['coordinates']?['lat'] as num?)?.toDouble(),
+      lng: (location['coordinates']?['lng'] as num?)?.toDouble(),
+    );
+
     await docRef.set({
+      ...geo.toFirestore(),
       'type': type,
       'title': title,
       'name': title,
