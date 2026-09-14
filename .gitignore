@@ -69,3 +69,40 @@ SKILL.md
 **/zencoder_*
 **/*_zencoder*
 zencoder.json
+# Node / Cloud Functions
+node_modules/
+functions/lib/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+.firebase/
+
+# AI agent / assistant tooling (all of it stays local)
+.agents/
+.claude/
+.codex/
+.codex-temp/
+.cursor/
+.kombai/
+.qodo/
+.windsurf/
+.zencoder/
+.zenflow/
+.aider*
+.continue/
+.github/copilot-instructions.md
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.mcp.json
+
+# Scratch / generated docs, not source
+_to_delete/
+IMPLEMENTATION_NOTES_*.md
+*_SUMMARY.md
+UI_UX_OVERHAUL_PLAN.md
+CARDANO_INTEGRATION_ROADMAP.md
+*.docx
