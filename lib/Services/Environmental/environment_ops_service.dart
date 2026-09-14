@@ -16,6 +16,7 @@ import 'package:impact_trail/Models/environmental/models/environmental_credit.da
 import 'package:impact_trail/Models/environmental/models/fleet_collector.dart';
 import 'package:impact_trail/Models/environmental/models/market_order.dart';
 import 'package:impact_trail/Models/environmental/models/transformation_record_summary.dart';
+import 'package:impact_trail/Models/environmental/models/monthly_tree_report.dart';
 import 'package:impact_trail/Models/environmental/models/tree_record.dart';
 import 'package:impact_trail/Models/environmental/shared/gps_coordinate.dart';
 import 'package:impact_trail/Models/geo/canopy_location.dart';
@@ -722,6 +723,64 @@ class EnvironmentOpsService {
       issuedCredits: credits.length,
       transformations: transformations,
       credits: credits,
+    );
+  }
+
+  /// Phase 7.1 — "count survival, not carbon." Pulls the same `trees`
+  /// subcollection fetchVerificationSnapshot() already reads, and derives
+  /// two things: how many trees this org planted in [month] (defaults to
+  /// the current calendar month), and — across every tree ever planted,
+  /// not just this month's — how many have reached each ~30-day checkpoint
+  /// still alive. No carbon-equivalent figure is computed anywhere here;
+  /// see monthly_tree_report.dart's header comment for why.
+  Future<MonthlyTreeCountReport> fetchMonthlyTreeCountReport({
+    required String orgId,
+    DateTime? month,
+  }) async {
+    final now = DateTime.now();
+    final targetMonth = month ?? DateTime(now.year, now.month);
+    final monthStart = DateTime(targetMonth.year, targetMonth.month);
+    final monthEnd = DateTime(targetMonth.year, targetMonth.month + 1);
+
+    final treeSnap = await _orgs.doc(orgId).collection('trees').get();
+    final trees = treeSnap.docs.map(TreeRecord.fromFirestore).toList();
+
+    final plantedThisMonth = trees.where((t) {
+      final plantedAt = t.planting.plantedAt;
+      if (plantedAt == null) return false;
+      return !plantedAt.isBefore(monthStart) && plantedAt.isBefore(monthEnd);
+    }).length;
+
+    final confirmed90Day =
+        trees.where((t) => t.survival.survivalConfirmed90Day).length;
+
+    // Checkpoints 1–3 (~30/60/90 days) — derived from each tree's recorded
+    // monthlyUpdates, so a tree only counts once it actually has that many
+    // check-ins logged.
+    final checkpoints = <TreeCheckpointCount>[];
+    for (var checkpoint = 1; checkpoint <= 3; checkpoint++) {
+      var reached = 0;
+      var alive = 0;
+      for (final tree in trees) {
+        if (tree.monthlyUpdates.length < checkpoint) continue;
+        reached++;
+        final update = tree.monthlyUpdates[checkpoint - 1];
+        if (update.statusAtUpdate.firestoreKey == 'alive') alive++;
+      }
+      checkpoints.add(TreeCheckpointCount(
+        checkpointNumber: checkpoint,
+        daysApprox: checkpoint * 30,
+        confirmedAlive: alive,
+        reachedCheckpoint: reached,
+      ));
+    }
+
+    return MonthlyTreeCountReport(
+      month: monthStart,
+      treesPlantedThisMonth: plantedThisMonth,
+      totalTreesAllTime: trees.length,
+      treesConfirmedAlive90DayAllTime: confirmed90Day,
+      checkpoints: checkpoints,
     );
   }
 

@@ -24,6 +24,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../Models/marketplace/canopy_listing.dart';
+import '../../Models/geo/canopy_location.dart';
 import '../../Providers/location_provider.dart';
 import '../../Services/Environmental/environment_ops_service.dart';
 import '../../Services/Marketplace/listing_service.dart';
@@ -163,8 +164,7 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
           icon: const Icon(Icons.add_circle_outline, color: Colors.white),
           label: const Text(
             'Post Listing',
-            style:
-                TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
           ),
         ),
       ),
@@ -195,9 +195,8 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
               Expanded(
                   child: _StatCard(
                       label: 'Kg diverted',
-                      value: t == null
-                          ? '—'
-                          : t.kgDiverted.round().toString())),
+                      value:
+                          t == null ? '—' : t.kgDiverted.round().toString())),
             ],
           ),
         );
@@ -215,14 +214,12 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
           _Tab(
               label: 'Wanted',
               active: _intent == ListingIntent.seeking,
-              onTap: () =>
-                  setState(() => _intent = ListingIntent.seeking)),
+              onTap: () => setState(() => _intent = ListingIntent.seeking)),
           const SizedBox(width: 8),
           _Tab(
               label: 'Offered',
               active: _intent == ListingIntent.offering,
-              onTap: () =>
-                  setState(() => _intent = ListingIntent.offering)),
+              onTap: () => setState(() => _intent = ListingIntent.offering)),
         ],
       ),
     );
@@ -248,8 +245,7 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
           GestureDetector(
             onTap: () => setState(() => _onlyMine = !_onlyMine),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: _onlyMine
                     ? AppTheme.primary.withOpacity(0.12)
@@ -334,9 +330,7 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                  wanted
-                      ? Icons.search_outlined
-                      : Icons.storefront_outlined,
+                  wanted ? Icons.search_outlined : Icons.storefront_outlined,
                   size: 34,
                   color: AppTheme.primary.withOpacity(0.5)),
             ),
@@ -371,8 +365,7 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
                 onPressed: location.showEverywhere,
                 icon: const Icon(Icons.public_rounded, size: 16),
                 label: const Text('Show everywhere'),
-                style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.primary),
+                style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
               ),
             ],
           ],
@@ -402,8 +395,7 @@ class _EnvMarketScreenState extends State<EnvMarketScreen> {
               message,
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.darkGreen.withOpacity(0.45)),
+                  fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.45)),
             ),
           ],
         ),
@@ -479,8 +471,7 @@ class _ListingCard extends StatelessWidget {
                     color: AppTheme.primary.withOpacity(0.08),
                     child: Center(
                       child: Icon(Icons.image_outlined,
-                          size: 36,
-                          color: AppTheme.primary.withOpacity(0.25)),
+                          size: 36, color: AppTheme.primary.withOpacity(0.25)),
                     ),
                   ),
                   errorWidget: (_, __, ___) => Container(
@@ -529,9 +520,7 @@ class _ListingCard extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 17,
                       fontWeight: FontWeight.w800,
-                      shadows: [
-                        Shadow(blurRadius: 8, color: Colors.black45)
-                      ],
+                      shadows: [Shadow(blurRadius: 8, color: Colors.black45)],
                     ),
                   ),
                 ),
@@ -542,8 +531,7 @@ class _ListingCard extends StatelessWidget {
                     children: [
                       if (listing.fulfilment.isRecurring)
                         _Badge(
-                            label: 'Recurring',
-                            color: const Color(0xFF6A1B9A)),
+                            label: 'Recurring', color: const Color(0xFF6A1B9A)),
                       if (listing.fulfilment.isRecurring)
                         const SizedBox(width: 5),
                       _Badge(
@@ -614,8 +602,7 @@ class _ListingCard extends StatelessWidget {
                 Row(
                   children: [
                     Icon(Icons.scale_outlined,
-                        size: 13,
-                        color: AppTheme.darkGreen.withOpacity(0.45)),
+                        size: 13, color: AppTheme.darkGreen.withOpacity(0.45)),
                     const SizedBox(width: 4),
                     Text(
                       '$quantity $unitWord',
@@ -628,8 +615,7 @@ class _ListingCard extends StatelessWidget {
                     if (listing.fulfilment.willCollect) ...[
                       const SizedBox(width: 10),
                       Icon(Icons.local_shipping_outlined,
-                          size: 13,
-                          color: AppTheme.accent.withOpacity(0.7)),
+                          size: 13, color: AppTheme.accent.withOpacity(0.7)),
                       const SizedBox(width: 4),
                       Text(
                         'They collect',
@@ -671,8 +657,8 @@ class _ListingCard extends StatelessWidget {
                       value: listing.quantity.fillProgress,
                       minHeight: 5,
                       backgroundColor: AppTheme.lightGreen.withOpacity(0.22),
-                      valueColor: const AlwaysStoppedAnimation(
-                          AppTheme.tertiary),
+                      valueColor:
+                          const AlwaysStoppedAnimation(AppTheme.tertiary),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -823,9 +809,8 @@ class _Tab extends StatelessWidget {
         child: Container(
           height: 30,
           decoration: BoxDecoration(
-            color: active
-                ? AppTheme.accent
-                : AppTheme.primary.withOpacity(0.10),
+            color:
+                active ? AppTheme.accent : AppTheme.primary.withOpacity(0.10),
             borderRadius: BorderRadius.circular(15),
           ),
           alignment: Alignment.center,
@@ -834,9 +819,8 @@ class _Tab extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: active
-                  ? Colors.white
-                  : AppTheme.darkGreen.withOpacity(0.65),
+              color:
+                  active ? Colors.white : AppTheme.darkGreen.withOpacity(0.65),
             ),
           ),
         ),
@@ -909,16 +893,13 @@ class _ActionBtn extends StatelessWidget {
         onPressed: onTap,
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: AppTheme.primary.withOpacity(0.6)),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           minimumSize: Size.zero,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         child: Text(label,
-            style:
-                const TextStyle(fontSize: 12, color: AppTheme.primary)),
+            style: const TextStyle(fontSize: 12, color: AppTheme.primary)),
       );
     }
     return TextButton(

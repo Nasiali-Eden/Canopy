@@ -18,7 +18,7 @@ class RecognitionService {
       Badge(
         id: 'first_contribution',
         title: 'First Contribution',
-        description: 'Logged your first contribution.',
+        description: 'Verified your first contribution.',
         earned: contributionsCount >= 1,
         requiredContributions: 1,
       ),
@@ -28,7 +28,7 @@ class RecognitionService {
       Badge(
         id: 'contributor_5',
         title: 'Consistent Contributor',
-        description: 'Logged 5 contributions.',
+        description: 'Completed 5 verified contributions.',
         earned: contributionsCount >= 5,
         requiredContributions: 5,
       ),

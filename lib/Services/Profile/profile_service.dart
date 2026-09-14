@@ -4,11 +4,13 @@ class ProfileData {
   final String name;
   final String location;
   final String? photoUrl;
+  final String? phone;
 
   const ProfileData({
     required this.name,
     required this.location,
     required this.photoUrl,
+    this.phone,
   });
 }
 
@@ -25,6 +27,7 @@ class ProfileService {
         name: (data['name'] ?? '') as String,
         location: (data['location'] ?? '') as String,
         photoUrl: data['photoUrl'] as String?,
+        phone: data['phone'] as String?,
       );
     });
   }
@@ -37,17 +40,24 @@ class ProfileService {
       name: (data['name'] ?? '') as String,
       location: (data['location'] ?? '') as String,
       photoUrl: data['photoUrl'] as String?,
+      phone: data['phone'] as String?,
     );
   }
 
+  /// Phase 2.4 (Minimal Release Roadmap) — settings should let every role
+  /// edit name, phone, location, and password at minimum. Password is a
+  /// Firebase Auth operation (see `EditProfileScreen._sendPasswordReset`),
+  /// not a Firestore field, so it isn't part of this write.
   Future<void> updateProfile({
     required String userId,
     required String name,
     required String location,
+    String? phone,
   }) {
     return _db.collection('Users').doc(userId).set({
       'name': name,
       'location': location,
+      if (phone != null) 'phone': phone,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

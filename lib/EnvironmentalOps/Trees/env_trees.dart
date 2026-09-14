@@ -11,6 +11,7 @@ import 'dart:io';
 import '../../Shared/theme/app_theme.dart';
 import '../../Services/Environmental/environment_ops_service.dart';
 import '../Shared/zone_drawing_controller.dart';
+import 'tree_count_report_screen.dart';
 
 // ─── Enums & models ───────────────────────────────────────────────────────────
 enum TreeStatus { current, overdue, critical, unconfirmed }
@@ -124,6 +125,8 @@ class _EnvTreesScreenState extends State<EnvTreesScreen> {
           children: [
             const SizedBox(height: 16),
             _buildStatStrip(),
+            const SizedBox(height: 8),
+            _buildMonthlyReportLink(),
             const SizedBox(height: 12),
             _buildMapListToggle(),
             const SizedBox(height: 12),
@@ -170,6 +173,51 @@ class _EnvTreesScreenState extends State<EnvTreesScreen> {
               child: _buildStatCard('Pending Review', '$pending',
                   isOverdue: pending > 10)),
         ],
+      ),
+    );
+  }
+
+  // Phase 7.1 — "count survival, not carbon." Opens the monthly tree-count
+  // report (trees planted this month + survival-checkpoint counts, no
+  // carbon-equivalent figure anywhere in it).
+  Widget _buildMonthlyReportLink() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          onPressed: _openMonthlyReport,
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            visualDensity: VisualDensity.compact,
+          ),
+          icon: const Icon(Icons.summarize_outlined,
+              size: 16, color: AppTheme.primary),
+          label: const Text(
+            'Monthly tree-count report',
+            style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.primary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openMonthlyReport() async {
+    final ctx = await EnvironmentOpsService.instance.resolveContext();
+    if (!mounted) return;
+    if (ctx == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No organisation linked to this account.')),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TreeCountReportScreen(orgId: ctx.orgId),
       ),
     );
   }

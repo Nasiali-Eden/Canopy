@@ -11,6 +11,7 @@ import '../../../Shared/theme/app_theme.dart';
 import '../../../Shared/Activities/create_activity.dart';
 import '../../../Shared/Activities/create_article.dart';
 import '../../../Community/Contributions/log_contribution.dart';
+import '../../Events/create_event_screen.dart';
 import '../Articles/org_articles.dart';
 import '../Programmes/programme_editor.dart';
 
@@ -338,6 +339,42 @@ class _DashboardContentState extends State<_DashboardContent>
                           Navigator.of(context).pushNamed('/createPost'),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: DashQuickAction(
+                      title: 'Host Event',
+                      icon: Icons.qr_code_scanner_rounded,
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      onTap: () {
+                        final orgId = _orgId;
+                        if (orgId == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Still loading your organisation — try again in a moment.')),
+                          );
+                          return;
+                        }
+                        Navigator.of(context, rootNavigator: true).push(
+                          MaterialPageRoute(
+                            builder: (_) => CreateEventScreen(
+                              orgId: orgId,
+                              orgName: _org?.name ?? 'Your organisation',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: SizedBox()),
                 ],
               ),
             ],

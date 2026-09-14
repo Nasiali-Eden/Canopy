@@ -31,12 +31,17 @@ class LocationSwitcher extends StatelessWidget {
   /// Compact form for app bars — no sub-label, smaller hit area.
   final bool dense;
 
+  /// Bare app-bar presentation: label and chevron only, without the location
+  /// icon, container decoration, home badge, or quick actions.
+  final bool bare;
+
   final EdgeInsetsGeometry padding;
 
   const LocationSwitcher({
     super.key,
     this.onDark = false,
     this.dense = false,
+    this.bare = false,
     this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
   });
 
@@ -55,6 +60,43 @@ class LocationSwitcher extends StatelessWidget {
     final borderColor = onDark
         ? Colors.white.withOpacity(0.24)
         : AppTheme.lightGreen.withOpacity(0.32);
+
+    if (bare) {
+      return Padding(
+        padding: padding,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => showLocationPicker(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      provider.isResolving
+                          ? 'Finding your area…'
+                          : filter.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: fg,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(Icons.expand_more_rounded, size: 18, color: subFg),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: padding,

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -15,9 +16,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _location = TextEditingController();
+  final _phone = TextEditingController();
 
   bool _loading = true;
   bool _saving = false;
+  bool _sendingReset = false;
 
   @override
   void initState() {
@@ -39,6 +42,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     _name.text = profile?.name ?? '';
     _location.text = profile?.location ?? '';
+    _phone.text = profile?.phone ?? '';
 
     setState(() {
       _loading = false;
@@ -60,6 +64,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         userId: user.uid,
         name: _name.text.trim(),
         location: _location.text.trim(),
+        phone: _phone.text.trim(),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,10 +81,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  /// Phase 2.4 — "password at minimum for every role". Sends a Firebase Auth
+  /// reset-password email rather than an inline current/new-password form:
+  /// it needs no re-authentication step here, and reuses the same reset flow
+  /// login.dart already offers, so there's exactly one way this works.
+  Future<void> _sendPasswordReset() async {
+    final email = FirebaseAuth.instance.currentUser?.email;
+    if (email == null || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No email on file for this account to send a reset link to.'),
+        ),
+      );
+      return;
+    }
+    setState(() => _sendingReset = true);
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Password reset link sent to $email')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not send reset link: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingReset = false);
+    }
+  }
+
   @override
   void dispose() {
     _name.dispose();
     _location.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
@@ -121,6 +158,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     (v == null || v.trim().isEmpty)
                                         ? 'Location is required'
                                         : null,
+                              ),
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                controller: _phone,
+                                keyboardType: TextInputType.phone,
+                                decoration: const InputDecoration(
+                                    labelText: 'Phone number'),
+                              ),
+                              const SizedBox(height: 12),
+                              Card(
+                                child: ListTile(
+                                  leading: _sendingReset
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(2),
+                                          child: SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2)),
+                                        )
+                                      : const Icon(Icons.lock_outline),
+                                  title: const Text('Change password'),
+                                  subtitle: const Text(
+                                      'Sends a reset link to your account email'),
+                                  trailing: const Icon(Icons.chevron_right),
+                                  onTap: _sendingReset ? null : _sendPasswordReset,
+                                ),
                               ),
                               const SizedBox(height: 12),
                               Card(

@@ -9,6 +9,7 @@ import '../../../Services/Authentication/auth.dart';
 import '../../../Services/Authentication/community_auth.dart';
 import '../../../Shared/Pages/login.dart';
 import '../../../Shared/theme/app_theme.dart';
+import '../../../Shared/theme/canopy_ui.dart';
 import '../../../Shared/widgets/role_context_switcher.dart';
 
 class OrgProfile extends StatefulWidget {
@@ -35,8 +36,10 @@ class _OrgProfileState extends State<OrgProfile> {
   static String _normalizeStatus(dynamic raw) {
     if (raw == null) return 'none';
     final s = raw.toString().trim().toLowerCase();
-    if (s == 'approved' || s == 'active' || s == 'enabled' || s == 'yes') return 'approved';
-    if (s == 'pending' || s == 'under review' || s == 'review') return 'pending';
+    if (s == 'approved' || s == 'active' || s == 'enabled' || s == 'yes')
+      return 'approved';
+    if (s == 'pending' || s == 'under review' || s == 'review')
+      return 'pending';
     if (s == 'rejected' || s == 'denied' || s == 'declined') return 'rejected';
     if (s.isEmpty || s == 'none' || s == 'null') return 'none';
     return s;
@@ -66,7 +69,11 @@ class _OrgProfileState extends State<OrgProfile> {
       data['orgId'] = orgId;
       // Normalise special-ops status fields so every consumer sees a canonical
       // lowercase value regardless of how it was written to Firestore.
-      for (final key in ['marketplaceStatus', 'envOpsStatus', 'culturalStatus']) {
+      for (final key in [
+        'marketplaceStatus',
+        'envOpsStatus',
+        'culturalStatus'
+      ]) {
         final raw = data[key];
         if (raw != null) data[key] = _normalizeStatus(raw);
       }
@@ -80,9 +87,9 @@ class _OrgProfileState extends State<OrgProfile> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: CanopyUi.canvas,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: CanopyUi.canvas,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         toolbarHeight: 68,
@@ -162,8 +169,7 @@ class _OrgProfileState extends State<OrgProfile> {
     final area = orgData?['area'] as String? ?? '';
     final description =
         orgData?['description'] as String? ?? orgData?['bio'] as String? ?? '';
-    final locationText =
-        [area, city].where((s) => s.isNotEmpty).join(', ');
+    final locationText = [area, city].where((s) => s.isNotEmpty).join(', ');
 
     final parts = orgName.trim().split(RegExp(r'\s+'));
     final initials = parts.length >= 2
@@ -283,8 +289,7 @@ class _OrgProfileState extends State<OrgProfile> {
                 Expanded(
                   child: Text(locationText,
                       style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.85))),
+                          fontSize: 12, color: Colors.white.withOpacity(0.85))),
                 ),
               ],
             ),
@@ -406,16 +411,17 @@ class _OrgProfileState extends State<OrgProfile> {
                           hasMarketplace: hasMarketplace,
                           hasCultural: hasCultural,
                           orgContextBuilder: widget.orgHomeBuilder,
-                          memberContextBuilder: (_) => const CommunityHomeScreen(),
+                          memberContextBuilder: (_) =>
+                              const CommunityHomeScreen(),
                         )
                     : null,
                 culturalContextBuilder: hasCultural
                     ? (_) => CultureHomeScreen(
-                                      orgId: orgId,
-                                      orgContextBuilder: widget.orgHomeBuilder,
-                                      memberContextBuilder: (_) =>
-                                          const CommunityHomeScreen(),
-                                    )
+                          orgId: orgId,
+                          orgContextBuilder: widget.orgHomeBuilder,
+                          memberContextBuilder: (_) =>
+                              const CommunityHomeScreen(),
+                        )
                     : null,
               ),
             ),
@@ -436,16 +442,17 @@ class _OrgProfileState extends State<OrgProfile> {
                           hasEnvOps: hasEnvOps,
                           hasCultural: hasCultural,
                           orgContextBuilder: widget.orgHomeBuilder,
-                          memberContextBuilder: (_) => const CommunityHomeScreen(),
+                          memberContextBuilder: (_) =>
+                              const CommunityHomeScreen(),
                         )
                     : null,
                 culturalContextBuilder: hasCultural
                     ? (_) => CultureHomeScreen(
-                                      orgId: orgId,
-                                      orgContextBuilder: widget.orgHomeBuilder,
-                                      memberContextBuilder: (_) =>
-                                          const CommunityHomeScreen(),
-                                    )
+                          orgId: orgId,
+                          orgContextBuilder: widget.orgHomeBuilder,
+                          memberContextBuilder: (_) =>
+                              const CommunityHomeScreen(),
+                        )
                     : null,
               ),
             ),
@@ -457,11 +464,10 @@ class _OrgProfileState extends State<OrgProfile> {
             context,
             MaterialPageRoute(
                 builder: (_) => CultureHomeScreen(
-                                      orgId: orgId,
-                                      orgContextBuilder: widget.orgHomeBuilder,
-                                      memberContextBuilder: (_) =>
-                                          const CommunityHomeScreen(),
-                                    )),
+                      orgId: orgId,
+                      orgContextBuilder: widget.orgHomeBuilder,
+                      memberContextBuilder: (_) => const CommunityHomeScreen(),
+                    )),
             (route) => false,
           );
         },
@@ -577,15 +583,24 @@ class _OrgProfileState extends State<OrgProfile> {
         '—';
     final city = orgData?['city'] as String? ?? '';
     final area = orgData?['area'] as String? ?? '';
-    final locationText =
-        [area, city].where((s) => s.isNotEmpty).join(', ');
+    final locationText = [area, city].where((s) => s.isNotEmpty).join(', ');
     final createdAt = orgData?['createdAt'];
     String establishedStr = '—';
     if (createdAt is Timestamp) {
       final dt = createdAt.toDate();
       const months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
       ];
       establishedStr = '${months[dt.month - 1]} ${dt.year}';
     }
@@ -663,9 +678,18 @@ class _OrgProfileState extends State<OrgProfile> {
           ),
           _SettingsCard(
             items: [
-              _SettingsItem(icon: Icons.account_circle, title: 'Account Details', onTap: () {}),
-              _SettingsItem(icon: Icons.lock, title: 'Password and Security', onTap: () {}),
-              _SettingsItem(icon: Icons.location_city, title: 'Organization Address', onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.account_circle,
+                  title: 'Account Details',
+                  onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.lock,
+                  title: 'Password and Security',
+                  onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.location_city,
+                  title: 'Organization Address',
+                  onTap: () {}),
             ],
           ),
         ],
@@ -691,9 +715,18 @@ class _OrgProfileState extends State<OrgProfile> {
           ),
           _SettingsCard(
             items: [
-              _SettingsItem(icon: Icons.email, title: 'Email Notifications', onTap: () {}),
-              _SettingsItem(icon: Icons.notifications, title: 'Push Notifications', onTap: () {}),
-              _SettingsItem(icon: Icons.notifications_off, title: 'Manage Preferences', onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.email,
+                  title: 'Email Notifications',
+                  onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.notifications,
+                  title: 'Push Notifications',
+                  onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.notifications_off,
+                  title: 'Manage Preferences',
+                  onTap: () {}),
             ],
           ),
         ],
@@ -719,9 +752,16 @@ class _OrgProfileState extends State<OrgProfile> {
           ),
           _SettingsCard(
             items: [
-              _SettingsItem(icon: Icons.help_outline, title: 'Help Center', onTap: () {}),
-              _SettingsItem(icon: Icons.info_outline, title: 'About Canopy', onTap: () {}),
-              _SettingsItem(icon: Icons.privacy_tip_outlined, title: 'Privacy Policy', onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.help_outline, title: 'Help Center', onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.info_outline,
+                  title: 'About Canopy',
+                  onTap: () {}),
+              _SettingsItem(
+                  icon: Icons.privacy_tip_outlined,
+                  title: 'Privacy Policy',
+                  onTap: () {}),
             ],
           ),
         ],
@@ -768,8 +808,8 @@ class _OrgProfileState extends State<OrgProfile> {
                     ),
                     FilledButton(
                       onPressed: () => Navigator.pop(context, true),
-                      style: FilledButton.styleFrom(
-                          backgroundColor: Colors.red),
+                      style:
+                          FilledButton.styleFrom(backgroundColor: Colors.red),
                       child: const Text('Sign Out'),
                     ),
                   ],
@@ -886,9 +926,21 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
   ];
 
   static const _culturalRoleOptions = [
-    ('documentation', 'Heritage Documentation', 'Documenting and archiving community cultural knowledge'),
-    ('council', 'Community Voice', 'Representing a community\'s cultural heritage interests'),
-    ('research', 'Research & Education', 'Academic, archival, or educational cultural work'),
+    (
+      'documentation',
+      'Heritage Documentation',
+      'Documenting and archiving community cultural knowledge'
+    ),
+    (
+      'council',
+      'Community Voice',
+      'Representing a community\'s cultural heritage interests'
+    ),
+    (
+      'research',
+      'Research & Education',
+      'Academic, archival, or educational cultural work'
+    ),
   ];
 
   @override
@@ -896,8 +948,8 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
     super.initState();
     final d = widget.orgData;
     _marketplaceStatus = _normalize(d?['marketplaceStatus']);
-    _envOpsStatus     = _normalize(d?['envOpsStatus']);
-    _culturalStatus   = _normalize(d?['culturalStatus']);
+    _envOpsStatus = _normalize(d?['envOpsStatus']);
+    _culturalStatus = _normalize(d?['culturalStatus']);
     debugPrint('[SpecialOps] initState — '
         'marketplace=$_marketplaceStatus  '
         'envOps=$_envOpsStatus  '
@@ -910,8 +962,10 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
   static String _normalize(dynamic raw) {
     if (raw == null) return 'none';
     final s = raw.toString().trim().toLowerCase();
-    if (s == 'approved' || s == 'active' || s == 'enabled' || s == 'yes') return 'approved';
-    if (s == 'pending' || s == 'under review' || s == 'review') return 'pending';
+    if (s == 'approved' || s == 'active' || s == 'enabled' || s == 'yes')
+      return 'approved';
+    if (s == 'pending' || s == 'under review' || s == 'review')
+      return 'pending';
     if (s == 'rejected' || s == 'denied' || s == 'declined') return 'rejected';
     if (s.isEmpty || s == 'none' || s == 'null') return 'none';
     return s;
@@ -1052,7 +1106,8 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
         backgroundColor: bg,
       );
 
-  SnackBar _errSnack() => _snack('Something went wrong. Please try again.', Colors.red.shade700);
+  SnackBar _errSnack() =>
+      _snack('Something went wrong. Please try again.', Colors.red.shade700);
 
   // ── Build ────────────────────────────────────────────────────────────────────
 
@@ -1122,7 +1177,8 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Text(
                   'Extend your organisation\'s capabilities on Canopy.',
-                  style: TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.6)),
+                  style: TextStyle(
+                      fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.6)),
                 ),
               ),
               const Divider(height: 1),
@@ -1154,7 +1210,8 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
       icon: Icons.storefront_outlined,
       color: AppTheme.tertiary,
       title: 'Marketplace',
-      description: 'List materials, processed goods, or artisan products. Your verified org identity backs every listing.',
+      description:
+          'List materials, processed goods, or artisan products. Your verified org identity backs every listing.',
       status: _marketplaceStatus,
       onOpenTap: _marketplaceStatus == 'approved'
           ? () {
@@ -1176,7 +1233,8 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
                               orgContextBuilder: widget.orgHomeBuilder,
                               memberContextBuilder: (_) =>
                                   const CommunityHomeScreen(),
-                              marketplaceContextBuilder: (_) => SellerHomeScreen(
+                              marketplaceContextBuilder: (_) =>
+                                  SellerHomeScreen(
                                 hasEnvOps: true,
                                 hasCultural: hasCultural,
                                 orgContextBuilder: widget.orgHomeBuilder,
@@ -1185,21 +1243,22 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
                               ),
                               culturalContextBuilder: hasCultural
                                   ? (_) => CultureHomeScreen(
-                                      orgId: orgId,
-                                      orgContextBuilder: widget.orgHomeBuilder,
-                                      memberContextBuilder: (_) =>
-                                          const CommunityHomeScreen(),
-                                    )
+                                        orgId: orgId,
+                                        orgContextBuilder:
+                                            widget.orgHomeBuilder,
+                                        memberContextBuilder: (_) =>
+                                            const CommunityHomeScreen(),
+                                      )
                                   : null,
                             )
                         : null,
                     culturalContextBuilder: hasCultural
                         ? (_) => CultureHomeScreen(
-                                      orgId: orgId,
-                                      orgContextBuilder: widget.orgHomeBuilder,
-                                      memberContextBuilder: (_) =>
-                                          const CommunityHomeScreen(),
-                                    )
+                              orgId: orgId,
+                              orgContextBuilder: widget.orgHomeBuilder,
+                              memberContextBuilder: (_) =>
+                                  const CommunityHomeScreen(),
+                            )
                         : null,
                   ),
                 ),
@@ -1227,10 +1286,10 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _roleChip('collector', 'Collector', AppTheme.primary,
-                _sellerRole, (v) => setState(() => _sellerRole = v)),
-            _roleChip('processor', 'Processor', AppTheme.accent,
-                _sellerRole, (v) => setState(() => _sellerRole = v)),
+            _roleChip('collector', 'Collector', AppTheme.primary, _sellerRole,
+                (v) => setState(() => _sellerRole = v)),
+            _roleChip('processor', 'Processor', AppTheme.accent, _sellerRole,
+                (v) => setState(() => _sellerRole = v)),
             _roleChip('maker', 'Maker / Artisan', AppTheme.tertiary,
                 _sellerRole, (v) => setState(() => _sellerRole = v)),
           ],
@@ -1254,7 +1313,8 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
       icon: Icons.eco_outlined,
       color: const Color(0xFF2E7D5E),
       title: 'Environmental Operations',
-      description: 'Track material collection, territory, tree planting, collector fleet, and impact credits.',
+      description:
+          'Track material collection, territory, tree planting, collector fleet, and impact credits.',
       status: _envOpsStatus,
       onOpenTap: _envOpsStatus == 'approved'
           ? () {
@@ -1285,21 +1345,22 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
                               ),
                               culturalContextBuilder: hasCultural
                                   ? (_) => CultureHomeScreen(
-                                      orgId: orgId,
-                                      orgContextBuilder: widget.orgHomeBuilder,
-                                      memberContextBuilder: (_) =>
-                                          const CommunityHomeScreen(),
-                                    )
+                                        orgId: orgId,
+                                        orgContextBuilder:
+                                            widget.orgHomeBuilder,
+                                        memberContextBuilder: (_) =>
+                                            const CommunityHomeScreen(),
+                                      )
                                   : null,
                             )
                         : null,
                     culturalContextBuilder: hasCultural
                         ? (_) => CultureHomeScreen(
-                                      orgId: orgId,
-                                      orgContextBuilder: widget.orgHomeBuilder,
-                                      memberContextBuilder: (_) =>
-                                          const CommunityHomeScreen(),
-                                    )
+                              orgId: orgId,
+                              orgContextBuilder: widget.orgHomeBuilder,
+                              memberContextBuilder: (_) =>
+                                  const CommunityHomeScreen(),
+                            )
                         : null,
                   ),
                 ),
@@ -1331,12 +1392,15 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
             final selected = _envActivities.contains(key);
             return GestureDetector(
               onTap: () => setState(() {
-                if (selected) _envActivities.remove(key);
-                else _envActivities.add(key);
+                if (selected)
+                  _envActivities.remove(key);
+                else
+                  _envActivities.add(key);
               }),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 140),
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
                 decoration: BoxDecoration(
                   color: selected
                       ? const Color(0xFF2E7D5E).withOpacity(0.1)
@@ -1385,18 +1449,19 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
       icon: Icons.auto_stories_outlined,
       color: const Color(0xFF7A5230),
       title: 'Cultural Archive',
-      description: 'Document and preserve community heritage — oral traditions, music, craft, language, food, and more.',
+      description:
+          'Document and preserve community heritage — oral traditions, music, craft, language, food, and more.',
       status: _culturalStatus,
       onOpenTap: _culturalStatus == 'approved'
           ? () => Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(
                     builder: (_) => CultureHomeScreen(
-                                      orgId: orgId,
-                                      orgContextBuilder: widget.orgHomeBuilder,
-                                      memberContextBuilder: (_) =>
-                                          const CommunityHomeScreen(),
-                                    )),
+                          orgId: orgId,
+                          orgContextBuilder: widget.orgHomeBuilder,
+                          memberContextBuilder: (_) =>
+                              const CommunityHomeScreen(),
+                        )),
                 (r) => false,
               )
           : null,
@@ -1431,9 +1496,7 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: selected
-                      ? const Color(0xFF7A5230)
-                      : Colors.grey[300]!,
+                  color: selected ? const Color(0xFF7A5230) : Colors.grey[300]!,
                   width: selected ? 1.5 : 1,
                 ),
               ),
@@ -1532,8 +1595,7 @@ class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
                 child: CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2),
               )
-            : Text(label,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            : Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -1568,9 +1630,8 @@ class _OpCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: status == 'approved'
-              ? color.withOpacity(0.4)
-              : Colors.grey[200]!,
+          color:
+              status == 'approved' ? color.withOpacity(0.4) : Colors.grey[200]!,
           width: status == 'approved' ? 1.5 : 1,
         ),
         boxShadow: [
@@ -1674,9 +1735,21 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, bg, fg) = switch (status) {
-      'approved' => ('Active', Colors.green.withOpacity(0.12), Colors.green.shade700),
-      'pending' => ('Pending', Colors.amber.withOpacity(0.12), Colors.amber.shade700),
-      'rejected' => ('Reapply', Colors.red.withOpacity(0.1), Colors.red.shade700),
+      'approved' => (
+          'Active',
+          Colors.green.withOpacity(0.12),
+          Colors.green.shade700
+        ),
+      'pending' => (
+          'Pending',
+          Colors.amber.withOpacity(0.12),
+          Colors.amber.shade700
+        ),
+      'rejected' => (
+          'Reapply',
+          Colors.red.withOpacity(0.1),
+          Colors.red.shade700
+        ),
       _ => ('Apply', AppTheme.primary.withOpacity(0.08), AppTheme.primary),
     };
     return Container(
@@ -1686,8 +1759,8 @@ class _StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(label,
-          style: TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
+          style:
+              TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
     );
   }
 }
@@ -1699,7 +1772,8 @@ class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _InfoRow({required this.icon, required this.label, required this.value});
+  const _InfoRow(
+      {required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -1807,8 +1881,7 @@ class _SettingsCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(left: 62),
                   child: Divider(
-                      height: 1,
-                      color: AppTheme.lightGreen.withOpacity(0.2)),
+                      height: 1, color: AppTheme.lightGreen.withOpacity(0.2)),
                 ),
             ],
           );

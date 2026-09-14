@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../Models/user.dart';
 import '../Geo/geo_registry.dart';
+import 'username_service.dart';
 
 class CommunityAuthService {
   final FirebaseAuth _auth;
@@ -323,6 +324,12 @@ class CommunityAuthService {
     required String role,
     String? city,
     String? area,
+    // Phase 3.2 — optional so existing callers that haven't added a
+    // username field to their form yet don't break. Reserved via
+    // UsernameService AFTER the auth account exists (the reservation write
+    // needs request.auth per firestore.rules — see that file's
+    // `usernames/{username}` rule).
+    String? username,
   }) async {
     try {
       debugPrint('[CommunityAuth] registerWithEmail start');
@@ -342,10 +349,16 @@ class CommunityAuthService {
       final memberGeo = GeoRegistry.instance
           .resolve(area: area, county: city, country: 'Kenya');
 
+      final normalizedUsername =
+          username != null && username.trim().isNotEmpty
+              ? UsernameService.normalize(username)
+              : null;
+
       final data = {
         'name': name,
         'email': email,
         'role': role,
+        if (normalizedUsername != null) 'username': normalizedUsername,
         if (role == 'Volunteer') 'volunteer': true,
         // Kept as free text for anything still reading the legacy fields.
         if (city != null && city.isNotEmpty) 'city': city,
@@ -364,6 +377,19 @@ class CommunityAuthService {
         {...data, 'isPrototypeMode': true},
         SetOptions(merge: true),
       );
+
+      if (normalizedUsername != null) {
+        try {
+          await UsernameService(db: _db)
+              .reserve(username: normalizedUsername, uid: user.uid);
+        } catch (e) {
+          // Account creation already succeeded — a failed reservation here
+          // (e.g. a race lost to another signup) shouldn't strand the user
+          // mid-registration. Surface it as a debug log; the profile simply
+          // won't have a claimed username until they set one later.
+          debugPrint('[CommunityAuth] username reservation failed: $e');
+        }
+      }
 
       debugPrint('[CommunityAuth] registration completed for uid=${user.uid}');
       return F_User(uid: user.uid);

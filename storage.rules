@@ -1,0 +1,84 @@
+rules_version = '2';
+
+// =============================================================================
+// CANOPY — Firebase Storage Security Rules
+// Week 1 deliverable, Cardano 4-Week Implementation Plan. Paths below are
+// taken directly from the actual upload call sites in lib/ (grepped, not
+// guessed) — see IMPLEMENTATION_NOTES_BLOCKCHAIN_STAGE0.md for the exact
+// grep output this was built from.
+//
+// Rule of thumb used throughout: anyone can VIEW evidence photos (they're
+// the public proof the whole platform is built on), but only a signed-in
+// user — and for org-scoped paths, a member of that org — can upload to
+// their own path. Nothing here lets a client mark a photo "approved" or
+// attach it to an anchored evidence record; that's a server-side (Cloud
+// Functions) responsibility once Week 2's evidence pipeline lands.
+// =============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isReasonableImage() {
+      return request.resource.size < 15 * 1024 * 1024 &&
+             request.resource.contentType.matches('image/.*');
+    }
+
+    // incident_images/{incidentId}/{file} — dumpsite/hazard reports.
+    // Public read (this is the evidence the community map is built on);
+    // any signed-in resident can submit a report photo.
+    match /incident_images/{incidentId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isReasonableImage();
+    }
+
+    // planting_photos/{uid}/{file} — tree planting evidence, owner-scoped.
+    match /planting_photos/{uid}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == uid && isReasonableImage();
+    }
+
+    // activities/{activityId}/{file} — event gallery photos.
+    match /activities/{activityId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isReasonableImage();
+    }
+
+    // map_pins/{file} — filename embeds uid ($timestamp_$uid.jpg); we can't
+    // pattern-match the uid out of a filename in rules reliably, so this
+    // stays "any signed-in user, size/type checked" rather than a false
+    // sense of per-file ownership enforcement. Tighten once map pin uploads
+    // move to a uid-prefixed folder instead of a uid-suffixed filename.
+    match /map_pins/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isReasonableImage();
+    }
+
+    // cultural_media/{orgId}/pending/{file} — Cultural Archive uploads.
+    // Only org members of the owning org may upload; visibility rules for
+    // *reading* restricted/sealed media are enforced by the trusted API,
+    // not by Storage rules, since Storage rules can't see the Firestore
+    // visibility field on the linked cultural_entries doc.
+    match /cultural_media/{orgId}/{allPaths=**} {
+      allow read: if true; // "pending" media is not yet public by convention;
+                            // tighten to a callable-function-issued signed
+                            // URL before Cultural Archive visibility ships —
+                            // tracked as a Week 2+ item, not silently assumed safe.
+      allow write: if isSignedIn() && isReasonableImage();
+    }
+
+    // programmes/{orgId}/{programmeId} — programme cover images/media.
+    match /programmes/{orgId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && isReasonableImage();
+    }
+
+    // Default deny for anything not explicitly matched above.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

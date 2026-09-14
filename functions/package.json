@@ -1,0 +1,29 @@
+{
+  "name": "canopy-functions",
+  "description": "Canopy trusted API — Cloud Functions. Server-authoritative evidence approval, role/org enforcement, and Cardano Preprod anchoring (Blockchain Stage 0).",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions,firestore,storage",
+    "shell": "npm run build && firebase functions:shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "test": "npm run build && jest"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^12.3.1",
+    "firebase-functions": "^5.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.12",
+    "firebase-functions-test": "^3.3.0",
+    "@firebase/rules-unit-testing": "^3.0.4"
+  },
+  "private": true
+}

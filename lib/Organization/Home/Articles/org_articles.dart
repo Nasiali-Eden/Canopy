@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +8,7 @@ import '../../../Services/Article/article_service.dart';
 import '../../../Shared/Activities/create_article.dart';
 import '../../../Shared/theme/app_theme.dart';
 import '../../../Shared/utils/rich_body.dart';
+import 'special_articles_banner.dart';
 
 const _kBg = Color(0xFFF7F5F0);
 
@@ -107,18 +109,41 @@ class OrgArticlesScreen extends StatelessWidget {
                 child: CircularProgressIndicator(color: AppTheme.primary));
           }
           final articles = snap.data ?? const [];
+          final existingHeadings = articles
+              .map((a) => (a['heading'] ?? a['title'] ?? '') as String)
+              .where((h) => h.isNotEmpty)
+              .toSet();
+          final banner = SpecialArticlesBanner(
+            orgId: orgId,
+            uid: FirebaseAuth.instance.currentUser?.uid,
+            existingHeadings: existingHeadings,
+          );
+
           if (articles.isEmpty) {
-            return _EmptyState(onCreate: () => _openEditor(context));
+            return Column(
+              children: [
+                banner,
+                Expanded(child: _EmptyState(onCreate: () => _openEditor(context))),
+              ],
+            );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-            itemCount: articles.length,
-            itemBuilder: (context, i) => _ArticleManageCard(
-              data: articles[i],
-              onEdit: () => _openEditor(context, existing: articles[i]),
-              onTogglePublish: () => _togglePublish(context, service, articles[i]),
-              onDelete: () => _confirmDelete(context, service, articles[i]),
-            ),
+          return Column(
+            children: [
+              banner,
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
+                  itemCount: articles.length,
+                  itemBuilder: (context, i) => _ArticleManageCard(
+                    data: articles[i],
+                    onEdit: () => _openEditor(context, existing: articles[i]),
+                    onTogglePublish: () =>
+                        _togglePublish(context, service, articles[i]),
+                    onDelete: () => _confirmDelete(context, service, articles[i]),
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -214,6 +239,8 @@ class _ArticleManageCard extends StatelessWidget {
         return 'Impact Story';
       case 'event_recap':
         return 'Event Recap';
+      case 'special':
+        return 'Special';
       default:
         return cat ?? '';
     }

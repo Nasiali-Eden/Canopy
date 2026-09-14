@@ -6,6 +6,7 @@
 // The nav bar mirrors the Organization shell (org_home.dart).
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +24,7 @@ import '../Map/org_logo_cache.dart';
 import '../Announcements/announcements_tab.dart';
 import '../Articles/articles_list_screen.dart';
 import '../Contributions/all_contributions_screen.dart';
+import '../Events/log_work_event_screen.dart';
 import 'home_feed.dart';
 
 // Keep `timeAgo` importable from this file for sibling screens that already do
@@ -44,6 +46,11 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
   int _index = 0;
   bool _remindersChecked = false;
   ActivityFilter _activityFilter = const ActivityFilter();
+
+  // Phase 1.4 — the Heritage tab (index 3) is the one screen whose bottom
+  // bar should go transparent while scrolling down and opaque at rest/on
+  // scroll-up. Every other tab always gets the solid white bar.
+  bool _heritageBarTransparent = false;
 
   static const _destinations = [
     CanopyNavDestination(
@@ -76,12 +83,10 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
     OrgLogoCache.instance.warmUp();
   }
 
-  void _showComingSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Work logging will be available soon'),
-        backgroundColor: AppTheme.darkGreen,
-      ),
+  void _openLogWork() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LogWorkEventScreen()),
     );
   }
 
@@ -173,7 +178,7 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
       HomeFeed(
         userId: user?.uid,
         onJoinActivity: () => setState(() => _index = 1),
-        onLogContributionComingSoon: _showComingSoon,
+        onLogWork: _openLogWork,
         onViewAnnouncements: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AnnouncementsScreen()),
@@ -190,7 +195,14 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
       ),
       ActivityHomeLogic.buildActivityTab(filter: _activityFilter),
       const MapScreen(),
-      const CommunityHeritageTab(),
+      CommunityHeritageTab(
+        onScrollDirectionChanged: (dir) {
+          final shouldBeTransparent = dir == ScrollDirection.reverse;
+          if (shouldBeTransparent != _heritageBarTransparent) {
+            setState(() => _heritageBarTransparent = shouldBeTransparent);
+          }
+        },
+      ),
       const ProfileScreen(),
     ];
 
@@ -206,7 +218,14 @@ class _CommunityHomeScreenState extends State<CommunityHomeScreen> {
         bottomNavigationBar: CanopyBottomBar(
           currentIndex: _index,
           destinations: _destinations,
-          onTap: (i) => setState(() => _index = i),
+          onTap: (i) => setState(() {
+            _index = i;
+            // Reset so re-entering Heritage always starts opaque, and other
+            // tabs never inherit a stale transparent state.
+            if (i != 3) _heritageBarTransparent = false;
+          }),
+          frosted: _index == 3,
+          transparent: _index == 3 && _heritageBarTransparent,
         ),
       ),
     );

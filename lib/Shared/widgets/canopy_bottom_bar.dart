@@ -57,6 +57,16 @@ class CanopyBottomBar extends StatelessWidget {
   /// background. Still flush to the bottom edge — not a floating pill.
   final bool frosted;
 
+  /// Phase 1.4 (Minimal Release Roadmap) — "transparent-on-scroll": when
+  /// true (only meaningful together with [frosted]), the bar's background
+  /// chrome (blur tint + top hairline) fades out so the screen's own content
+  /// shows through; nav icons/labels stay put and stay tappable — only the
+  /// backing goes away. Callers animate this in step with scroll direction
+  /// (transparent while scrolling down, opaque at rest or scrolling up) and
+  /// must scope it to the one screen that wants it — every other shell
+  /// should leave this false.
+  final bool transparent;
+
   const CanopyBottomBar({
     super.key,
     required this.currentIndex,
@@ -64,6 +74,7 @@ class CanopyBottomBar extends StatelessWidget {
     required this.onTap,
     this.selectedColor = AppTheme.tertiary,
     this.frosted = false,
+    this.transparent = false,
   });
 
   /// Height of the bar's content, excluding the device's bottom safe-area
@@ -125,11 +136,16 @@ class CanopyBottomBar extends StatelessWidget {
     return ClipRect(
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.42),
+            color: Colors.black.withOpacity(transparent ? 0.0 : 0.42),
             border: Border(
-              top: BorderSide(color: Colors.white.withOpacity(0.16), width: 0.8),
+              top: BorderSide(
+                color: Colors.white.withOpacity(transparent ? 0.0 : 0.16),
+                width: 0.8,
+              ),
             ),
           ),
           child: SafeArea(top: false, child: child),

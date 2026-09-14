@@ -123,7 +123,6 @@ class ListingService {
     if (field != null && value != null) {
       q = q.where(field, isEqualTo: value);
     }
-
     // Seller / org scoping is also an equality predicate and is mutually
     // exclusive with geo in practice (a shop page is not location-filtered),
     // so this never stacks into a composite requirement.
@@ -149,6 +148,11 @@ class ListingService {
     final value = query.location.value;
     if (field != null && value != null) {
       q = q.where(field, isEqualTo: value);
+    }
+    if (query.sellerId != null && query.sellerId!.isNotEmpty) {
+      q = q.where('postedByUid', isEqualTo: query.sellerId);
+    } else if (query.orgId != null && query.orgId!.isNotEmpty) {
+      q = q.where('orgId', isEqualTo: query.orgId);
     }
     try {
       final snap = await q.limit(limit).get();
@@ -258,11 +262,8 @@ class ListingService {
 
   // ── Responses to seeking listings ─────────────────────────────────────────
 
-  Stream<List<ListingResponse>> watchResponses(String listingId) => _col
-      .doc(listingId)
-      .collection('responses')
-      .snapshots()
-      .map((s) => s.docs
+  Stream<List<ListingResponse>> watchResponses(String listingId) =>
+      _col.doc(listingId).collection('responses').snapshots().map((s) => s.docs
           .map((d) => ListingResponse.fromFirestore(listingId, d))
           .toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
@@ -307,12 +308,9 @@ class ListingService {
         seeking: all.where((l) => l.isSeeking && !l.isExpired).length,
         supply: all.where((l) => l.isSupply).length,
         creative: all.where((l) => l.isCreative).length,
-        kgDiverted:
-            all.fold<double>(0, (sum, l) => sum + l.impact.kgDiverted),
-        collectorsCredited: all
-            .expand((l) => l.creditedCollectors)
-            .toSet()
-            .length,
+        kgDiverted: all.fold<double>(0, (sum, l) => sum + l.impact.kgDiverted),
+        collectorsCredited:
+            all.expand((l) => l.creditedCollectors).toSet().length,
       );
     } catch (e) {
       debugPrint('[ListingService] totals failed: $e');

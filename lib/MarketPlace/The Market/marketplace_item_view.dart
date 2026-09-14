@@ -4,7 +4,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../Models/marketplace/canopy_listing.dart';
 import '../../Services/Marketplace/listing_service.dart';
 import '../../Shared/theme/app_theme.dart';
-import 'marketplace_listing.dart';
+import '../../Shared/theme/canopy_ui.dart';
+import '../../Shared/widgets/profile/canopy_profile_widgets.dart';
+import 'marketplace_listing.dart' hide CircularBadgeTier;
 import 'marketplace_shop_view.dart';
 import 'marketplace_checkout.dart';
 
@@ -20,7 +22,8 @@ import 'marketplace_checkout.dart';
 final _placeholderListing = _PlaceholderDetail(
   title: 'Nairobi River Copper Bangles',
   tagline: 'Each ring holds 18 months of Mathare River stories',
-  story: '''James Odhiambo has been walking the Mathare River bank every morning since 2019. Not for exercise — for copper wire. The wire that falls from electricity repairs, that washes down from construction sites, that gets tangled in the reeds and slowly becomes part of the riverbed.
+  story:
+      '''James Odhiambo has been walking the Mathare River bank every morning since 2019. Not for exercise — for copper wire. The wire that falls from electricity repairs, that washes down from construction sites, that gets tangled in the reeds and slowly becomes part of the riverbed.
 
 He collected 840 grams of this wire over three weeks in January. He cleaned it, sorted it by gauge, weighed it, and sold it through Canopy to Amina Wanjiku's workshop in Kibera — at a price three times what a middleman would have offered, because James's six months of Canopy history meant Amina knew exactly what she was getting.
 
@@ -37,7 +40,8 @@ What you are buying is not copper. You are buying the morning walk, the sort, th
   priceNum: 1200,
   makerName: 'Amina Wanjiku',
   makerCity: 'Kibera, Nairobi',
-  makerBio: 'Metalworker and jewellery designer. Working with recovered copper and brass since 2021.',
+  makerBio:
+      'Metalworker and jewellery designer. Working with recovered copper and brass since 2021.',
   shopName: 'AW Studio Kibera',
   collectorName: 'James Odhiambo',
   collectorCity: 'Mathare, Nairobi',
@@ -81,6 +85,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
   int _activeImage = 0;
   CanopyListing? _listing;
   bool _loading = true;
+  Object? _loadError;
   final PageController _pageCtrl = PageController();
   bool _wishlistActive = false;
   bool _storyExpanded = false;
@@ -105,19 +110,29 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
     final preloaded = widget.listing;
     if (preloaded != null) {
       setState(() {
+        _loadError = StateError('Legacy listing requires migration');
         _listing = null; // legacy MarketplaceListing — not the unified shape
         _loading = false;
       });
       return;
     }
-    final fetched = await ListingService.instance.byId(widget.listingId);
-    if (!mounted) return;
-    setState(() {
-      _listing = fetched;
-      _loading = false;
-    });
-    if (fetched != null) {
-      ListingService.instance.incrementView(widget.listingId);
+    try {
+      final fetched = await ListingService.instance.byId(widget.listingId);
+      if (!mounted) return;
+      setState(() {
+        _listing = fetched;
+        _loadError = null;
+        _loading = false;
+      });
+      if (fetched != null) {
+        ListingService.instance.incrementView(widget.listingId);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = error;
+        _loading = false;
+      });
     }
   }
 
@@ -146,10 +161,36 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
     }
 
     final listing = _listing;
-    final item = listing != null
-        ? _PlaceholderDetail.fromListing(listing)
-        : _placeholderListing;
-    final isSample = listing == null;
+    if (_loadError != null || listing == null) {
+      return Scaffold(
+        backgroundColor: CanopyUi.canvas,
+        appBar: AppBar(title: const Text('Listing')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: CanopyProfileEmptyState(
+              icon: _loadError == null
+                  ? Icons.search_off_outlined
+                  : Icons.cloud_off_outlined,
+              title: _loadError == null
+                  ? 'This listing is no longer available'
+                  : 'The listing could not be loaded',
+              message:
+                  'Canopy will not replace missing database records with sample products.',
+              actionLabel: 'Try again',
+              onAction: () {
+                setState(() {
+                  _loading = true;
+                  _loadError = null;
+                });
+                _load();
+              },
+            ),
+          ),
+        ),
+      );
+    }
+    final item = _PlaceholderDetail.fromListing(listing);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -162,7 +203,6 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (isSample) _buildSampleBanner(),
                     _buildIdentity(item),
                     _buildStory(item),
                     _buildMaterialDnaChain(item),
@@ -182,7 +222,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
             right: 0,
             // A "wanted" listing is a request, not a shelf item — offering a
             // Buy button on one would be nonsense.
-            child: listing != null && listing.isSeeking
+            child: listing.isSeeking
                 ? _buildRespondBar(listing)
                 : _buildBottomBar(item),
           ),
@@ -208,8 +248,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
               color: Colors.white.withOpacity(0.9),
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.1), blurRadius: 8),
+                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8),
               ],
             ),
             child: const Icon(Icons.arrow_back_ios_new,
@@ -235,7 +274,8 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
               child: Icon(
                 _wishlistActive ? Icons.favorite : Icons.favorite_border,
                 size: 18,
-                color: _wishlistActive ? Colors.red.shade500 : AppTheme.darkGreen,
+                color:
+                    _wishlistActive ? Colors.red.shade500 : AppTheme.darkGreen,
               ),
             ),
           ),
@@ -246,27 +286,28 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
         background: Stack(
           fit: StackFit.expand,
           children: [
-            PageView.builder(
-              controller: _pageCtrl,
-              itemCount: item.images.length,
-              onPageChanged: (i) => setState(() => _activeImage = i),
-              itemBuilder: (ctx, i) => CachedNetworkImage(
-                imageUrl: item.images[i],
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(
-                  color: AppTheme.lightGreen.withOpacity(0.15),
-                  child: const Center(
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: AppTheme.primary),
+            if (item.images.isEmpty)
+              const CanopyMediaFallback(
+                label: 'This seller has not added a product image',
+              )
+            else
+              PageView.builder(
+                controller: _pageCtrl,
+                itemCount: item.images.length,
+                onPageChanged: (i) => setState(() => _activeImage = i),
+                itemBuilder: (ctx, i) => CachedNetworkImage(
+                  imageUrl: item.images[i],
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(
+                    color: AppTheme.lightGreen.withOpacity(0.15),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppTheme.primary),
+                    ),
                   ),
-                ),
-                errorWidget: (_, __, ___) => Container(
-                  color: AppTheme.lightGreen.withOpacity(0.15),
-                  child: const Icon(Icons.image_outlined,
-                      size: 48, color: AppTheme.primary),
+                  errorWidget: (_, __, ___) => const CanopyMediaFallback(),
                 ),
               ),
-            ),
             // Dot indicator
             Positioned(
               bottom: 16,
@@ -276,7 +317,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(
                   item.images.length,
-                      (i) => AnimatedContainer(
+                  (i) => AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.symmetric(horizontal: 3),
                     width: _activeImage == i ? 18 : 6,
@@ -297,8 +338,8 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
                 top: 80,
                 right: 14,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: AppTheme.tertiary,
                     borderRadius: BorderRadius.circular(20),
@@ -339,8 +380,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
           // Category + rating
           Row(children: [
             Container(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: AppTheme.primary.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(20),
@@ -354,8 +394,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
                   )),
             ),
             const Spacer(),
-            const Icon(Icons.star_rounded,
-                size: 14, color: AppTheme.tertiary),
+            const Icon(Icons.star_rounded, size: 14, color: AppTheme.tertiary),
             const SizedBox(width: 3),
             Text('${item.rating}',
                 style: const TextStyle(
@@ -364,8 +403,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
                     fontSize: 13)),
             Text(' (${item.reviewCount})',
                 style: TextStyle(
-                    color: AppTheme.darkGreen.withOpacity(0.4),
-                    fontSize: 12)),
+                    color: AppTheme.darkGreen.withOpacity(0.4), fontSize: 12)),
           ]),
           const SizedBox(height: 10),
           // Title
@@ -408,8 +446,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
               decoration: BoxDecoration(
                 color: AppTheme.tertiary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: AppTheme.tertiary.withOpacity(0.4)),
+                border: Border.all(color: AppTheme.tertiary.withOpacity(0.4)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 const Icon(Icons.account_balance_wallet_outlined,
@@ -445,9 +482,8 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
   // ── Story ────────────────────────────────────────────────────────────────────
 
   Widget _buildStory(_PlaceholderDetail item) {
-    final preview = item.story.length > 300
-        ? item.story.substring(0, 300)
-        : item.story;
+    final preview =
+        item.story.length > 300 ? item.story.substring(0, 300) : item.story;
     final showToggle = item.story.length > 300;
 
     return Padding(
@@ -584,8 +620,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
               decoration: BoxDecoration(
                 color: AppTheme.primary.withOpacity(0.04),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: AppTheme.primary.withOpacity(0.15)),
+                border: Border.all(color: AppTheme.primary.withOpacity(0.15)),
               ),
               child: Row(children: [
                 Container(
@@ -711,8 +746,8 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: AppTheme.lightGreen.withOpacity(0.25)),
+                border:
+                    Border.all(color: AppTheme.lightGreen.withOpacity(0.25)),
                 boxShadow: [
                   BoxShadow(
                       color: AppTheme.primary.withOpacity(0.05),
@@ -763,8 +798,8 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppTheme.darkGreen.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(8),
@@ -795,20 +830,20 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
         runSpacing: 6,
         children: item.tags
             .map((t) => Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: AppTheme.lightGreen.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-                color: AppTheme.lightGreen.withOpacity(0.3)),
-          ),
-          child: Text('#$t',
-              style: TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.darkGreen.withOpacity(0.6),
-                  fontWeight: FontWeight.w600)),
-        ))
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppTheme.lightGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border:
+                        Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
+                  ),
+                  child: Text('#$t',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.darkGreen.withOpacity(0.6),
+                          fontWeight: FontWeight.w600)),
+                ))
             .toList(),
       ),
     );
@@ -838,7 +873,7 @@ class _MarketplaceItemViewScreenState extends State<MarketplaceItemViewScreen>
               Row(
                 children: List.generate(
                   5,
-                      (i) => Icon(
+                  (i) => Icon(
                     i < item.rating.floor()
                         ? Icons.star_rounded
                         : Icons.star_half_rounded,
@@ -1101,7 +1136,10 @@ class _DnaNode extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [color.withOpacity(0.4), color.withOpacity(0.1)],
+                        colors: [
+                          color.withOpacity(0.4),
+                          color.withOpacity(0.1)
+                        ],
                       ),
                     ),
                   ),
@@ -1112,8 +1150,7 @@ class _DnaNode extends StatelessWidget {
           // Content
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(
-                  bottom: isLast ? 0 : 16, top: 6),
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16, top: 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1127,7 +1164,8 @@ class _DnaNode extends StatelessWidget {
                     const Spacer(),
                     if (onChain && !isLast)
                       Row(children: [
-                        const Icon(Icons.link, size: 10, color: AppTheme.primary),
+                        const Icon(Icons.link,
+                            size: 10, color: AppTheme.primary),
                         const SizedBox(width: 2),
                         Text('On-chain',
                             style: const TextStyle(
@@ -1240,9 +1278,7 @@ class _SectionLabel extends StatelessWidget {
           style: TextStyle(
               fontSize: 14, fontWeight: FontWeight.w800, color: color)),
       const SizedBox(width: 10),
-      Expanded(
-          child: Container(
-              height: 1, color: color.withOpacity(0.12))),
+      Expanded(child: Container(height: 1, color: color.withOpacity(0.12))),
     ]);
   }
 }
@@ -1322,19 +1358,15 @@ class _PlaceholderDetail {
       title: l.title,
       tagline: l.tagline,
       story: l.story,
-      images: l.images.isNotEmpty
-          ? l.images
-          : ['https://picsum.photos/seed/${l.id}/900/700'],
+      images: l.images,
       price: l.pricing.display,
       priceNum: l.pricing.amountKes,
-      makerName: l.seller.shopName.isNotEmpty
-          ? l.seller.shopName
-          : (l.orgName ?? ''),
+      makerName:
+          l.seller.shopName.isNotEmpty ? l.seller.shopName : (l.orgName ?? ''),
       makerCity: l.location.label,
       makerBio: '',
-      shopName: l.seller.shopName.isNotEmpty
-          ? l.seller.shopName
-          : (l.orgName ?? ''),
+      shopName:
+          l.seller.shopName.isNotEmpty ? l.seller.shopName : (l.orgName ?? ''),
       collectorName: dna?.collectorName ?? '',
       collectorCity: dna?.collectorCity ?? '',
       collectionSite: dna?.collectionSite ?? '',

@@ -11,6 +11,7 @@ class Contribution {
   final String? notes;
   final List<String> photoUrls;
   final int estimatedImpactPoints;
+  final bool isVerified;
   final DateTime? createdAt;
 
   const Contribution({
@@ -24,6 +25,7 @@ class Contribution {
     required this.notes,
     required this.photoUrls,
     required this.estimatedImpactPoints,
+    this.isVerified = false,
     required this.createdAt,
   });
 
@@ -62,7 +64,12 @@ class Contribution {
       materials: (data['materials'] as List?)?.cast<String>() ?? const [],
       notes: data['notes'] as String?,
       photoUrls: (data['photoUrls'] as List?)?.cast<String>() ?? const [],
-      estimatedImpactPoints: (data['estimatedImpactPoints'] ?? 0) as int,
+      estimatedImpactPoints:
+          ((data['estimatedImpactPoints'] ?? data['points'] ?? 0) as num)
+              .toInt(),
+      isVerified: data['status'] == 'verified' &&
+          data['scoringVersion'] == 1 &&
+          data['deleted'] != true,
       createdAt: _toDate(data['createdAt']),
     );
   }

@@ -12,6 +12,6 @@ void main() {
   test('estimateImpactPoints: Materials contribution', () {
     final points = ContributionService().estimateImpactPoints(
         type: 'Materials', materials: ['bags', 'gloves', 'water']);
-    expect(points, 24);
+    expect(points, 20);
   });
 }

@@ -94,7 +94,7 @@ class ContributionConfirmationScreen extends StatelessWidget {
                       child: Column(
                         children: [
                           Text(
-                            'You earned',
+                            'Pending verification',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -124,7 +124,7 @@ class ContributionConfirmationScreen extends StatelessWidget {
                             ],
                           ),
                           Text(
-                            'impact points',
+                            'estimated impact points',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -161,7 +161,7 @@ class ContributionConfirmationScreen extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Your contribution is making a real difference in the community!',
+                        'Points count toward ranking after verification. An organisation activity must be linked for review.',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,

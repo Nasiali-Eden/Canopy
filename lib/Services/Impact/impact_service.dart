@@ -35,7 +35,7 @@ class ImpactService {
   Stream<int> watchUserImpactPoints({required String userId}) {
     return _db.collection('Users').doc(userId).snapshots().map((doc) {
       final data = doc.data();
-      return (data?['impact_points'] as int?) ?? 0;
+      return data?['rankingVersion'] == 1 ? (data?['impact_points'] as num?)?.toInt() ?? 0 : 0;
     });
   }
 

@@ -38,6 +38,7 @@ dependencies:
   firebase_analytics: any
   firebase_storage: any
   firebase_messaging: any
+  cloud_functions: ^6.4.0  # calls checkInToEvent (functions/src/index.ts) — the QR check-in Cloud Function
 
   # UI & Utility dependencies
   shimmer: ^3.0.0  # Used for loading placeholders
@@ -67,6 +68,11 @@ dependencies:
   flutter_polyline_points: ^2.1.0
   geolocator: ^13.0.3
   geojson_vi: ^2.2.5
+
+  # QR check-in (Log Work — Events): mobile_scanner reads an organiser's QR,
+  # qr_flutter renders it for the organiser to display/share.
+  mobile_scanner: ^6.0.2
+  qr_flutter: ^4.1.0
 
   # Splash Screen & App Icons
   flutter_native_splash: ^2.4.4

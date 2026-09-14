@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../Models/marketplace/canopy_listing.dart';
+import '../../Models/marketplace/marketplace_seller_profile.dart';
+import '../../Services/Marketplace/listing_service.dart';
+import '../../Services/Marketplace/marketplace_seller_repository.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/theme/canopy_ui.dart';
+import '../../Shared/widgets/profile/canopy_profile_widgets.dart';
 import 'marketplace_item_view.dart';
 import 'marketplace_listing.dart';
 
@@ -12,15 +18,18 @@ import 'marketplace_listing.dart';
 const _placeholderShop = _ShopDetail(
   name: 'Kibera Makers Collective',
   tagline: 'We make things that carry the weight of where they came from.',
-  bio: '''We are seven makers who share a workshop in Kibera. None of us trained formally — we learned by taking apart what other people threw away.
+  bio:
+      '''We are seven makers who share a workshop in Kibera. None of us trained formally — we learned by taking apart what other people threw away.
 
 The Collective started in 2022 when we realised we were all buying copper wire from the same collector, James Odhiambo, who walked the Mathare River every morning. We thought: what if the people who collect and the people who create worked in the same direction?
 
 We now source almost everything through Canopy. We know whose hands held the material before ours. We pay fair prices. When we sell something, the collector gets a royalty — because the object is as much theirs as it is ours.
 
 We make jewellery, sculpture, furniture, and whatever comes to us when we look at what James brings back from the river.''',
-  bannerUrl: 'https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=1200&auto=format&fit=crop',
-  logoUrl: 'https://images.unsplash.com/photo-1590492181492-9efd75b27ae9?w=300&auto=format&fit=crop',
+  bannerUrl:
+      'https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=1200&auto=format&fit=crop',
+  logoUrl:
+      'https://images.unsplash.com/photo-1590492181492-9efd75b27ae9?w=300&auto=format&fit=crop',
   city: 'Kibera, Nairobi',
   country: 'Kenya',
   badge: 'Circular Craft',
@@ -31,7 +40,12 @@ We make jewellery, sculpture, furniture, and whatever comes to us when we look a
   memberSince: 'March 2022',
   kgDiverted: 48.6,
   collectorsSupported: 6,
-  materialSpecialties: ['Copper', 'Scrap metal', 'Reclaimed wood', 'Soft plastic'],
+  materialSpecialties: [
+    'Copper',
+    'Scrap metal',
+    'Reclaimed wood',
+    'Soft plastic'
+  ],
   categories: ['Jewellery', 'Sculpture', 'Furniture', 'Homeware'],
   whatsappNumber: '+254700000000',
   instagramHandle: '@kiberamakers',
@@ -42,7 +56,8 @@ const _placeholderListings = [
     title: 'Nairobi River Copper Bangles',
     price: 'KSh 1,200',
     kgDiverted: 0.84,
-    imageUrl: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=600&auto=format&fit=crop',
+    imageUrl:
+        'https://images.unsplash.com/photo-1610701596007-11502861dcfa?w=600&auto=format&fit=crop',
     category: 'Jewellery',
     badge: 'Circular Craft',
   ),
@@ -50,7 +65,8 @@ const _placeholderListings = [
     title: 'Mathare Wire Sculpture — "Kustawi"',
     price: 'KSh 22,000',
     kgDiverted: 5.6,
-    imageUrl: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=600&auto=format&fit=crop',
+    imageUrl:
+        'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=600&auto=format&fit=crop',
     category: 'Sculpture',
     badge: 'Circular Craft',
   ),
@@ -58,7 +74,8 @@ const _placeholderListings = [
     title: 'Pallet Table with Skyline Inlay',
     price: 'KSh 18,500',
     kgDiverted: 12.4,
-    imageUrl: 'https://images.unsplash.com/photo-1590492181492-9efd75b27ae9?w=600&auto=format&fit=crop',
+    imageUrl:
+        'https://images.unsplash.com/photo-1590492181492-9efd75b27ae9?w=600&auto=format&fit=crop',
     category: 'Furniture',
     badge: 'Circular Craft',
   ),
@@ -66,7 +83,8 @@ const _placeholderListings = [
     title: 'Soft Plastic Bowl — Kibera Series',
     price: 'KSh 680',
     kgDiverted: 0.32,
-    imageUrl: 'https://images.unsplash.com/photo-1578922746465-3a80a228f223?w=600&auto=format&fit=crop',
+    imageUrl:
+        'https://images.unsplash.com/photo-1578922746465-3a80a228f223?w=600&auto=format&fit=crop',
     category: 'Homeware',
     badge: 'Circular Craft',
   ),
@@ -74,18 +92,23 @@ const _placeholderListings = [
 
 const _processJournal = [
   _JournalEntry(
-    imageUrl: 'https://images.unsplash.com/photo-1605001011156-cbf0b0f67a51?w=600&auto=format&fit=crop',
-    caption: 'James brings in copper wire sorted by gauge. We weigh it together.',
+    imageUrl:
+        'https://images.unsplash.com/photo-1605001011156-cbf0b0f67a51?w=600&auto=format&fit=crop',
+    caption:
+        'James brings in copper wire sorted by gauge. We weigh it together.',
     date: 'January 14, 2026',
   ),
   _JournalEntry(
-    imageUrl: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&auto=format&fit=crop',
+    imageUrl:
+        'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&auto=format&fit=crop',
     caption: 'The hammering takes two days. No two bangles are the same.',
     date: 'January 16, 2026',
   ),
   _JournalEntry(
-    imageUrl: 'https://images.unsplash.com/photo-1611923134239-b9be5816e23c?w=600&auto=format&fit=crop',
-    caption: 'Finished. The irregularities are not defects — they are evidence.',
+    imageUrl:
+        'https://images.unsplash.com/photo-1611923134239-b9be5816e23c?w=600&auto=format&fit=crop',
+    caption:
+        'Finished. The irregularities are not defects — they are evidence.',
     date: 'January 18, 2026',
   ),
 ];
@@ -113,11 +136,13 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   bool _bioExpanded = false;
+  late Future<MarketplaceSellerProfile?> _sellerFuture;
 
   @override
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 3, vsync: this);
+    _sellerFuture = MarketplaceSellerRepository().fetch(widget.sellerId);
   }
 
   @override
@@ -128,24 +153,61 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
 
   @override
   Widget build(BuildContext context) {
-    final shop = _placeholderShop;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F5F0),
-      body: NestedScrollView(
-        headerSliverBuilder: (context, _) => [
-          _buildHeader(shop),
-          _buildTabBar(),
-        ],
-        body: TabBarView(
-          controller: _tabCtrl,
-          children: [
-            _buildListingsTab(),
-            _buildStoryTab(shop),
-            _buildImpactTab(shop),
-          ],
-        ),
-      ),
+    return FutureBuilder<MarketplaceSellerProfile?>(
+      future: _sellerFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: CanopyUi.canvas,
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final profile = snapshot.data;
+        if (snapshot.hasError || profile == null) {
+          return Scaffold(
+            backgroundColor: CanopyUi.canvas,
+            appBar: AppBar(title: const Text('Seller profile')),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: CanopyProfileEmptyState(
+                  icon: snapshot.hasError
+                      ? Icons.cloud_off_outlined
+                      : Icons.storefront_outlined,
+                  title: snapshot.hasError
+                      ? 'Seller profile could not be loaded'
+                      : 'Seller profile is unavailable',
+                  message:
+                      'No sample shop is substituted for a missing database profile.',
+                  actionLabel: 'Try again',
+                  onAction: () => setState(() {
+                    _sellerFuture =
+                        MarketplaceSellerRepository().fetch(widget.sellerId);
+                  }),
+                ),
+              ),
+            ),
+          );
+        }
+        final shop = _ShopDetail.fromProfile(profile);
+        return Scaffold(
+          backgroundColor: CanopyUi.canvas,
+          body: NestedScrollView(
+            headerSliverBuilder: (context, _) => [
+              _buildHeader(shop),
+              _buildTabBar(),
+            ],
+            body: TabBarView(
+              controller: _tabCtrl,
+              children: [
+                _buildListingsTab(shop),
+                _buildStoryTab(shop),
+                _buildImpactTab(shop),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -166,8 +228,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
               color: Colors.white.withOpacity(0.9),
               shape: BoxShape.circle,
               boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.1), blurRadius: 8),
+                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8),
               ],
             ),
             child: const Icon(Icons.arrow_back_ios_new,
@@ -345,8 +406,8 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
           unselectedLabelColor: AppTheme.darkGreen.withOpacity(0.4),
           indicatorColor: AppTheme.primary,
           indicatorWeight: 2.5,
-          labelStyle: const TextStyle(
-              fontWeight: FontWeight.w700, fontSize: 13),
+          labelStyle:
+              const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
           tabs: const [
             Tab(text: 'Shop'),
             Tab(text: 'Our Story'),
@@ -359,55 +420,69 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
 
   // ── Listings tab ─────────────────────────────────────────────────────────────
 
-  Widget _buildListingsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Stats row
-          Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppTheme.lightGreen.withOpacity(0.2)),
-            ),
-            child: Row(children: [
-              _MiniStat(
-                  value: '${_placeholderShop.totalListings}',
-                  label: 'Listings'),
-              _vDivider(),
-              _MiniStat(
-                  value: '${_placeholderShop.totalSales}',
-                  label: 'Sold'),
-              _vDivider(),
-              _MiniStat(
-                  value: _placeholderShop.memberSince,
-                  label: 'Member since'),
-            ]),
-          ),
+  Widget _buildListingsTab(_ShopDetail shop) {
+    return StreamBuilder<List<CanopyListing>>(
+      stream: ListingService.instance.watchByMember(widget.sellerId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Text('Listings could not be loaded.'));
+        }
+        final listings = snapshot.data ?? const <CanopyListing>[];
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Stats row
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border:
+                      Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
+                ),
+                child: Row(children: [
+                  _MiniStat(value: '${listings.length}', label: 'Listings'),
+                  _vDivider(),
+                  _MiniStat(value: '${shop.totalSales}', label: 'Sold'),
+                  _vDivider(),
+                  _MiniStat(value: shop.memberSince, label: 'Member since'),
+                ]),
+              ),
 
-          const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-          // Grid
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 0.72,
-            ),
-            itemCount: _placeholderListings.length,
-            itemBuilder: (_, i) =>
-                _ListingCard(listing: _placeholderListings[i]),
+              // Grid
+              if (listings.isEmpty)
+                const CanopyProfileEmptyState(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'No active listings',
+                  message: 'This seller has not published an active item yet.',
+                )
+              else
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.72,
+                  ),
+                  itemCount: listings.length,
+                  itemBuilder: (_, i) => _ListingCard(
+                    listing: _ShopListingPreview.fromListing(listings[i]),
+                  ),
+                ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -415,7 +490,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
 
   Widget _buildStoryTab(_ShopDetail shop) {
     final preview =
-    shop.bio.length > 400 ? shop.bio.substring(0, 400) : shop.bio;
+        shop.bio.length > 400 ? shop.bio.substring(0, 400) : shop.bio;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -428,8 +503,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppTheme.lightGreen.withOpacity(0.2)),
+              border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -456,8 +530,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
                           height: 1.75)),
                 ),
                 GestureDetector(
-                  onTap: () =>
-                      setState(() => _bioExpanded = !_bioExpanded),
+                  onTap: () => setState(() => _bioExpanded = !_bioExpanded),
                   child: Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: Row(children: [
@@ -490,8 +563,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppTheme.lightGreen.withOpacity(0.2)),
+              border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -506,22 +578,20 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
                   runSpacing: 6,
                   children: shop.materialSpecialties
                       .map((m) => Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color:
-                      AppTheme.accent.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                          color: AppTheme.accent
-                              .withOpacity(0.25)),
-                    ),
-                    child: Text(m,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.accent,
-                            fontWeight: FontWeight.w600)),
-                  ))
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accent.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: AppTheme.accent.withOpacity(0.25)),
+                            ),
+                            child: Text(m,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.accent,
+                                    fontWeight: FontWeight.w600)),
+                          ))
                       .toList(),
                 ),
               ],
@@ -536,9 +606,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
               label: 'Process Journal',
               color: AppTheme.secondary),
           const SizedBox(height: 12),
-          ..._processJournal
-              .map((j) => _JournalCard(entry: j))
-              .toList(),
+          ..._processJournal.map((j) => _JournalCard(entry: j)).toList(),
         ],
       ),
     );
@@ -579,8 +647,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
                 const SizedBox(height: 4),
                 Text('Since ${shop.memberSince}',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.65),
-                        fontSize: 11)),
+                        color: Colors.white.withOpacity(0.65), fontSize: 11)),
                 const SizedBox(height: 18),
                 Row(children: [
                   _BigImpactStat(
@@ -592,8 +659,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
                       label: 'Collectors\nsupported'),
                   const SizedBox(width: 12),
                   _BigImpactStat(
-                      value: '${shop.totalSales}',
-                      label: 'Objects\nsold'),
+                      value: '${shop.totalSales}', label: 'Objects\nsold'),
                 ]),
               ],
             ),
@@ -607,8 +673,7 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppTheme.lightGreen.withOpacity(0.2)),
+              border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,56 +699,51 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
                     'Peter Otieno · Kawangware',
                   ]
                       .map((c) => Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary
-                            .withOpacity(0.05),
-                        borderRadius:
-                        BorderRadius.circular(10),
-                        border: Border.all(
-                            color: AppTheme.primary
-                                .withOpacity(0.15)),
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: AppTheme.lightGreen
-                                  .withOpacity(0.2),
-                              shape: BoxShape.circle,
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: AppTheme.primary.withOpacity(0.15)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppTheme.lightGreen.withOpacity(0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.person_outline,
+                                        size: 16, color: AppTheme.primary),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    c.split(' · ')[0],
+                                    style: const TextStyle(
+                                        color: AppTheme.darkGreen,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 10),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    c.split(' · ')[1],
+                                    style: TextStyle(
+                                        color:
+                                            AppTheme.darkGreen.withOpacity(0.4),
+                                        fontSize: 9),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: const Icon(
-                                Icons.person_outline,
-                                size: 16,
-                                color: AppTheme.primary),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            c.split(' · ')[0],
-                            style: const TextStyle(
-                                color: AppTheme.darkGreen,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 10),
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            c.split(' · ')[1],
-                            style: TextStyle(
-                                color: AppTheme.darkGreen
-                                    .withOpacity(0.4),
-                                fontSize: 9),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ))
+                          ))
                       .toList(),
                 ]),
               ],
@@ -695,11 +755,11 @@ class _MarketplaceShopViewScreenState extends State<MarketplaceShopViewScreen>
   }
 
   Widget _vDivider() => Container(
-    width: 1,
-    height: 28,
-    color: AppTheme.lightGreen.withOpacity(0.3),
-    margin: const EdgeInsets.symmetric(horizontal: 10),
-  );
+        width: 1,
+        height: 28,
+        color: AppTheme.lightGreen.withOpacity(0.3),
+        margin: const EdgeInsets.symmetric(horizontal: 10),
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -718,15 +778,14 @@ class _ListingCard extends StatelessWidget {
         context,
         MaterialPageRoute(
           builder: (_) =>
-              MarketplaceItemViewScreen(listingId: listing.title),
+              MarketplaceItemViewScreen(listingId: listing.listingId),
         ),
       ),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border:
-          Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
+          border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
           boxShadow: [
             BoxShadow(
                 color: Colors.black.withOpacity(0.04),
@@ -736,19 +795,19 @@ class _ListingCard extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           ClipRRect(
-            borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(13)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
             child: SizedBox(
               height: 120,
               width: double.infinity,
               child: Stack(fit: StackFit.expand, children: [
-                CachedNetworkImage(
-                  imageUrl: listing.imageUrl,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) => Container(
-                    color: AppTheme.lightGreen.withOpacity(0.12),
+                if (listing.imageUrl.isEmpty)
+                  const CanopyMediaFallback()
+                else
+                  CachedNetworkImage(
+                    imageUrl: listing.imageUrl,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => const CanopyMediaFallback(),
                   ),
-                ),
                 if (listing.badge == 'Circular Craft')
                   Positioned(
                     top: 6,
@@ -823,8 +882,7 @@ class _JournalCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         ClipRRect(
-          borderRadius:
-          const BorderRadius.vertical(top: Radius.circular(13)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
           child: SizedBox(
             height: 180,
             width: double.infinity,
@@ -1038,9 +1096,62 @@ class _ShopDetail {
     this.whatsappNumber,
     this.instagramHandle,
   });
+
+  factory _ShopDetail.fromProfile(MarketplaceSellerProfile profile) {
+    final joinedCategories = profile.categories.join(' and ');
+    final year = profile.createdAt?.year;
+    return _ShopDetail(
+      name: profile.name,
+      tagline: profile.role,
+      bio: profile.bio,
+      bannerUrl: profile.bannerUrl ?? '',
+      logoUrl: profile.logoUrl ?? '',
+      city: profile.location,
+      country: 'Kenya',
+      badge: profile.verified ? 'Verified seller' : 'Canopy seller',
+      rating: profile.rating,
+      reviewCount: 0,
+      totalSales: profile.totalSales,
+      totalListings: profile.activeListings,
+      memberSince: year == null ? 'Not recorded' : '$year',
+      kgDiverted: profile.kgDiverted,
+      collectorsSupported: 0,
+      materialSpecialties: profile.specialisations,
+      categories: profile.categories,
+      whatsappNumber: null,
+      instagramHandle: null,
+    ).copyWithTaglineFallback(joinedCategories);
+  }
+
+  _ShopDetail copyWithTaglineFallback(String categoriesLabel) => _ShopDetail(
+        name: name,
+        tagline: tagline.trim().isNotEmpty
+            ? tagline
+            : (categoriesLabel.isEmpty
+                ? 'Canopy marketplace seller'
+                : categoriesLabel),
+        bio: bio,
+        bannerUrl: bannerUrl,
+        logoUrl: logoUrl,
+        city: city,
+        country: country,
+        badge: badge,
+        rating: rating,
+        reviewCount: reviewCount,
+        totalSales: totalSales,
+        totalListings: totalListings,
+        memberSince: memberSince,
+        kgDiverted: kgDiverted,
+        collectorsSupported: collectorsSupported,
+        materialSpecialties: materialSpecialties,
+        categories: categories,
+        whatsappNumber: whatsappNumber,
+        instagramHandle: instagramHandle,
+      );
 }
 
 class _ShopListingPreview {
+  final String listingId;
   final String title;
   final String price;
   final double kgDiverted;
@@ -1049,6 +1160,7 @@ class _ShopListingPreview {
   final String badge;
 
   const _ShopListingPreview({
+    this.listingId = '',
     required this.title,
     required this.price,
     required this.kgDiverted,
@@ -1056,6 +1168,17 @@ class _ShopListingPreview {
     required this.category,
     required this.badge,
   });
+
+  factory _ShopListingPreview.fromListing(CanopyListing listing) =>
+      _ShopListingPreview(
+        listingId: listing.id,
+        title: listing.title,
+        price: listing.pricing.display,
+        kgDiverted: listing.impact.kgDiverted,
+        imageUrl: listing.coverImage ?? '',
+        category: listing.category.label,
+        badge: listing.circularBadge.label,
+      );
 }
 
 class _JournalEntry {

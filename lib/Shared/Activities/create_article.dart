@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../Services/Article/article_service.dart';
+import '../config/platform_config.dart';
 import '../theme/app_theme.dart';
 import '../utils/rich_body.dart';
 
@@ -34,6 +35,15 @@ const _categories = <_Category>[
   _Category('impact_story', 'Impact Story', Icons.favorite_outline),
   _Category('event_recap', 'Event Recap', Icons.event_available_outlined),
 ];
+
+// Phase 5.1 of the Minimal Release Roadmap: "Special/blockchain articles are
+// restricted to one organisation (Super Admin) for now... start narrow,
+// expand once there's a moderation model for open contribution." Only
+// offered in the picker when the resolved org's `organizations/{orgId}`
+// doc has `isSuperAdmin == true` — enforced again (non-bypassably) by
+// firestore.rules' isSuperAdminOrg() check on create.
+const _specialCategory =
+    _Category('special', 'Special', Icons.hub_outlined);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Content blocks — the building units of an article body.
@@ -154,6 +164,14 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
   String? _category;
   final List<_Block> _blocks = [];
 
+  /// Phase 5.1 — whether [_orgId] is the one org allowed to publish
+  /// 'special' category articles. Resolved alongside org id/edit-hydration;
+  /// starts false so the picker never shows 'special' before this is known.
+  bool _isSuperAdminOrg = false;
+
+  List<_Category> get _availableCategories =>
+      _isSuperAdminOrg ? [..._categories, _specialCategory] : _categories;
+
   XFile? _coverFile;
   String? _coverUrl;
 
@@ -167,7 +185,11 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
   void initState() {
     super.initState();
     _orgId = widget.orgId;
-    if (_orgId == null) _resolveOrgId();
+    if (_orgId == null) {
+      _resolveOrgId();
+    } else {
+      _checkSuperAdminOrg(_orgId);
+    }
 
     final e = widget.existing;
     if (e != null) {
@@ -203,6 +225,31 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
     } catch (_) {
     } finally {
       if (mounted) setState(() => _resolvingOrg = false);
+    }
+    await _checkSuperAdminOrg(_orgId);
+  }
+
+  /// Phase 5.1 — reads whether [orgId] is flagged as the platform's Super
+  /// Admin org. Best-effort: any failure (offline, no such org yet) just
+  /// leaves 'special' out of the picker rather than blocking the editor.
+  Future<void> _checkSuperAdminOrg(String? orgId) async {
+    if (orgId == null) return;
+    // Bootstrap path — see lib/Shared/config/platform_config.dart. Checked
+    // first so the picker works immediately once that constant is filled
+    // in, without needing a Firestore write.
+    if (orgId == kSuperAdminOrgId) {
+      if (mounted) setState(() => _isSuperAdminOrg = true);
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      final isSuperAdmin = doc.data()?['isSuperAdmin'] == true;
+      if (mounted) setState(() => _isSuperAdminOrg = isSuperAdmin);
+    } catch (_) {
+      // Leave _isSuperAdminOrg at its default (false).
     }
   }
 
@@ -646,7 +693,7 @@ class _CreateArticleScreenState extends State<CreateArticleScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _categories.map((c) {
+          children: _availableCategories.map((c) {
             final active = _category == c.value;
             return GestureDetector(
               onTap: () => setState(() => _category = c.value),

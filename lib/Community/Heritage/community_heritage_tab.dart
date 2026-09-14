@@ -12,6 +12,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../Culture/Heritage/Services/heritage_data_service.dart';
@@ -27,7 +28,14 @@ const _gold = Color(0xFFC4A961);
 const _border = Color(0x1F86BC9E);
 
 class CommunityHeritageTab extends StatelessWidget {
-  const CommunityHeritageTab({super.key});
+  /// Phase 1.4 — reports scroll direction so the shared [CanopyBottomBar]
+  /// (owned by the parent shell, `community_home.dart`) can go transparent
+  /// while scrolling down and opaque at rest/scrolling up, scoped to this
+  /// screen only. Null when this tab isn't hosted inside that shell (e.g. if
+  /// ever pushed standalone) — the scroll listener is simply a no-op then.
+  final ValueChanged<ScrollDirection>? onScrollDirectionChanged;
+
+  const CommunityHeritageTab({super.key, this.onScrollDirectionChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -97,7 +105,12 @@ class CommunityHeritageTab extends StatelessWidget {
               ),
             ),
           ),
-          CustomScrollView(
+          NotificationListener<UserScrollNotification>(
+            onNotification: (notification) {
+              onScrollDirectionChanged?.call(notification.direction);
+              return false; // keep bubbling — don't swallow the notification
+            },
+            child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: SizedBox(height: topInset + 52)),
 
@@ -280,6 +293,7 @@ class CommunityHeritageTab extends StatelessWidget {
 
               SliverToBoxAdapter(child: SizedBox(height: 80 + bottomInset)),
             ],
+            ),
           ),
         ],
       ),

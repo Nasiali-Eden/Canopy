@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../Shared/theme/app_theme.dart';
+import '../../../Shared/theme/canopy_ui.dart';
 import '../../../Shared/widgets/role_context_switcher.dart';
 import '../../../Services/Authentication/auth.dart';
 import '../../../Shared/Pages/login.dart';
@@ -39,8 +40,7 @@ class CulturalOrgProfilePage extends StatefulWidget {
   });
 
   @override
-  State<CulturalOrgProfilePage> createState() =>
-      _CulturalOrgProfilePageState();
+  State<CulturalOrgProfilePage> createState() => _CulturalOrgProfilePageState();
 }
 
 class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
@@ -49,7 +49,7 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
   // ── Warm parchment palette local tokens ──────────────────────────────────
   static const _gold = Color(0xFFC4A961);
   static const _goldDim = Color(0x22C4A961);
-  static const _surface = Color(0xFFFDF7F0);
+  static const _surface = CanopyUi.canvas;
   static const _border = Color(0x1FC4A961);
 
   Future<void> _signOut() async {
@@ -90,8 +90,7 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
           .doc(widget.orgId)
           .snapshots(),
       builder: (context, orgSnap) {
-        final orgData =
-            orgSnap.data?.data() as Map<String, dynamic>? ?? {};
+        final orgData = orgSnap.data?.data() as Map<String, dynamic>? ?? {};
         final orgName =
             orgData['organisationName'] as String? ?? 'Cultural Archive';
         final logoUrl = orgData['logoUrl'] as String?;
@@ -194,8 +193,7 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
                   const SizedBox(height: 24),
 
                   // Recent entries
-                  if (recentDocs.isNotEmpty)
-                    _buildRecentSection(recentDocs),
+                  if (recentDocs.isNotEmpty) _buildRecentSection(recentDocs),
 
                   if (recentDocs.isNotEmpty) const SizedBox(height: 24),
 
@@ -227,8 +225,7 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
     required String bio,
     required String culturalStatus,
   }) {
-    final locationText =
-        [area, city].where((s) => s.isNotEmpty).join(', ');
+    final locationText = [area, city].where((s) => s.isNotEmpty).join(', ');
 
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -291,7 +288,6 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
-                        fontFamily: 'Cormorant Garamond',
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -417,11 +413,9 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
                 final data = doc.data() as Map<String, dynamic>;
                 final isLast = index == docs.length - 1;
                 final title = data['title'] as String? ?? 'Untitled';
-                final contentType =
-                    data['content_type'] as String? ?? '';
+                final contentType = data['content_type'] as String? ?? '';
                 final loc = data['locality'] as Map<String, dynamic>?;
-                final community =
-                    loc?['community_name'] as String? ?? '';
+                final community = loc?['community_name'] as String? ?? '';
                 return Column(
                   children: [
                     Padding(
@@ -435,8 +429,8 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
                             decoration: BoxDecoration(
                               color: _goldDim,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: _gold.withOpacity(0.25)),
+                              border:
+                                  Border.all(color: _gold.withOpacity(0.25)),
                             ),
                             child: Center(
                               child: Text(
@@ -465,8 +459,8 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
                                     community,
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: AppTheme.darkGreen
-                                          .withOpacity(0.55),
+                                      color:
+                                          AppTheme.darkGreen.withOpacity(0.55),
                                     ),
                                   ),
                               ],
@@ -491,8 +485,7 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
                     ),
                     if (!isLast)
                       Padding(
-                        padding:
-                            const EdgeInsets.only(left: 64),
+                        padding: const EdgeInsets.only(left: 64),
                         child: Divider(height: 1, color: _border),
                       ),
                   ],
@@ -566,8 +559,8 @@ class _CulturalOrgProfilePageState extends State<CulturalOrgProfilePage> {
           foregroundColor: Colors.red[700],
           side: BorderSide(color: Colors.red.withOpacity(0.4)),
           padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
     );
@@ -621,7 +614,6 @@ class _InitialsBox extends StatelessWidget {
           fontSize: 22,
           fontWeight: FontWeight.w800,
           color: Colors.white,
-          fontFamily: 'Cormorant Garamond',
         ),
       ),
     );
@@ -670,7 +662,8 @@ class _StatusBadge extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -678,8 +671,8 @@ class _StatusBadge extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: fg),
+            style:
+                TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg),
           ),
         ],
       ),
@@ -773,12 +766,8 @@ class _SettingsCard extends StatelessWidget {
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.vertical(
-                    top: index == 0
-                        ? const Radius.circular(16)
-                        : Radius.zero,
-                    bottom: isLast
-                        ? const Radius.circular(16)
-                        : Radius.zero,
+                    top: index == 0 ? const Radius.circular(16) : Radius.zero,
+                    bottom: isLast ? const Radius.circular(16) : Radius.zero,
                   ),
                   onTap: item.onTap,
                   child: Padding(

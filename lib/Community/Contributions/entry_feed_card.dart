@@ -8,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../Organization/Explorer/org_view_screen.dart';
 import '../../Services/Contributions/contribution_service.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/widgets/image_caption_overlay.dart';
+import 'entry_feed_time.dart';
 
 /// Number of characters of [FeedEntry.description] shown before "Show more".
 const int _kDescriptionPreviewChars = 50;
@@ -58,6 +60,10 @@ class FeedEntry {
   /// built from one. Needed to persist edits.
   final String? contributionId;
 
+  /// When this contribution was created — shown in the image caption overlay
+  /// alongside the org name (Phase 1.3 image treatment).
+  final Timestamp? postedAt;
+
   const FeedEntry({
     required this.title,
     required this.description,
@@ -67,6 +73,7 @@ class FeedEntry {
     this.orgId,
     this.socials = const {},
     this.contributionId,
+    this.postedAt,
   });
 
   /// Build a feed entry from a `contributions` Firestore document map.
@@ -103,6 +110,7 @@ class FeedEntry {
       orgName: orgName,
       socials: socials,
       contributionId: contributionId ?? d['id'] as String?,
+      postedAt: d['createdAt'] as Timestamp?,
     );
   }
 }
@@ -394,38 +402,34 @@ class _EntryFeedCardState extends State<EntryFeedCard>
                     onPageChanged: _onPageChanged,
                     itemBuilder: (_, i) => _CarouselImage(url: _images[i]),
                   ),
-                  // Top scrim for the org chip.
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: 64,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withOpacity(0.30),
-                              Colors.transparent,
-                            ],
+                  // Thin scrim so the carousel progress indicator stays
+                  // legible over a light photo.
+                  if (_multi)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 36,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.24),
+                                Colors.transparent,
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  if (orgName.isNotEmpty)
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: _OrgChip(name: orgName, onTap: _openOrg),
                     ),
                   if (_multi)
                     Positioned(
                       left: 12,
                       right: 12,
-                      bottom: 10,
+                      top: 10,
                       child: AnimatedBuilder(
                         animation: _progress,
                         builder: (_, __) => _StoryIndicator(
@@ -434,6 +438,16 @@ class _EntryFeedCardState extends State<EntryFeedCard>
                           fill: _progress.value,
                         ),
                       ),
+                    ),
+                  // Bottom-up gradient caption — org name + posted date
+                  // (Phase 1.3 image treatment).
+                  if (orgName.isNotEmpty)
+                    ImageCaptionOverlay(
+                      name: orgName,
+                      dateLabel: widget.entry.postedAt != null
+                          ? feedCardTimeAgo(widget.entry.postedAt!)
+                          : null,
+                      onTap: _openOrg,
                     ),
                 ],
               ),
@@ -512,50 +526,6 @@ class _EntryFeedCardState extends State<EntryFeedCard>
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _OrgChip extends StatelessWidget {
-  final String name;
-  final VoidCallback onTap;
-  const _OrgChip({required this.name, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.38),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.25), width: 0.6),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.verified, color: Colors.white, size: 14),
-            const SizedBox(width: 5),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 200),
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(width: 3),
-            Icon(Icons.chevron_right,
-                color: Colors.white.withOpacity(0.8), size: 14),
-          ],
-        ),
       ),
     );
   }

@@ -151,20 +151,23 @@ class UploadIncident {
         "images": imageUrls,
         "timestamp": FieldValue.serverTimestamp(),
         "userId": user.uid,
+        // Status pipeline (Reported Issues feed / IncidentsService). Every
+        // report starts "pending" — nothing in the app currently assigns
+        // verifiers or advances status, so "verifying"/"confirmed"/
+        // "resolved" are read-side states the UI supports but nothing
+        // writes yet. Wiring that assignment is separate follow-up work.
+        "status": "pending",
+        "verifierIds": <String>[],
+        "verifiedAt": null,
       };
 
-      String targetCollection = await _getUserCollection(user.uid);
-
-      // Upload to the main 'Incidents' collection
+      // Single source of truth: the flat 'Incidents' collection, queried by
+      // userId (see IncidentsService.watchMine). This used to also fan out
+      // to a per-user/org subcollection copy, but nothing ever read that
+      // copy back and it had no Firestore rule covering it (would have
+      // failed permission-denied the moment this screen became reachable) —
+      // removed rather than securing a second copy of the same document.
       await _firestore.collection("Incidents").doc(incidentId).set(incidentData);
-
-      // Upload to user's own collection
-      await _firestore
-          .collection(targetCollection)
-          .doc(user.uid)
-          .collection("Incidents")
-          .doc(incidentId)
-          .set(incidentData);
 
       debugPrint("Incident successfully uploaded.");
 
@@ -173,11 +176,5 @@ class UploadIncident {
     } catch (e) {
       debugPrint("Error uploading incident: $e");
     }
-  }
-
-  /// Determines if the user is an individual or an organization.
-  Future<String> _getUserCollection(String uid) async {
-    DocumentSnapshot orgDoc = await _firestore.collection("Organizations").doc(uid).get();
-    return orgDoc.exists ? "Organizations" : "Users";
   }
 }

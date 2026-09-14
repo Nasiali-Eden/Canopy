@@ -36,7 +36,7 @@ class BadgesScreen extends StatelessWidget {
               final contribs = contribSnap.data ?? const [];
               final badges = RecognitionService().computeBadges(
                 impactPoints: points,
-                contributionsCount: contribs.length,
+                contributionsCount: contribs.where((c) => c.isVerified).length,
               );
 
               final earned = badges.where((b) => b.earned).toList();

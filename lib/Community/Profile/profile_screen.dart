@@ -18,6 +18,7 @@ import '../../Services/Impact/impact_service.dart';
 import '../../Services/Profile/profile_service.dart';
 import '../../Shared/Pages/login.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/theme/canopy_ui.dart';
 import '../../Shared/widgets/role_context_switcher.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -103,11 +104,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final profile = snapshot.data;
 
             return Scaffold(
-              backgroundColor: Colors.white,
+              backgroundColor: CanopyUi.canvas,
               // Flat white bar that blends into the page (no elevation/divider)
               // so it flows straight into the profile header below.
               appBar: AppBar(
-                backgroundColor: Colors.white,
+                backgroundColor: CanopyUi.canvas,
                 elevation: 0,
                 scrolledUnderElevation: 0,
                 surfaceTintColor: Colors.transparent,
@@ -564,6 +565,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 title: 'Impact Points',
                 onTap: () {
                   Navigator.pushNamed(context, '/impact');
+                },
+              ),
+              _SettingsItem(
+                icon: Icons.leaderboard_outlined,
+                title: 'Leaderboard',
+                onTap: () {
+                  Navigator.pushNamed(context, '/leaderboard');
                 },
               ),
               _SettingsItem(

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../Models/marketplace/marketplace_seller_profile.dart';
 import '../../Shared/theme/app_theme.dart';
+import '../../Shared/theme/canopy_ui.dart';
 import '../../Shared/widgets/role_context_switcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ class _SellerProfilePageState extends State<SellerProfilePage> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: CanopyUi.canvas,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -132,19 +134,19 @@ class _SellerProfilePageState extends State<SellerProfilePage> {
 
           final sellerData =
               snapshot.data!.data() as Map<String, dynamic>? ?? {};
-          final shopName = sellerData['shop_name'] as String? ?? 'Shop';
-          final role = sellerData['marketplace_role'] as String? ?? 'Seller';
-          final city = sellerData['city'] as String? ?? '';
-          final area = sellerData['area'] as String? ?? '';
-          final bio = sellerData['bio'] as String? ?? '';
-          final shopLogoUrl = sellerData['shop_logo_url'] as String?;
-          final kgDiverted = sellerData['kg_diverted'] as double? ?? 0.0;
-          final impactPoints = sellerData['impact_points'] as int? ?? 0;
-          final activeListings = sellerData['active_listings'] as int? ?? 0;
-          final specialisations =
-              List<String>.from(sellerData['specialisations'] as List? ?? []);
-          final creativeCategories = List<String>.from(
-              sellerData['creative_categories'] as List? ?? []);
+          final seller = MarketplaceSellerProfile.fromMap(uid!, sellerData);
+          final shopName = seller.name;
+          final role = seller.role;
+          final city = seller.city;
+          final area = seller.area;
+          final bio = seller.bio;
+          final shopLogoUrl = seller.logoUrl;
+          final kgDiverted = seller.kgDiverted;
+          final impactPoints =
+              (sellerData['impact_points'] as num?)?.toInt() ?? 0;
+          final activeListings = seller.activeListings;
+          final specialisations = seller.specialisations;
+          final creativeCategories = seller.categories;
 
           return SingleChildScrollView(
             child: Column(
@@ -162,8 +164,7 @@ class _SellerProfilePageState extends State<SellerProfilePage> {
                     onOrgTap: () {
                       if (widget.orgContextBuilder != null) {
                         Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                              builder: widget.orgContextBuilder!),
+                          MaterialPageRoute(builder: widget.orgContextBuilder!),
                           (_) => false,
                         );
                       }

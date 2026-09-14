@@ -5,32 +5,20 @@
 // file is a routing-only shell — see [CommunityHomeScreen].
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+import '../../HomeServices/services_home_screen.dart';
 import '../../MarketPlace/The Market/eco_shop.dart';
 import '../../Shared/theme/app_theme.dart';
-import '../../Shared/widgets/location_switcher.dart';
 import '../../Shared/utils/rich_body.dart';
 import '../Articles/article_view_screen.dart';
-import '../Communication/notification_center.dart';
 import '../Contributions/entry_feed_card.dart';
 
 // ── Firestore collection paths ─────────────────────────────────────────────────
 const _kArticles = 'articles';
 const _kAnnouncements = 'announcements';
 const _kUsers = 'users';
-
-// ── Feed background ───────────────────────────────────────────────────────────
-// Brand "green wash" — a faint lightGreen tint at the top fading into white, so
-// the feed ties into the hero header instead of sitting on flat white.
-final LinearGradient _kFeedGradient = LinearGradient(
-  begin: Alignment.topCenter,
-  end: Alignment.bottomCenter,
-  colors: [AppTheme.lightGreen.withOpacity(0.16), Colors.white],
-  stops: const [0.0, 0.42],
-);
 
 // ── Time helper — exported (via community_home.dart) for sibling screens ──────
 String timeAgo(Timestamp timestamp) {
@@ -50,7 +38,7 @@ String timeAgo(Timestamp timestamp) {
 class HomeFeed extends StatelessWidget {
   final String? userId;
   final VoidCallback onJoinActivity;
-  final VoidCallback onLogContributionComingSoon;
+  final VoidCallback onLogWork;
   final VoidCallback onViewAnnouncements;
   final VoidCallback onViewAllArticles;
   final VoidCallback onViewAllContributions;
@@ -59,108 +47,32 @@ class HomeFeed extends StatelessWidget {
     super.key,
     this.userId,
     required this.onJoinActivity,
-    required this.onLogContributionComingSoon,
+    required this.onLogWork,
     required this.onViewAnnouncements,
     required this.onViewAllArticles,
     required this.onViewAllContributions,
   });
 
-  // Floating/snapping home app bar — hides on scroll up, snaps back on scroll
-  // down. Lives inside the feed's CustomScrollView so it can collapse with the
-  // scroll (the Scaffold itself has no app bar for this tab).
-  Widget _sliverAppBar(BuildContext context) {
-    return SliverAppBar(
-      floating: true,
-      snap: true,
-      // At the top: transparent so the green wash flows through. Once content
-      // scrolls under it: 70% white + a shadow so it lifts above the content.
-      backgroundColor: WidgetStateColor.resolveWith((states) =>
-          states.contains(WidgetState.scrolledUnder)
-              ? Colors.white.withOpacity(0.7)
-              : Colors.transparent),
-      surfaceTintColor: Colors.transparent,
-      shadowColor: Colors.black.withOpacity(0.18),
-      elevation: 0,
-      scrolledUnderElevation: 4,
-      systemOverlayStyle: SystemUiOverlayStyle.dark,
-      toolbarHeight: 62,
-      centerTitle: true,
-      leading: Padding(
-        padding: const EdgeInsets.only(left: 16),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(Icons.eco_outlined, color: AppTheme.primary, size: 20),
-        ),
-      ),
-      title: Text(
-        'Canopy',
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppTheme.darkGreen,
-              fontWeight: FontWeight.w800,
-              fontSize: 22,
-            ),
-      ),
-      actions: [
-        IconButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const NotificationCenterScreen()),
-          ),
-          icon: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Icon(Icons.notifications_outlined,
-                  color: AppTheme.darkGreen, size: 24),
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: AppTheme.tertiary,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(gradient: _kFeedGradient),
-      child: CustomScrollView(
-        slivers: [
-          _sliverAppBar(context),
-          // ── Location switch ───────────────────────────────────────────────
-          // Sits directly under the app bar, above the hero, because it frames
-          // everything below it: a member is looking at THEIR county unless
-          // they say otherwise. Defaults to their registered county; one tap
-          // widens to region, country, or everywhere.
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.only(top: 4),
-              child: LocationSwitcher(),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Hero ──────────────────────────────────────────────────────
-                Container(
-                  margin: const EdgeInsets.all(20),
+    // No app bar for this tab (Phase 1.1 — removed entirely so content fills
+    // the reclaimed space); a plain white background enforces the theme's
+    // own `scaffoldBackgroundColor: Colors.white` instead of the old green
+    // wash. SafeArea keeps the hero card clear of the status bar now that
+    // there's no app bar reserving that space.
+    return Container(
+      color: Colors.white,
+      child: SafeArea(
+        bottom: false,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Hero ──────────────────────────────────────────────────────
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
@@ -287,57 +199,23 @@ class HomeFeed extends StatelessWidget {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          // Log Work — locked with coming-soon overlay
+                          // Log Work — QR event check-in (was a locked
+                          // "coming soon" tile; see LogWorkEventScreen).
                           Expanded(
-                            child: Stack(
-                              children: [
-                                _QuickActionCard(
-                                  title: 'Log Work',
-                                  icon: Icons.add_circle_outline,
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      AppTheme.primary,
-                                      AppTheme.lightGreen
-                                    ],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  onTap: onLogContributionComingSoon,
-                                ),
-                                Positioned.fill(
-                                  child: GestureDetector(
-                                    onTap: onLogContributionComingSoon,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.45),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: const Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.lock_outline,
-                                              color: Colors.white, size: 20),
-                                          SizedBox(height: 6),
-                                          Text(
-                                            'Coming Soon',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.5,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            child: _QuickActionCard(
+                              title: 'Log Work',
+                              icon: Icons.qr_code_scanner_rounded,
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              onTap: onLogWork,
                             ),
                           ),
                           const SizedBox(width: 12),
-                          // Join Event
+                          // Join Event — same coral family as Log
+                          // Work now that both are event-tied actions.
                           Expanded(
                             child: _QuickActionCard(
                               title: 'Join Event',
@@ -353,13 +231,37 @@ class HomeFeed extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      // Marketplace — full-width.
-                      _MarketplaceAction(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const EcoShopScreen()),
-                        ),
+                      // Marketplace + Services, side by side (Phase 1.1: "Add
+                      // a Services button beside Marketplace... opening to a
+                      // 'coming soon' state").
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _HomeEntryCard(
+                              title: 'Marketplace',
+                              subtitle: 'Shop recycled goods & eco products',
+                              icon: Icons.storefront_outlined,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const EcoShopScreen()),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _HomeEntryCard(
+                              title: 'Services',
+                              subtitle: 'Book trusted local help',
+                              icon: Icons.home_repair_service_outlined,
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const ServicesHomeScreen()),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -643,13 +545,14 @@ class HomeFeed extends StatelessWidget {
                   ),
                 ),
 
-                // Clearance so the last card sits above the floating bottom nav
-                // (the body extends behind it via extendBody).
-                const SizedBox(height: 120),
-              ],
+                  // Clearance so the last card sits above the floating bottom
+                  // nav (the body extends behind it via extendBody).
+                  const SizedBox(height: 120),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1052,9 +955,21 @@ class _QuickActionCard extends StatelessWidget {
 
 // ── Marketplace full-width action ─────────────────────────────────────────────
 
-class _MarketplaceAction extends StatelessWidget {
+/// Shared style for the home screen's primary entry points (Marketplace,
+/// Services) — a dark-green gradient pill with an icon chip, title, and
+/// subtitle. Sized to sit half-width, side by side (Phase 1.1).
+class _HomeEntryCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
   final VoidCallback onTap;
-  const _MarketplaceAction({required this.onTap});
+
+  const _HomeEntryCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1062,13 +977,13 @@ class _MarketplaceAction extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Container(
-        height: 84,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
+        height: 108,
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [AppTheme.darkGreen, AppTheme.primary],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
@@ -1079,39 +994,37 @@ class _MarketplaceAction extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.storefront_outlined,
-                  color: Colors.white, size: 26),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 22),
+                ),
+                Icon(Icons.arrow_forward_rounded,
+                    color: Colors.white.withOpacity(0.9), size: 18),
+              ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Marketplace',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 2),
-                  Text('Shop recycled goods & eco products',
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: 12.5)),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_rounded,
-                color: Colors.white.withOpacity(0.9), size: 20),
+            const Spacer(),
+            Text(title,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.85), fontSize: 11.5)),
           ],
         ),
       ),

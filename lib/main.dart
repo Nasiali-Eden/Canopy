@@ -8,21 +8,30 @@ import 'dart:io';
 import 'Services/storage/user_persistence.dart';
 import 'Community/Map/org_logo_cache.dart';
 
+import 'Community/Communication/announcement_detail.dart';
 import 'Community/Communication/announcements_list.dart';
+import 'Community/Communication/notification_center.dart';
 import 'Community/Contributions/log_contribution.dart';
 import 'Community/Home/community_home.dart';
+import 'Community/Incidents/incidents_feed_screen.dart';
 import 'Community/Impact/impact_dashboard.dart';
 import 'Community/Profile/community_info.dart';
 import 'Community/Profile/edit_profile.dart';
 import 'Community/Profile/roadmap_screen.dart';
 import 'Community/Profile/settings_screen.dart';
 import 'Community/Recognition/badges_screen.dart';
+import 'Community/Recognition/leaderboard_screen.dart';
 import 'Models/user.dart';
 import 'Providers/location_provider.dart';
 import 'Services/Geo/geo_registry.dart';
 import 'Providers/theme_provider.dart';
 import 'Services/Authentication/auth.dart';
+import 'Shared/Activities/create_activity.dart';
+import 'Shared/Pages/about_screen.dart';
+import 'Shared/Pages/community_guidelines.dart';
+import 'Shared/Pages/privacy_policy_screen.dart';
 import 'Shared/Pages/splash_screen.dart';
+import 'Shared/Inputs/post_incident.dart';
 import 'Shared/Pages/welcome_screen.dart';
 
 import 'Shared/theme/app_theme.dart';
@@ -219,13 +228,46 @@ final Map<String, WidgetBuilder> _appRoutes = {
   '/home': (_) => const CommunityHomeScreen(),
   '/impact': (_) => const ImpactDashboardScreen(),
   '/contributions/log': (_) => const LogContributionScreen(),
+  '/report-incident': (_) => const PostIncident(),
+  '/incidents': (_) => const IncidentsFeedScreen(),
   '/settings': (_) => const SettingsScreen(),
   '/profile/edit': (_) => const EditProfileScreen(),
   '/community/info': (_) => const CommunityInfoScreen(),
   '/announcements': (_) => const AnnouncementsListScreen(),
   '/roadmap': (_) => const RoadmapScreen(),
   '/recognition/badges': (_) => const BadgesScreen(),
+  // Phase 2.1 dead-screen audit (Minimal Release Roadmap) — these three
+  // screens already existed but were never wired into the route table, so
+  // every push landed on _RouteNotFoundScreen. See
+  // IMPLEMENTATION_NOTES_PHASE2_AUDIT.md for the full pass/fail list —
+  // several other pushed routes ('/security', '/about', '/privacy', etc.)
+  // point at screens that genuinely don't exist yet and are NOT fixed here.
+  '/notifications': (_) => const NotificationCenterScreen(),
+  '/guidelines': (_) => const CommunityGuidelinesScreen(),
+  '/activities/create': (_) => const CreateActivityScreen(),
+  '/about': (_) => const AboutScreen(),
+  '/privacy': (_) => const PrivacyPolicyScreen(),
+  '/leaderboard': (_) => const LeaderboardScreen(),
 };
+
+/// `/announcements/{id}` is pushed with the id baked into the path
+/// (`announcements_list.dart`), so it can't live in the static [_appRoutes]
+/// table — this pulls the id back out and builds [AnnouncementDetailScreen]
+/// directly (self-fetches by id). Falls through to [onUnknownRoute] for
+/// anything else, same as before this existed.
+Route<dynamic>? _onGenerateRoute(RouteSettings settings) {
+  final name = settings.name;
+  if (name != null && name.startsWith('/announcements/')) {
+    final id = name.substring('/announcements/'.length);
+    if (id.isNotEmpty) {
+      return MaterialPageRoute(
+        settings: settings,
+        builder: (_) => AnnouncementDetailScreen(announcementId: id),
+      );
+    }
+  }
+  return null;
+}
 
 /// Shown when a screen pushes a route that has no implementation yet. Better a
 /// readable dead-end than a red assertion mid-flow.
@@ -354,6 +396,7 @@ class MyApp extends StatelessWidget {
             themeMode: themeProvider.mode,
             home: const _LocationBinder(child: SplashScreen()),
             routes: _appRoutes,
+            onGenerateRoute: _onGenerateRoute,
             // Screens across the app push named routes, but no table was ever
             // registered — every one of them threw "Could not find a generator
             // for route". Anything still unmapped lands here instead of

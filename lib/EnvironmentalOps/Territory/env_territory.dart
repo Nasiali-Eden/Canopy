@@ -110,7 +110,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
       final contextData = await EnvironmentOpsService.instance.resolveContext();
       _orgId = contextData?.orgId;
     } catch (_) {
-      // Fall back to an unscoped load below.
+      _orgId = null;
     }
     await _loadZones();
   }
@@ -144,13 +144,16 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   }
 
   Future<void> _loadZones() async {
+    final orgId = _orgId;
+    if (orgId == null || orgId.isEmpty) {
+      if (mounted) setState(() => _zones = const []);
+      return;
+    }
     try {
       // Index-free: single equality filter, sorted client-side. Scoped to the
       // current organisation so Territory and the Overview dashboard agree.
       Query query = FirebaseFirestore.instance.collection('collection_zones');
-      if (_orgId != null) {
-        query = query.where('org_id', isEqualTo: _orgId);
-      }
+      query = query.where('org_id', isEqualTo: orgId);
       final snap = await query.limit(50).get();
       if (mounted) {
         final zones = snap.docs.map(CollectionZone.fromFirestore).toList()
@@ -165,7 +168,17 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
   Future<void> _saveZone(ZoneDrawingResult result, String name) async {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
     final service = EnvironmentOpsService.instance;
-    final orgId = _orgId ?? uid;
+    final orgId = _orgId;
+    if (orgId == null || orgId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Link an organisation before saving a zone.'),
+          ),
+        );
+      }
+      return;
+    }
     try {
       await service.createZone(
         orgId: orgId,
@@ -178,7 +191,10 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Zone saved locally — will sync when online')),
+          const SnackBar(
+            content:
+                Text('Zone was not saved. Check your connection and retry.'),
+          ),
         );
       }
     }
@@ -207,8 +223,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
               '${result.vertices.length} vertices · '
               '${result.areaKm2.toStringAsFixed(3)} km²',
               style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.darkGreen.withOpacity(0.6)),
+                  fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.6)),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -216,10 +231,10 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
               autofocus: true,
               decoration: InputDecoration(
                 hintText: 'e.g. Kibera Zone A',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
             ),
           ],
@@ -230,12 +245,9 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
             child: const Text('Discard'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary),
-            onPressed: () =>
-                Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Save',
-                style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -353,8 +365,7 @@ class _EnvTerritoryScreenState extends State<EnvTerritoryScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
-          const Icon(Icons.layers_outlined,
-              color: AppTheme.accent, size: 20),
+          const Icon(Icons.layers_outlined, color: AppTheme.accent, size: 20),
           const SizedBox(width: 8),
           Text(
             '${_zones.length} zone${_zones.length == 1 ? '' : 's'}',
@@ -402,7 +413,8 @@ class _ZoneDetailSheet extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: _statusColor(zone.status).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -421,8 +433,7 @@ class _ZoneDetailSheet extends StatelessWidget {
               Text(
                 DateFormat('d MMM yyyy').format(zone.createdAt),
                 style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.darkGreen.withOpacity(0.5)),
+                    fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.5)),
               ),
             ],
           ),

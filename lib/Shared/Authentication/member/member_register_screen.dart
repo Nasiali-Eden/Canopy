@@ -5,6 +5,7 @@ import 'dart:convert';
 import '../../theme/app_theme.dart';
 import '../../../Services/Authentication/community_auth.dart';
 import '../../Pages/login.dart';
+import '../components/username_field.dart';
 
 class MemberRegisterScreen extends StatefulWidget {
   const MemberRegisterScreen({super.key});
@@ -24,10 +25,12 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _usernameController = TextEditingController();
 
   bool _isObscure = true;
   bool _isObscureConfirm = true;
   bool _isLoading = false;
+  bool _usernameAvailable = false;
 
   String? _selectedCity;
   String? _selectedArea;
@@ -53,6 +56,7 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen>
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _usernameController.dispose();
     _animController.dispose();
     super.dispose();
   }
@@ -84,6 +88,10 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen>
       _showError('Please select your city.');
       return;
     }
+    if (!_usernameAvailable) {
+      _showError('Please choose an available username.');
+      return;
+    }
     setState(() => _isLoading = true);
     try {
       final auth = CommunityAuthService();
@@ -97,6 +105,7 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen>
         // switch defaults their whole experience to.
         city: _selectedCity,
         area: _selectedArea,
+        username: _usernameController.text.trim(),
       );
       if (!mounted) return;
       if (user == null) {
@@ -272,6 +281,13 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen>
                     accentColor: AppTheme.primary,
                     validator: (v) =>
                         v!.trim().isEmpty ? 'Name is required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  // Phase 3.2 — unique username with real-time availability.
+                  UsernameField(
+                    controller: _usernameController,
+                    onAvailabilityChanged: (available) =>
+                        setState(() => _usernameAvailable = available),
                   ),
                   const SizedBox(height: 12),
                   _Field(

@@ -5,10 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../Models/marketplace/canopy_listing.dart';
+import '../../Models/marketplace/marketplace_content_state.dart';
+import '../../Models/geo/canopy_location.dart';
 import '../../Providers/location_provider.dart';
 import '../../Services/Marketplace/listing_service.dart';
 import '../../Shared/theme/app_theme.dart';
 import '../../Shared/widgets/location_switcher.dart';
+import '../../Shared/widgets/profile/canopy_profile_widgets.dart';
 import 'marketplace_item_view.dart';
 import 'marketplace_shop_view.dart';
 
@@ -136,9 +139,8 @@ class _EcoShopScreenState extends State<EcoShopScreen>
   List<CanopyListing> _wanted = const [];
   MarketplaceTotals? _totals;
   bool _loading = true;
+  Object? _loadError;
   LocationFilter? _boundFilter;
-
-  bool get _isEmpty => _offering.isEmpty && _wanted.isEmpty;
 
   static const _categories = [
     'All',
@@ -194,24 +196,31 @@ class _EcoShopScreenState extends State<EcoShopScreen>
     // Assigned directly rather than via setState: this runs from
     // didChangeDependencies, which is already inside the build phase.
     _loading = true;
+    _loadError = null;
 
     final service = ListingService.instance;
     _sub = service
         .watch(ListingQuery(
-          // Geography is the only predicate pushed to Firestore. Category,
-          // badge and search are applied by _visible() over the result, so
-          // toggling them never needs a new subscription.
-          location: filter,
-        ))
+      // Geography is the only predicate pushed to Firestore. Category,
+      // badge and search are applied by _visible() over the result, so
+      // toggling them never needs a new subscription.
+      location: filter,
+    ))
         .listen((all) {
       if (!mounted) return;
       setState(() {
         _offering = all.where((l) => l.isOffering).toList();
         _wanted = all.where((l) => l.isSeeking).toList();
         _loading = false;
+        _loadError = null;
       });
-    }, onError: (Object _) {
-      if (mounted) setState(() => _loading = false);
+    }, onError: (Object error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _loadError = error;
+        });
+      }
     });
 
     service.totals(filter).then((t) {
@@ -228,8 +237,8 @@ class _EcoShopScreenState extends State<EcoShopScreen>
           l.category.label.toLowerCase() != _selectedCategory.toLowerCase()) {
         return false;
       }
-      if (_onlyCircularBadge &&
-          l.circularBadge != CircularBadgeTier.verified) return false;
+      if (_onlyCircularBadge && l.circularBadge != CircularBadgeTier.verified)
+        return false;
       if (_selectedContinent != 'All' &&
           (l.location.countryName ?? '').isNotEmpty &&
           _selectedContinent != 'Africa') {
@@ -261,6 +270,21 @@ class _EcoShopScreenState extends State<EcoShopScreen>
 
   @override
   Widget build(BuildContext context) {
+    final visibleOffering = _visible(_offering);
+    final visibleWanted = _visible(_wanted);
+    final presentation = MarketplaceContentResolver.resolve(
+      isLoading: _loading,
+      hasError: _loadError != null,
+      rawOfferingCount: _offering.length,
+      rawWantedCount: _wanted.length,
+      visibleCount: visibleOffering.length + visibleWanted.length,
+    );
+    final sampleMode = presentation == MarketplacePresentationState.sample;
+    final liveMode = presentation == MarketplacePresentationState.live;
+    final hasStories =
+        visibleOffering.any((listing) => listing.story.trim().length >= 40);
+    final hasMakers = _liveShops(visibleOffering).isNotEmpty;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F5F0), // warm off-white — editorial
       body: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -272,17 +296,25 @@ class _EcoShopScreenState extends State<EcoShopScreen>
             SliverToBoxAdapter(child: _buildSearchBar()),
             SliverToBoxAdapter(child: _buildCategoryRail()),
             const SliverToBoxAdapter(child: LocationSwitcher()),
-            if (_loading)
+            if (presentation == MarketplacePresentationState.loading)
               const SliverToBoxAdapter(child: _LoadingStrip())
-            else if (_isEmpty)
+            else if (sampleMode)
               SliverToBoxAdapter(child: _buildEmptyNotice()),
-            SliverToBoxAdapter(child: _buildHeroCarousel()),
+            if (presentation == MarketplacePresentationState.error)
+              SliverToBoxAdapter(child: _buildErrorNotice()),
+            if (presentation == MarketplacePresentationState.filteredEmpty)
+              SliverToBoxAdapter(child: _buildFilteredEmptyNotice()),
+            if (sampleMode ||
+                (liveMode &&
+                    visibleOffering.any((listing) => listing.isCreative)))
+              SliverToBoxAdapter(
+                  child: _buildHeroCarousel(sampleMode: sampleMode)),
 
             // ── WANTED ────────────────────────────────────────────────────
             // Materials an environmental participant needs bought. This is
             // the half of the marketplace that previously had no public
             // surface anywhere in the app.
-            if (_visible(_wanted).isNotEmpty) ...[
+            if (liveMode && visibleWanted.isNotEmpty) ...[
               SliverToBoxAdapter(
                   child: _buildSectionHeader(
                 label: 'Wanted Near You',
@@ -292,30 +324,40 @@ class _EcoShopScreenState extends State<EcoShopScreen>
               SliverToBoxAdapter(child: _buildWantedRail()),
             ],
 
-            SliverToBoxAdapter(
-                child: _buildSectionHeader(
-              label: 'Stories from the Ground',
-              sub: 'Objects with origin — made by hands you can name',
-              icon: Icons.auto_stories_outlined,
-            )),
-            SliverToBoxAdapter(child: _buildStoryGrid()),
-            SliverToBoxAdapter(child: _buildCircularBadgeBanner()),
-            SliverToBoxAdapter(
-                child: _buildSectionHeader(
-              label: 'Featured Makers',
-              sub:
-                  'Workshops doing extraordinary things with recovered materials',
-              icon: Icons.storefront_outlined,
-            )),
-            SliverToBoxAdapter(child: _buildFeaturedShopsRail()),
-            SliverToBoxAdapter(child: _buildImpactTicker()),
-            SliverToBoxAdapter(
-                child: _buildSectionHeader(
-              label: 'Newly Listed',
-              sub: 'Fresh from the workshop',
-              icon: Icons.new_releases_outlined,
-            )),
-            SliverToBoxAdapter(child: _buildNewListingsGrid()),
+            if (sampleMode || (liveMode && hasStories))
+              SliverToBoxAdapter(
+                  child: _buildSectionHeader(
+                label: 'Stories from the Ground',
+                sub: 'Objects with origin — made by hands you can name',
+                icon: Icons.auto_stories_outlined,
+              )),
+            if (sampleMode || (liveMode && hasStories))
+              SliverToBoxAdapter(
+                  child: _buildStoryGrid(sampleMode: sampleMode)),
+            if (sampleMode || liveMode)
+              SliverToBoxAdapter(child: _buildCircularBadgeBanner()),
+            if (sampleMode || (liveMode && hasMakers))
+              SliverToBoxAdapter(
+                  child: _buildSectionHeader(
+                label: 'Featured Makers',
+                sub:
+                    'Workshops doing extraordinary things with recovered materials',
+                icon: Icons.storefront_outlined,
+              )),
+            if (sampleMode || (liveMode && hasMakers))
+              SliverToBoxAdapter(
+                  child: _buildFeaturedShopsRail(sampleMode: sampleMode)),
+            if (liveMode) SliverToBoxAdapter(child: _buildImpactTicker()),
+            if (sampleMode || (liveMode && visibleOffering.isNotEmpty))
+              SliverToBoxAdapter(
+                  child: _buildSectionHeader(
+                label: 'Newly Listed',
+                sub: 'Fresh from the workshop',
+                icon: Icons.new_releases_outlined,
+              )),
+            if (sampleMode || (liveMode && visibleOffering.isNotEmpty))
+              SliverToBoxAdapter(
+                  child: _buildNewListingsGrid(sampleMode: sampleMode)),
             const SliverToBoxAdapter(child: SizedBox(height: 40)),
           ],
         ),
@@ -573,6 +615,37 @@ class _EcoShopScreenState extends State<EcoShopScreen>
     );
   }
 
+  Widget _buildErrorNotice() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+        child: CanopyProfileEmptyState(
+          icon: Icons.cloud_off_outlined,
+          title: 'The market could not be loaded',
+          message:
+              'No sample products are shown when the database cannot be checked.',
+          actionLabel: 'Try again',
+          onAction: _boundFilter == null
+              ? null
+              : () => setState(() => _subscribe(_boundFilter!)),
+        ),
+      );
+
+  Widget _buildFilteredEmptyNotice() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+        child: CanopyProfileEmptyState(
+          icon: Icons.filter_alt_off_outlined,
+          title: 'No listings match these filters',
+          message:
+              'Real listings exist in this location. Clear search and filters to see them.',
+          actionLabel: 'Clear filters',
+          onAction: () => setState(() {
+            _searchController.clear();
+            _selectedCategory = 'All';
+            _selectedContinent = 'All';
+            _onlyCircularBadge = false;
+          }),
+        ),
+      );
+
   // ── Wanted rail ───────────────────────────────────────────────────────────
 
   Widget _buildWantedRail() {
@@ -590,12 +663,12 @@ class _EcoShopScreenState extends State<EcoShopScreen>
 
   // ── Hero carousel ──────────────────────────────────────────────────────────
 
-  Widget _buildHeroCarousel() {
+  Widget _buildHeroCarousel({required bool sampleMode}) {
     final live = _visible(_offering.where((l) => l.isCreative).toList());
-    final items = live.isNotEmpty
-        ? live.take(6).map(_PlaceholderItem.fromListing).toList()
-        : _featuredPlaceholders;
-    final ids = live.isNotEmpty ? live.take(6).map((l) => l.id).toList() : null;
+    final items = sampleMode
+        ? _featuredPlaceholders
+        : live.take(6).map(_PlaceholderItem.fromListing).toList();
+    final ids = sampleMode ? null : live.take(6).map((l) => l.id).toList();
 
     return FadeTransition(
       opacity: _heroFade,
@@ -623,7 +696,7 @@ class _EcoShopScreenState extends State<EcoShopScreen>
 
   // ── Story grid ─────────────────────────────────────────────────────────────
 
-  Widget _buildStoryGrid() {
+  Widget _buildStoryGrid({required bool sampleMode}) {
     // Only listings that actually carry a story earn this treatment — the
     // section is called "Stories from the Ground" and should not be padded
     // out with specification-only supply listings.
@@ -631,10 +704,10 @@ class _EcoShopScreenState extends State<EcoShopScreen>
         .where((l) => l.story.trim().length >= 40)
         .take(6)
         .toList();
-    final items = live.isNotEmpty
-        ? live.map(_StoryItem.fromListing).toList()
-        : _storyPlaceholders;
-    final ids = live.isNotEmpty ? live.map((l) => l.id).toList() : null;
+    final items = sampleMode
+        ? _storyPlaceholders
+        : live.map(_StoryItem.fromListing).toList();
+    final ids = sampleMode ? null : live.map((l) => l.id).toList();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -733,45 +806,76 @@ class _EcoShopScreenState extends State<EcoShopScreen>
 
   // ── Featured shops rail ────────────────────────────────────────────────────
 
-  Widget _buildFeaturedShopsRail() {
-    final shops = [
-      _ShopPreview(
-        name: 'Kibera Makers Collective',
-        city: 'Kibera, Nairobi',
-        logoUrl:
-            'https://images.unsplash.com/photo-1590086782957-93c06ef21604?w=200&auto=format&fit=crop',
-        badge: 'Circular Craft',
-        listings: 24,
-        kgDiverted: 48.6,
-      ),
-      _ShopPreview(
-        name: 'Dawit Bekele Workshop',
-        city: 'Addis Ababa',
-        logoUrl:
-            'https://images.unsplash.com/photo-1593104547489-5cfb3839a3b5?w=200&auto=format&fit=crop',
-        badge: 'Maker',
-        listings: 11,
-        kgDiverted: 22.1,
-      ),
-      _ShopPreview(
-        name: 'Accra Glass Studio',
-        city: 'Accra, Ghana',
-        logoUrl:
-            'https://images.unsplash.com/photo-1601699165292-b3b1acd6472c?w=200&auto=format&fit=crop',
-        badge: 'Circular Craft',
-        listings: 8,
-        kgDiverted: 14.3,
-      ),
-      _ShopPreview(
-        name: 'Zola & Thread',
-        city: 'Cape Town',
-        logoUrl:
-            'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
-        badge: 'Maker',
-        listings: 19,
-        kgDiverted: 8.7,
-      ),
-    ];
+  List<_ShopPreview> _liveShops(List<CanopyListing> listings) {
+    final grouped = <String, List<CanopyListing>>{};
+    for (final listing in listings) {
+      final sellerId = listing.seller.sellerId.isNotEmpty
+          ? listing.seller.sellerId
+          : listing.postedByUid;
+      if (sellerId.isEmpty) continue;
+      grouped.putIfAbsent(sellerId, () => []).add(listing);
+    }
+    return grouped.entries.map((entry) {
+      final records = entry.value;
+      final first = records.first;
+      return _ShopPreview(
+        sellerId: entry.key,
+        name: first.seller.shopName.isNotEmpty
+            ? first.seller.shopName
+            : (first.orgName ?? 'Canopy seller'),
+        city: first.location.shortLabel,
+        logoUrl: first.seller.shopLogoUrl ?? '',
+        badge: first.seller.badgeTier.label,
+        listings: records.length,
+        kgDiverted: records.fold<double>(
+          0,
+          (total, listing) => total + listing.impact.kgDiverted,
+        ),
+      );
+    }).toList();
+  }
+
+  Widget _buildFeaturedShopsRail({required bool sampleMode}) {
+    final shops = sampleMode
+        ? [
+            _ShopPreview(
+              name: 'Kibera Makers Collective',
+              city: 'Kibera, Nairobi',
+              logoUrl:
+                  'https://images.unsplash.com/photo-1590086782957-93c06ef21604?w=200&auto=format&fit=crop',
+              badge: 'Circular Craft',
+              listings: 24,
+              kgDiverted: 48.6,
+            ),
+            _ShopPreview(
+              name: 'Dawit Bekele Workshop',
+              city: 'Addis Ababa',
+              logoUrl:
+                  'https://images.unsplash.com/photo-1593104547489-5cfb3839a3b5?w=200&auto=format&fit=crop',
+              badge: 'Maker',
+              listings: 11,
+              kgDiverted: 22.1,
+            ),
+            _ShopPreview(
+              name: 'Accra Glass Studio',
+              city: 'Accra, Ghana',
+              logoUrl:
+                  'https://images.unsplash.com/photo-1601699165292-b3b1acd6472c?w=200&auto=format&fit=crop',
+              badge: 'Circular Craft',
+              listings: 8,
+              kgDiverted: 14.3,
+            ),
+            _ShopPreview(
+              name: 'Zola & Thread',
+              city: 'Cape Town',
+              logoUrl:
+                  'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=200&auto=format&fit=crop',
+              badge: 'Maker',
+              listings: 19,
+              kgDiverted: 8.7,
+            ),
+          ]
+        : _liveShops(_visible(_offering));
 
     return SizedBox(
       height: 168,
@@ -801,9 +905,7 @@ class _EcoShopScreenState extends State<EcoShopScreen>
           // in by hand. Same rule the Dashboard follows: impact figures are
           // computed from operational data or they are not shown.
           _ImpactStat(
-              value: _totals == null
-                  ? '—'
-                  : _formatKg(_totals!.kgDiverted),
+              value: _totals == null ? '—' : _formatKg(_totals!.kgDiverted),
               label: 'Diverted'),
           _divider(),
           _ImpactStat(
@@ -811,9 +913,7 @@ class _EcoShopScreenState extends State<EcoShopScreen>
               label: 'Made items'),
           _divider(),
           _ImpactStat(
-              value: _totals == null
-                  ? '—'
-                  : '${_totals!.collectorsCredited}',
+              value: _totals == null ? '—' : '${_totals!.collectorsCredited}',
               label: 'Collectors named'),
           _divider(),
           _ImpactStat(
@@ -840,15 +940,16 @@ class _EcoShopScreenState extends State<EcoShopScreen>
 
   /// (card model, listing id) pairs — id is null for sample content, which is
   /// how the cards know not to navigate into a listing that does not exist.
-  List<(_StoryItem, String?)> get _newestItems {
+  List<(_StoryItem, String?)> _newestItems({required bool sampleMode}) {
     final live = _visible(_offering).take(8).toList();
-    if (live.isEmpty) {
+    if (sampleMode) {
       return _storyPlaceholders.map((p) => (p, null as String?)).toList();
     }
     return live.map((l) => (_StoryItem.fromListing(l), l.id)).toList();
   }
 
-  Widget _buildNewListingsGrid() {
+  Widget _buildNewListingsGrid({required bool sampleMode}) {
+    final items = _newestItems(sampleMode: sampleMode);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
       child: GridView.builder(
@@ -860,9 +961,9 @@ class _EcoShopScreenState extends State<EcoShopScreen>
           crossAxisSpacing: 12,
           childAspectRatio: 0.72,
         ),
-        itemCount: _newestItems.length,
+        itemCount: items.length,
         itemBuilder: (context, i) {
-          final entry = _newestItems[i];
+          final entry = items[i];
           return _GridCard(item: entry.$1, listingId: entry.$2);
         },
       ),
@@ -1469,12 +1570,15 @@ class _ShopPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => MarketplaceShopViewScreen(sellerId: shop.name),
-        ),
-      ),
+      onTap: shop.sellerId == null
+          ? () => _sampleTapNotice(context)
+          : () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      MarketplaceShopViewScreen(sellerId: shop.sellerId!),
+                ),
+              ),
       child: Container(
         width: 145,
         margin: const EdgeInsets.only(right: 12),
@@ -1833,7 +1937,7 @@ class _PlaceholderItem {
   /// can express — story, material DNA, credited collectors — which the item
   /// view surfaces in full.
   factory _PlaceholderItem.fromListing(CanopyListing l) => _PlaceholderItem(
-        imageUrl: l.coverImage ?? _fallbackImage(l),
+        imageUrl: l.coverImage ?? '',
         title: l.title,
         tagline: l.tagline.isNotEmpty
             ? l.tagline
@@ -1848,9 +1952,6 @@ class _PlaceholderItem {
         category: l.category.label,
       );
 }
-
-String _fallbackImage(CanopyListing l) =>
-    'https://picsum.photos/seed/${l.id}/900/700';
 
 class _StoryItem {
   final String imageUrl;
@@ -1872,7 +1973,7 @@ class _StoryItem {
   });
 
   factory _StoryItem.fromListing(CanopyListing l) => _StoryItem(
-        imageUrl: l.coverImage ?? _fallbackImage(l),
+        imageUrl: l.coverImage ?? '',
         title: l.title,
         price: l.pricing.display,
         maker: l.seller.shopName.isNotEmpty
@@ -1885,6 +1986,7 @@ class _StoryItem {
 }
 
 class _ShopPreview {
+  final String? sellerId;
   final String name;
   final String city;
   final String logoUrl;
@@ -1893,6 +1995,7 @@ class _ShopPreview {
   final double kgDiverted;
 
   const _ShopPreview({
+    this.sellerId,
     required this.name,
     required this.city,
     required this.logoUrl,
@@ -1901,7 +2004,6 @@ class _ShopPreview {
     required this.kgDiverted,
   });
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHARED HELPERS
@@ -1933,7 +2035,8 @@ class _LoadingStrip extends StatelessWidget {
           height: 22,
           child: CircularProgressIndicator(
             strokeWidth: 2.2,
-            valueColor: AlwaysStoppedAnimation(AppTheme.primary.withOpacity(0.6)),
+            valueColor:
+                AlwaysStoppedAnimation(AppTheme.primary.withOpacity(0.6)),
           ),
         ),
       ),
@@ -1974,7 +2077,8 @@ class _WantedCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.tertiary.withOpacity(0.55), width: 1.4),
+          border: Border.all(
+              color: AppTheme.tertiary.withOpacity(0.55), width: 1.4),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2068,8 +2172,7 @@ class _WantedCard extends StatelessWidget {
                   value: listing.quantity.fillProgress,
                   minHeight: 4,
                   backgroundColor: AppTheme.lightGreen.withOpacity(0.22),
-                  valueColor:
-                      const AlwaysStoppedAnimation(AppTheme.tertiary),
+                  valueColor: const AlwaysStoppedAnimation(AppTheme.tertiary),
                 ),
               ),
               const SizedBox(height: 4),

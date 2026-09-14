@@ -24,51 +24,17 @@ class ContributionService {
     String? effort,
     List<String> materials = const [],
   }) {
-    // Base points calculation from original system
-    int basePoints = 0;
-
+    // Estimates only; the trusted verifier recomputes the scoring policy.
     if (type == 'Time') {
       final h = hours ?? 0;
-      basePoints = (h * 10).round().clamp(0, 500);
-    } else if (type == 'Effort') {
-      final len = (effort ?? '').trim().length;
-      if (len == 0) {
-        basePoints = 0;
-      } else {
-        basePoints = (20 + (len / 50).floor() * 5).clamp(0, 200);
-      }
-    } else if (type == 'Materials') {
-      basePoints = (materials.length * 8).clamp(0, 300);
+      if (!h.isFinite || h <= 0 || h > 24) return 0;
+      return (h * 10).round().clamp(1, 240);
     }
-
-    // Add bonus points based on work type (encourage specific activities)
-    int workTypeBonus = 0;
-    if (workType != null) {
-      switch (workType) {
-        case 'Tree Planting':
-          workTypeBonus = 50; // Highest priority
-          break;
-        case 'School Upgrading':
-          workTypeBonus = 40;
-          break;
-        case 'Water & Sanitation':
-          workTypeBonus = 35;
-          break;
-        case 'Waste Management':
-          workTypeBonus = 30;
-          break;
-        case 'Infrastructure':
-          workTypeBonus = 30;
-          break;
-        case 'Cleanup':
-          workTypeBonus = 25;
-          break;
-        default:
-          workTypeBonus = 20;
-      }
+    if (type == 'Effort') return (effort ?? '').trim().isEmpty ? 0 : 20;
+    if (type == 'Materials') {
+      return materials.any((m) => m.trim().isNotEmpty) ? 20 : 0;
     }
-
-    return basePoints + workTypeBonus;
+    return 0;
   }
 
   /// Create a new contribution
@@ -105,6 +71,9 @@ class ContributionService {
       materials: materials,
     );
 
+    if (points <= 0)
+      throw Exception('Add valid contribution details before submitting.');
+
     final contributionRef = db.collection('contributions').doc();
     final contributionId = contributionRef.id;
 
@@ -134,7 +103,7 @@ class ContributionService {
       // New fields
       'title': title.trim(),
       'workType': workType,
-      
+
       // Original fields
       'userId': userId,
       'activityId': activityId,
@@ -168,7 +137,8 @@ class ContributionService {
       'longitude': longitude,
 
       // Metadata
-      'points': points, // Changed from estimatedImpactPoints for simplicity
+      'estimatedImpactPoints': points,
+      'points': points, // Legacy display estimate, never an awarded total.
       'communityId': communityId,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -177,54 +147,6 @@ class ContributionService {
       // Monthly transformation photo sets (null for one-time events).
       'monthlyUpdates': isTransformation ? [] : null,
     });
-
-    // Update user stats
-    final userRef = db.collection('users').doc(userId);
-    batch.set(
-      userRef,
-      {
-        'totalPoints': FieldValue.increment(points),
-        'contributions': FieldValue.increment(1),
-        'lastContribution': FieldValue.serverTimestamp(),
-        'contributionsByType': {
-          workType: FieldValue.increment(1),
-        },
-      },
-      SetOptions(merge: true),
-    );
-
-    // Update community impact points
-    batch.set(
-      db.collection('communities').doc(communityId),
-      {
-        'totalImpactPoints': FieldValue.increment(points),
-        'totalContributions': FieldValue.increment(1),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'contributionsByType': {
-          workType: FieldValue.increment(1),
-        },
-      },
-      SetOptions(merge: true),
-    );
-
-    // Add to activity feed with more details
-    batch.set(
-      db
-          .collection('communities')
-          .doc(communityId)
-          .collection('activity_feed')
-          .doc(),
-      {
-        'text': title,
-        'subtitle': '$workType • $points points',
-        'userId': userId,
-        'contributionId': contributionId,
-        'type': 'contribution',
-        'workType': workType,
-        'points': points,
-        'createdAt': FieldValue.serverTimestamp(),
-      },
-    );
 
     await batch.commit();
 
@@ -246,7 +168,8 @@ class ContributionService {
   ///
   /// Index-free: filters on the single `userId` field (auto-indexed); the
   /// tracking-type / due-date checks run client-side to avoid a composite index.
-  Future<int> processDueTransformationReminders({required String userId}) async {
+  Future<int> processDueTransformationReminders(
+      {required String userId}) async {
     final now = DateTime.now();
 
     final snap = await db
@@ -267,15 +190,12 @@ class ContributionService {
 
       final cycle = (data['reminderCycle'] as int? ?? 0) + 1;
       final title = (data['title'] as String?)?.trim();
-      final label = (title == null || title.isEmpty) ? 'your project' : '"$title"';
+      final label =
+          (title == null || title.isEmpty) ? 'your project' : '"$title"';
 
       // Write the in-app notification (matches NotificationService path:
       // Users/{uid}/notifications, capital U).
-      await db
-          .collection('Users')
-          .doc(userId)
-          .collection('notifications')
-          .add({
+      await db.collection('Users').doc(userId).collection('notifications').add({
         'title': 'Time to update $label',
         'body':
             'Add this month\'s photos (Month $cycle) to keep tracing your project\'s transformation.',
@@ -306,7 +226,7 @@ class ContributionService {
     String? notes,
   }) async {
     final doc = await db.collection('contributions').doc(contributionId).get();
-    
+
     if (!doc.exists) {
       throw Exception('Contribution not found');
     }
@@ -322,7 +242,7 @@ class ContributionService {
     // Upload monthly photos
     final monthlyPhotoUrls = <String>[];
     final monthYear = DateTime.now().toString().substring(0, 7); // YYYY-MM
-    
+
     for (var i = 0; i < monthlyPhotos.length; i++) {
       final file = monthlyPhotos[i];
       final ref = storage.ref().child(
@@ -350,15 +270,6 @@ class ContributionService {
       'afterImages': monthlyPhotoUrls, // Update main after images with latest
       'updatedAt': FieldValue.serverTimestamp(),
     });
-
-    // Award bonus points for consistent updates
-    final bonusPoints = 25;
-    await db.collection('users').doc(userId).set(
-      {
-        'totalPoints': FieldValue.increment(bonusPoints),
-      },
-      SetOptions(merge: true),
-    );
   }
 
   /// Get a specific contribution by ID
@@ -377,9 +288,8 @@ class ContributionService {
         .where('userId', isEqualTo: userId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList());
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
   }
 
   /// Get contributions for a user filtered by work type
@@ -393,9 +303,8 @@ class ContributionService {
         .where('workType', isEqualTo: workType)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList());
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
   }
 
   /// Get all contributions for a community
@@ -407,9 +316,8 @@ class ContributionService {
         .where('communityId', isEqualTo: communityId)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList());
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
   }
 
   /// Get community contributions filtered by work type
@@ -423,14 +331,13 @@ class ContributionService {
         .where('workType', isEqualTo: workType)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList());
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList());
   }
 
   /// Get user contribution statistics
   Future<Map<String, dynamic>> getUserStats({required String userId}) async {
-    final userDoc = await db.collection('users').doc(userId).get();
+    final userDoc = await db.collection('Users').doc(userId).get();
     final userData = userDoc.data() ?? {};
 
     final contributions = await db
@@ -440,7 +347,7 @@ class ContributionService {
 
     final totalContributions = contributions.docs.length;
     final verifiedContributions = contributions.docs
-        .where((doc) => doc.data()['status'] == 'verified')
+        .where((doc) => doc.data()['status'] == 'verified' && doc.data()['scoringVersion'] == 1 && doc.data()['deleted'] != true)
         .length;
 
     final workTypeBreakdown = <String, int>{};
@@ -450,7 +357,7 @@ class ContributionService {
     }
 
     return {
-      'totalPoints': userData['totalPoints'] ?? 0,
+      'totalPoints': userData['rankingVersion'] == 1 ? userData['impact_points'] ?? 0 : 0,
       'totalContributions': totalContributions,
       'verifiedContributions': verifiedContributions,
       'pendingContributions': totalContributions - verifiedContributions,
@@ -464,7 +371,8 @@ class ContributionService {
   Future<Map<String, dynamic>> getCommunityStats({
     required String communityId,
   }) async {
-    final communityDoc = await db.collection('communities').doc(communityId).get();
+    final communityDoc =
+        await db.collection('communities').doc(communityId).get();
     final communityData = communityDoc.data() ?? {};
 
     return {
@@ -497,7 +405,7 @@ class ContributionService {
     required String userId,
   }) async {
     final doc = await db.collection('contributions').doc(contributionId).get();
-    
+
     if (!doc.exists) {
       throw Exception('Contribution not found');
     }
@@ -512,16 +420,6 @@ class ContributionService {
       'deleted': true,
       'deletedAt': FieldValue.serverTimestamp(),
     });
-
-    // Optionally, deduct points from user
-    final points = data['points'] as int? ?? 0;
-    await db.collection('users').doc(userId).set(
-      {
-        'totalPoints': FieldValue.increment(-points),
-        'contributions': FieldValue.increment(-1),
-      },
-      SetOptions(merge: true),
-    );
   }
 
   /// Edit a contribution
@@ -532,7 +430,7 @@ class ContributionService {
     String? notes,
   }) async {
     final doc = await db.collection('contributions').doc(contributionId).get();
-    
+
     if (!doc.exists) {
       throw Exception('Contribution not found');
     }
@@ -576,7 +474,8 @@ class ContributionService {
 
     for (final doc in contributions.docs) {
       final userId = doc.data()['userId'] as String;
-      final points = doc.data()['points'] as int? ?? 0;
+      if (doc.data()['scoringVersion'] != 1 || doc.data()['deleted'] == true) continue;
+      final points = (doc.data()['confirmedImpactPoints'] as num?)?.toInt() ?? 0;
 
       userPoints[userId] = (userPoints[userId] ?? 0) + points;
       userContributions[userId] = (userContributions[userId] ?? 0) + 1;
@@ -590,9 +489,8 @@ class ContributionService {
       };
     }).toList();
 
-    leaderboard.sort((a, b) => 
-      (b['totalPoints'] as int).compareTo(a['totalPoints'] as int)
-    );
+    leaderboard.sort(
+        (a, b) => (b['totalPoints'] as int).compareTo(a['totalPoints'] as int));
 
     return leaderboard.take(limit).toList();
   }

@@ -33,6 +33,9 @@ class _ArticlesListScreenState extends State<ArticlesListScreen> {
     {'label': 'Education', 'value': 'education'},
     {'label': 'Impact Story', 'value': 'impact_story'},
     {'label': 'Event Recap', 'value': 'event_recap'},
+    // Phase 5.1 — blockchain/financial-literacy pieces from the Super Admin
+    // org. Anyone can filter to read them; only that org can publish them.
+    {'label': 'Special', 'value': 'special'},
   ];
 
   @override
@@ -264,6 +267,8 @@ class _ArticleCard extends StatelessWidget {
         return 'Impact Story';
       case 'event_recap':
         return 'Event Recap';
+      case 'special':
+        return 'Special';
       default:
         return cat ?? '';
     }

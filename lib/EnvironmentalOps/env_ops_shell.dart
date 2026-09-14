@@ -2,14 +2,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../Shared/theme/app_theme.dart';
+import '../Shared/theme/canopy_ui.dart';
 import '../Shared/widgets/canopy_bottom_bar.dart';
+import '../Shared/widgets/profile/canopy_profile_widgets.dart';
 import '../Shared/widgets/role_context_switcher.dart';
 import '../Services/Environmental/environment_ops_service.dart';
 import 'Fleet/env_fleet.dart';
 import 'Mapping/env_mapping_hub.dart';
-import 'Mapping/mapped_site_catalog.dart';
 import 'Market/create_listing_screen.dart';
 import 'Market/env_market.dart';
+import 'Profile/operational_footprint_map.dart';
 import 'Territory/env_territory.dart';
 import 'Trees/env_trees.dart';
 import 'Verified/env_verified.dart';
@@ -156,6 +158,7 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   bool _loading = true;
   Future<Map<String, int>>? _statsFuture;
   Future<List<_ActivityEntry>>? _activityFuture;
+  int _footprintRevision = 0;
 
   Map<String, dynamic>? get _orgDataWithId {
     final contextData = _contextData;
@@ -185,6 +188,7 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
         _loading = false;
         _statsFuture = _loadStats();
         _activityFuture = _loadActivity();
+        _footprintRevision++;
       });
     } catch (_) {
       if (!mounted) {
@@ -214,7 +218,8 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
     }
 
     final orgId = contextData.orgId;
-    final orgRef = FirebaseFirestore.instance.collection('organizations').doc(orgId);
+    final orgRef =
+        FirebaseFirestore.instance.collection('organizations').doc(orgId);
 
     var zones = 0;
     var trees = 0;
@@ -222,7 +227,8 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
     var handoffs = 0;
 
     try {
-      final newZoneSnap = await orgRef.collection('collectionZones').count().get();
+      final newZoneSnap =
+          await orgRef.collection('collectionZones').count().get();
       final legacyZoneSnap = await FirebaseFirestore.instance
           .collection('collection_zones')
           .where('org_id', isEqualTo: orgId)
@@ -241,7 +247,8 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
             .get();
         trees = legacyTreeSnap.docs.fold<int>(
           0,
-          (sum, doc) => sum + ((doc.data()['quantity'] as num?)?.toInt() ?? 0),
+          (total, doc) =>
+              total + ((doc.data()['quantity'] as num?)?.toInt() ?? 0),
         );
       }
 
@@ -252,7 +259,8 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
           .get();
       pins = pinSnap.count ?? 0;
 
-      final handoffSnap = await orgRef.collection('collectionHandoffs').count().get();
+      final handoffSnap =
+          await orgRef.collection('collectionHandoffs').count().get();
       if ((handoffSnap.count ?? 0) > 0) {
         handoffs = handoffSnap.count ?? 0;
       } else {
@@ -283,18 +291,21 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
 
     final orgId = contextData.orgId;
     final out = <_ActivityEntry>[];
-    final orgRef = FirebaseFirestore.instance.collection('organizations').doc(orgId);
+    final orgRef =
+        FirebaseFirestore.instance.collection('organizations').doc(orgId);
 
     try {
-      final zoneSnap = await orgRef.collection('collectionZones').limit(20).get();
+      final zoneSnap =
+          await orgRef.collection('collectionZones').limit(20).get();
       for (final doc in zoneSnap.docs) {
         final data = doc.data();
         final isActive = (data['isActive'] as bool?) ?? false;
+        final area = _placeName(data['area'], contextData.area);
         out.add(
           _ActivityEntry(
             kind: _ActivityKind.zone,
             title: data['label'] as String? ?? 'Collection zone',
-            subtitle: isActive ? 'Boundary active' : 'Boundary draft',
+            subtitle: '$area - ${isActive ? 'ACTIVE' : 'DRAFT'} boundary',
             timestamp: (data['createdAt'] as Timestamp?)?.toDate(),
             color: isActive ? AppTheme.primary : Colors.orange,
             icon: Icons.polyline_outlined,
@@ -310,11 +321,13 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
             .get();
         for (final doc in legacyZoneSnap.docs) {
           final data = doc.data();
+          final area = _placeName(data['area'], contextData.area);
           out.add(
             _ActivityEntry(
               kind: _ActivityKind.zone,
               title: data['name'] as String? ?? 'Collection zone',
-              subtitle: '${(data['status'] as String? ?? 'draft').toUpperCase()} boundary',
+              subtitle:
+                  '$area - ${(data['status'] as String? ?? 'draft').toUpperCase()} boundary',
               timestamp: (data['created_at'] as Timestamp?)?.toDate(),
               color: AppTheme.primary,
               icon: Icons.polyline_outlined,
@@ -330,12 +343,14 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
           .get();
       for (final doc in pinSnap.docs) {
         final data = doc.data();
-        final pinType = (data['pin_type'] as String? ?? 'site').replaceAll('_', ' ');
+        final pinType =
+            (data['pin_type'] as String? ?? 'site').replaceAll('_', ' ');
+        final area = _placeName(data['area'], contextData.area);
         out.add(
           _ActivityEntry(
             kind: _ActivityKind.mapping,
             title: data['name'] as String? ?? 'Mapped site',
-            subtitle: pinType.toUpperCase(),
+            subtitle: '$area - ${pinType.toUpperCase()}',
             timestamp: (data['created_at'] as Timestamp?)?.toDate(),
             color: AppTheme.accent,
             icon: Icons.place_outlined,
@@ -346,11 +361,23 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
       final treeSnap = await orgRef.collection('trees').limit(20).get();
       for (final doc in treeSnap.docs) {
         final data = doc.data();
+        final planting = data['planting'] is Map
+            ? Map<String, dynamic>.from(data['planting'] as Map)
+            : const <String, dynamic>{};
+        final location = planting['location'] is Map
+            ? Map<String, dynamic>.from(planting['location'] as Map)
+            : const <String, dynamic>{};
+        final area = _placeName(location['area'], contextData.area);
+        final commonName = '${data['commonName'] ?? ''}'.trim();
+        final species = '${data['species'] ?? ''}'.trim();
         out.add(
           _ActivityEntry(
             kind: _ActivityKind.tree,
-            title: data['commonName'] as String? ?? 'Tree record',
-            subtitle: '${(data['status'] as String? ?? 'unconfirmed').toUpperCase()} planting',
+            title: commonName.isNotEmpty
+                ? commonName
+                : (species.isNotEmpty ? species : 'Tree record'),
+            subtitle:
+                '$area - ${(data['status'] as String? ?? 'unconfirmed').toUpperCase()} planting',
             timestamp: (data['createdAt'] as Timestamp?)?.toDate(),
             color: const Color(0xFF3A7D44),
             icon: Icons.park_outlined,
@@ -362,9 +389,17 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
     }
 
     out.sort(
-      (a, b) => (b.timestamp ?? DateTime(0)).compareTo(a.timestamp ?? DateTime(0)),
+      (a, b) =>
+          (b.timestamp ?? DateTime(0)).compareTo(a.timestamp ?? DateTime(0)),
     );
     return out.take(6).toList();
+  }
+
+  String _placeName(dynamic storedArea, String fallbackArea) {
+    final stored = '${storedArea ?? ''}'.trim();
+    if (stored.isNotEmpty) return stored;
+    final fallback = fallbackArea.trim();
+    return fallback.isEmpty ? 'Operating area not added' : fallback;
   }
 
   void _openListingComposer() {
@@ -436,35 +471,41 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
         children: [
           _buildHero(),
           const SizedBox(height: 18),
-          _buildEditorialBanner(),
-          const SizedBox(height: 22),
-          _LabeledSection(
-            label: 'FIELD SIGNALS',
-            note: 'A quick reading of where the operation is active right now.',
+          if (_contextData != null) ...[
+            const _LabeledSection(
+              label: 'LIVE FIELD MAP',
+              note: 'Territory, dumpsites, and planting evidence in one view.',
+            ),
+            const SizedBox(height: 12),
+            OperationalFootprintMap(
+              key: ValueKey(
+                '${_contextData!.orgId}:$_footprintRevision',
+              ),
+              orgId: _contextData!.orgId,
+              operatingArea: _contextData!.area,
+            ),
+            const SizedBox(height: 22),
+          ],
+          const _LabeledSection(
+            label: 'LIVE SIGNALS',
+            note: 'Tap a signal to open the field work behind it.',
           ),
           const SizedBox(height: 12),
           _buildSignalsGrid(),
           const SizedBox(height: 22),
-          _LabeledSection(
-            label: 'COMMANDS',
-            note: 'Launch straight into the workflows that move territory, cleanup, and recovery forward.',
+          const _LabeledSection(
+            label: 'QUICK ACTIONS',
+            note: 'Add fresh evidence from the field.',
           ),
           const SizedBox(height: 12),
           _buildActionDeck(),
-          const SizedBox(height: 22),
-          _LabeledSection(
-            label: 'MAPPING SURFACES',
-            note: 'A cleaner view of what this organisation can place on the map beyond collection boundaries.',
-          ),
-          const SizedBox(height: 12),
-          _buildMappingPreview(),
           const SizedBox(height: 22),
           Row(
             children: [
               const Expanded(
                 child: _LabeledSection(
-                  label: 'ACTIVITY PULSE',
-                  note: 'Recent movements across mapping, trees, and territory.',
+                  label: 'FIELD NOTES',
+                  note: 'Recent work, with the place it happened.',
                 ),
               ),
               TextButton(
@@ -493,7 +534,9 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
 
     final contextData = _contextData;
     final orgName = contextData?.orgName ?? 'Environmental Operations';
-    final area = contextData?.area ?? 'Field network';
+    final area = contextData?.area.trim().isNotEmpty == true
+        ? contextData!.area.trim()
+        : 'Area not added';
 
     return Container(
       padding: const EdgeInsets.all(22),
@@ -577,14 +620,6 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
                             height: 1.05,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          area,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.75),
-                            fontSize: 13,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -592,7 +627,7 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
               ),
               const SizedBox(height: 22),
               const Text(
-                'An elegant field console for zones, sites, handoffs, greening records, and proof of environmental impact.',
+                'Your field activity, mapped as it happens.',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -600,59 +635,56 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
                 ),
               ),
               const SizedBox(height: 18),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.location_on_outlined,
+                        color: Colors.white, size: 16),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Operating in $area',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
               Wrap(
                 spacing: 10,
                 runSpacing: 10,
-                children: const [
-                  _HeroTag(label: 'Territory'),
-                  _HeroTag(label: 'Cleanup'),
-                  _HeroTag(label: 'Recovery'),
-                  _HeroTag(label: 'Verification'),
+                children: [
+                  _HeroTag(
+                    label: 'Trace territory',
+                    icon: Icons.polyline_outlined,
+                    onTap: () => widget.onSelectTab?.call(1),
+                  ),
+                  _HeroTag(
+                    label: 'Record trees',
+                    icon: Icons.park_outlined,
+                    onTap: () => widget.onOpenOperations?.call(1),
+                  ),
+                  _HeroTag(
+                    label: 'Map a site',
+                    icon: Icons.add_location_alt_outlined,
+                    onTap: _openMappingHub,
+                  ),
                 ],
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEditorialBanner() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD9C6A2).withOpacity(0.35),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.auto_awesome_outlined, color: AppTheme.darkGreen),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              'Inspired by current Pinterest-style eco dashboards: softer earth tones, editorial spacing, stronger section hierarchy, and mapping-first quick actions.',
-              style: TextStyle(
-                color: AppTheme.darkGreen.withOpacity(0.68),
-                fontSize: 12,
-                height: 1.5,
-              ),
-            ),
           ),
         ],
       ),
@@ -672,42 +704,42 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
             };
         final cards = [
           _SignalCardData(
-            label: 'Zones',
+            label: 'Territory',
             value: '${stats['zones'] ?? 0}',
             icon: Icons.polyline_outlined,
             color: AppTheme.primary,
-            caption: 'Boundary coverage',
+            caption: 'Saved zones',
+            onTap: () => widget.onSelectTab?.call(1),
           ),
           _SignalCardData(
             label: 'Mapped Sites',
             value: '${stats['pins'] ?? 0}',
             icon: Icons.place_outlined,
             color: AppTheme.accent,
-            caption: 'Pins across operations',
+            caption: 'Recorded pins',
+            onTap: _openMappingHub,
           ),
           _SignalCardData(
             label: 'Trees',
             value: '${stats['trees'] ?? 0}',
             icon: Icons.park_outlined,
             color: const Color(0xFF3A7D44),
-            caption: 'Planted or tracked',
+            caption: 'Trees tracked',
+            onTap: () => widget.onOpenOperations?.call(1),
           ),
           _SignalCardData(
             label: 'Handoffs',
             value: '${stats['handoffs'] ?? 0}',
             icon: Icons.inventory_2_outlined,
             color: AppTheme.tertiary,
-            caption: 'Verified collection flow',
+            caption: 'Collection flow',
+            onTap: () => widget.onOpenOperations?.call(2),
           ),
         ];
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 760
-                ? 4
-                : constraints.maxWidth >= 480
-                    ? 2
-                    : 1;
+            final columns = constraints.maxWidth >= 760 ? 4 : 2;
             final width =
                 (constraints.maxWidth - (12 * (columns - 1))) / columns;
             return Wrap(
@@ -729,29 +761,29 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
   Widget _buildActionDeck() {
     final actions = [
       _ActionCardData(
-        title: 'Open Territory',
-        caption: 'Trace collection zones and manage polygon coverage.',
+        title: 'Trace territory',
+        caption: 'Walk and save a collection boundary.',
         icon: Icons.map_outlined,
         color: AppTheme.primary,
         onTap: () => widget.onSelectTab?.call(1),
       ),
       _ActionCardData(
-        title: 'Open Mapping Hub',
-        caption: 'Launch dumpsites, collection sites, scrap yards, and more.',
+        title: 'Map a dumpsite',
+        caption: 'Place a field site on the shared map.',
         icon: Icons.travel_explore_outlined,
         color: AppTheme.accent,
         onTap: _openMappingHub,
       ),
       _ActionCardData(
-        title: 'Log Trees',
-        caption: 'Move into planting, follow-up, and verification trails.',
+        title: 'Record trees',
+        caption: 'Add planting evidence and follow-ups.',
         icon: Icons.park_outlined,
         color: const Color(0xFF3A7D44),
         onTap: () => widget.onOpenOperations?.call(1),
       ),
       _ActionCardData(
-        title: 'Post Recovery Order',
-        caption: 'Create a market listing for recyclable material flow.',
+        title: 'Post recovery',
+        caption: 'List recyclable material for collection.',
         icon: Icons.storefront_outlined,
         color: AppTheme.tertiary,
         onTap: _openListingComposer,
@@ -760,13 +792,8 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 920
-            ? 4
-            : constraints.maxWidth >= 560
-                ? 2
-                : 1;
-        final width =
-            (constraints.maxWidth - (12 * (columns - 1))) / columns;
+        final columns = constraints.maxWidth >= 920 ? 4 : 2;
+        final width = (constraints.maxWidth - (12 * (columns - 1))) / columns;
         return Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -781,49 +808,6 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
     );
   }
 
-  Widget _buildMappingPreview() {
-    final preview = envMappedSiteDefinitions.take(4).toList();
-    return Column(
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 920
-                ? 4
-                : constraints.maxWidth >= 560
-                    ? 2
-                    : 1;
-            final width =
-                (constraints.maxWidth - (12 * (columns - 1))) / columns;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: preview
-                  .map(
-                    (definition) => SizedBox(
-                      width: width,
-                      child: _MappingPreviewCard(
-                        definition: definition,
-                        onTap: _openMappingHub,
-                      ),
-                    ),
-                  )
-                  .toList(),
-            );
-          },
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: _openMappingHub,
-            icon: const Icon(Icons.layers_outlined),
-            label: const Text('Explore all mapping types'),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildActivityFeed() {
     if (_loading) {
       return const _EmptyPanel(
@@ -835,7 +819,8 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
     if (_contextData == null) {
       return const _EmptyPanel(
         icon: Icons.forest_outlined,
-        message: 'Connect an organisation to activate the environmental dashboard.',
+        message:
+            'Connect an organisation to activate the environmental dashboard.',
       );
     }
 
@@ -852,7 +837,8 @@ class _EnvOpsOverviewTabState extends State<_EnvOpsOverviewTab> {
         if (entries.isEmpty) {
           return const _EmptyPanel(
             icon: Icons.timeline_outlined,
-            message: 'No environmental activity yet. Start with territory, trees, or mapping.',
+            message:
+                'No environmental activity yet. Start with territory, trees, or mapping.',
           );
         }
 
@@ -971,10 +957,16 @@ class _EnvOperationsTabState extends State<_EnvOperationsTab>
               unselectedLabelStyle:
                   const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
               tabs: const [
-                Tab(icon: Icon(Icons.storefront_outlined, size: 16), text: 'Market'),
+                Tab(
+                    icon: Icon(Icons.storefront_outlined, size: 16),
+                    text: 'Market'),
                 Tab(icon: Icon(Icons.park_outlined, size: 16), text: 'Trees'),
-                Tab(icon: Icon(Icons.local_shipping_outlined, size: 16), text: 'Fleet'),
-                Tab(icon: Icon(Icons.verified_outlined, size: 16), text: 'Verified'),
+                Tab(
+                    icon: Icon(Icons.local_shipping_outlined, size: 16),
+                    text: 'Fleet'),
+                Tab(
+                    icon: Icon(Icons.verified_outlined, size: 16),
+                    text: 'Verified'),
               ],
             ),
           ),
@@ -1082,10 +1074,139 @@ class _EnvOpsProfileTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
+        FutureBuilder<EnvironmentOpsContext?>(
+          future: EnvironmentOpsService.instance.resolveContext(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final ops = snapshot.data;
+            if (ops == null) {
+              return const CanopyProfileEmptyState(
+                icon: Icons.link_off_outlined,
+                title: 'Environmental profile is not linked',
+                message:
+                    'Link an organisation to add service area, material capability, verification, and operational records.',
+              );
+            }
+            final data = ops.orgData;
+            final rawMaterials = data['specialisations'] ??
+                data['materials'] ??
+                data['material_types'];
+            final materials = rawMaterials is List
+                ? rawMaterials.map((item) => '$item').toList()
+                : const <String>[];
+            final verification =
+                '${data['verification_status'] ?? data['verificationStatus'] ?? 'Not submitted'}';
+            final capacity = data['processing_capacity_kg'] ??
+                data['capacity_kg'] ??
+                data['monthly_capacity_kg'];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                CanopyProfileSection(
+                  title: 'Operational identity',
+                  description:
+                      'The organisation and service area attached to this environmental workspace.',
+                  child: CanopyIdentityLedger(
+                    name: ops.orgName,
+                    role:
+                        '${data['org_type'] ?? data['organization_type'] ?? 'Environmental operator'}',
+                    location: ops.area,
+                    initials: ops.orgName
+                        .trim()
+                        .split(RegExp(r'\s+'))
+                        .take(2)
+                        .map((word) => word.isEmpty ? '' : word[0])
+                        .join(),
+                    status: verification,
+                    accent: CanopyUi.teal,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                CanopyProfileSection(
+                  title: 'Readiness',
+                  description:
+                      'Coverage and capability details used to assess collection and processing fit.',
+                  child: CanopyProfileMetricGrid(
+                    metrics: [
+                      CanopyProfileMetric(
+                        label: 'Service area',
+                        value: ops.area,
+                        icon: Icons.map_outlined,
+                      ),
+                      CanopyProfileMetric(
+                        label: 'Materials',
+                        value: '${materials.length}',
+                        icon: Icons.recycling_outlined,
+                        color: CanopyUi.teal,
+                      ),
+                      CanopyProfileMetric(
+                        label: 'Capacity',
+                        value: capacity == null ? 'Not added' : '$capacity kg',
+                        icon: Icons.scale_outlined,
+                        color: CanopyUi.gold,
+                      ),
+                      CanopyProfileMetric(
+                        label: 'Verification',
+                        value: verification,
+                        icon: Icons.verified_outlined,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                CanopyProfileSection(
+                  title: 'Operational footprint',
+                  description:
+                      'Territory boundaries, organisation dumpsites, and planting evidence recorded across this operating area.',
+                  child: OperationalFootprintMap(
+                    orgId: ops.orgId,
+                    operatingArea: ops.area,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                CanopyProfileSection(
+                  title: 'Capabilities',
+                  description:
+                      'Materials handled, collection coverage, processing capacity, and traceability evidence belong here.',
+                  child: materials.isEmpty
+                      ? const CanopyProfileEmptyState(
+                          icon: Icons.recycling_outlined,
+                          title: 'Material capabilities not added',
+                          message:
+                              'Add accepted materials and capacity so collectors and marketplace partners can assess fit.',
+                        )
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: materials
+                              .map((material) => Chip(label: Text(material)))
+                              .toList(),
+                        ),
+                ),
+                const SizedBox(height: 24),
+                const CanopyProfileSection(
+                  title: 'Recent activity',
+                  description:
+                      'Verified events are drawn from territory, fleet, tree, market, and handoff records.',
+                  child: CanopyProfileEmptyState(
+                    icon: Icons.history_outlined,
+                    title: 'Activity appears after operations begin',
+                    message:
+                        'Create a zone, map a site, publish a listing, or verify a handoff to build this operational history.',
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 24),
         if (orgContextBuilder != null || memberContextBuilder != null) ...[
           const _LabeledSection(
             label: 'SWITCH CONTEXT',
-            note: 'Move between organisation, member, marketplace, and environmental surfaces.',
+            note:
+                'Move between organisation, member, marketplace, and environmental surfaces.',
           ),
           const SizedBox(height: 12),
           RoleContextSwitcher(
@@ -1108,7 +1229,8 @@ class _EnvOpsProfileTab extends StatelessWidget {
         if (orgContextBuilder != null) ...[
           const _LabeledSection(
             label: 'ORGANISATION',
-            note: 'Return to people, programmes, settings, and the wider dashboard.',
+            note:
+                'Return to people, programmes, settings, and the wider dashboard.',
           ),
           const SizedBox(height: 12),
           GestureDetector(
@@ -1118,7 +1240,8 @@ class _EnvOpsProfileTab extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: AppTheme.lightGreen.withOpacity(0.28)),
+                border:
+                    Border.all(color: AppTheme.lightGreen.withOpacity(0.28)),
               ),
               child: Row(
                 children: [
@@ -1129,7 +1252,8 @@ class _EnvOpsProfileTab extends StatelessWidget {
                       color: AppTheme.lightGreen.withOpacity(0.18),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.business_outlined, color: AppTheme.primary),
+                    child: const Icon(Icons.business_outlined,
+                        color: AppTheme.primary),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -1155,7 +1279,8 @@ class _EnvOpsProfileTab extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Icon(Icons.chevron_right, color: AppTheme.primary.withOpacity(0.62)),
+                  Icon(Icons.chevron_right,
+                      color: AppTheme.primary.withOpacity(0.62)),
                 ],
               ),
             ),
@@ -1176,25 +1301,44 @@ class _TabInfo {
 
 class _HeroTag extends StatelessWidget {
   final String label;
+  final IconData icon;
+  final VoidCallback onTap;
 
   const _HeroTag({
     required this.label,
+    required this.icon,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
         color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: Colors.white, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1246,6 +1390,7 @@ class _SignalCardData {
   final String caption;
   final IconData icon;
   final Color color;
+  final VoidCallback onTap;
 
   const _SignalCardData({
     required this.label,
@@ -1253,6 +1398,7 @@ class _SignalCardData {
     required this.caption,
     required this.icon,
     required this.color,
+    required this.onTap,
   });
 }
 
@@ -1265,60 +1411,80 @@ class _SignalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+    return Semantics(
+      button: true,
+      label: '${data.label}, ${data.value}. ${data.caption}',
+      child: Material(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: data.color.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
+        child: InkWell(
+          onTap: data.onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 142),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: data.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: [
+                BoxShadow(
+                  color: data.color.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: Icon(data.icon, color: data.color),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            data.value,
-            style: const TextStyle(
-              color: AppTheme.darkGreen,
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              height: 1,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: data.color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(data.icon, color: data.color, size: 20),
+                    ),
+                    const Spacer(),
+                    Icon(Icons.north_east_rounded,
+                        color: data.color.withOpacity(0.7), size: 16),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  data.value,
+                  style: const TextStyle(
+                    color: AppTheme.darkGreen,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  data.label,
+                  style: const TextStyle(
+                    color: AppTheme.darkGreen,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  data.caption,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppTheme.darkGreen.withOpacity(0.56),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            data.label,
-            style: const TextStyle(
-              color: AppTheme.darkGreen,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            data.caption,
-            style: TextStyle(
-              color: AppTheme.darkGreen.withOpacity(0.56),
-              fontSize: 11,
-              height: 1.35,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1398,65 +1564,6 @@ class _EditorialActionCard extends StatelessWidget {
               style: TextStyle(
                 color: AppTheme.darkGreen.withOpacity(0.58),
                 fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MappingPreviewCard extends StatelessWidget {
-  final EnvMappedSiteDefinition definition;
-  final VoidCallback onTap;
-
-  const _MappingPreviewCard({
-    required this.definition,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: definition.color.withOpacity(0.12)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: definition.color.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(definition.icon, color: definition.color),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              definition.title,
-              style: const TextStyle(
-                color: AppTheme.darkGreen,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              definition.subtitle,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: AppTheme.darkGreen.withOpacity(0.58),
-                fontSize: 11,
                 height: 1.4,
               ),
             ),

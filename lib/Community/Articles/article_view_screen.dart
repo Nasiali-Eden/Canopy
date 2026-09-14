@@ -28,6 +28,8 @@ class ArticleViewScreen extends StatelessWidget {
         return 'Impact Story';
       case 'event_recap':
         return 'Event Recap';
+      case 'special':
+        return 'Special';
       default:
         return cat ?? '';
     }

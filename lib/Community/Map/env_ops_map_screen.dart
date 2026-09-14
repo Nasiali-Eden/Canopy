@@ -4,13 +4,19 @@
 // (polygons) and dumpsites (markers) across the platform. Reached from the
 // community map's "View Environmental Operations" button.
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../Shared/theme/app_theme.dart';
-import '../../EnvironmentalOps/Territory/env_territory.dart' show CollectionZone;
+import '../../EnvironmentalOps/Territory/env_territory.dart'
+    show CollectionZone;
 import 'map_style.dart' as map_style;
+import 'org_logo_cache.dart';
+import '../Incidents/incidents_feed_screen.dart';
+import '../../Shared/Inputs/post_incident.dart';
 
 class EnvOpsMapScreen extends StatefulWidget {
   const EnvOpsMapScreen({super.key});
@@ -23,6 +29,9 @@ class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
   List<CollectionZone> _zones = [];
   final List<_Dumpsite> _dumpsites = [];
   bool _loading = true;
+  bool _showZoneLogos = false;
+  final Map<String, BitmapDescriptor> _zoneLogos = {};
+  final Map<String, String> _orgNames = {};
 
   static const CameraPosition _initial = CameraPosition(
     target: LatLng(-1.2921, 36.8219),
@@ -76,9 +85,114 @@ class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
           ..addAll(dumps);
         _loading = false;
       });
+      await _loadZoneLogos(zones);
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _loadZoneLogos(List<CollectionZone> zones) async {
+    await Future.wait(zones
+        .map((z) => z.orgId)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .map((orgId) async {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('organizations')
+            .doc(orgId)
+            .get();
+        final data = doc.data();
+        if (data == null || !mounted) return;
+        final url = [data['logoUrl'], data['profilePhoto']]
+            .whereType<String>()
+            .where((value) => value.trim().isNotEmpty)
+            .firstOrNull;
+        if (url == null) return;
+        final bytes = await OrgLogoCache.instance.bytes(url);
+        if (bytes == null || !mounted) return;
+        final codec = await ui.instantiateImageCodec(bytes, targetWidth: 128);
+        try {
+          final frame = await codec.getNextFrame();
+          try {
+            final recorder = ui.PictureRecorder();
+            final canvas = Canvas(recorder);
+            const bounds = Rect.fromLTWH(0, 0, 128, 128);
+            canvas.drawCircle(
+                const Offset(64, 64), 62, Paint()..color = Colors.white);
+            canvas.save();
+            canvas.clipPath(Path()..addOval(bounds.deflate(8)));
+            paintImage(
+                canvas: canvas,
+                rect: bounds.deflate(12),
+                image: frame.image,
+                fit: BoxFit.contain);
+            canvas.restore();
+            canvas.drawCircle(
+                const Offset(64, 64),
+                62,
+                Paint()
+                  ..color = AppTheme.primary
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = 4);
+            final picture = recorder.endRecording();
+            final image = await picture.toImage(128, 128);
+            picture.dispose();
+            try {
+              final png =
+                  await image.toByteData(format: ui.ImageByteFormat.png);
+              if (png == null || !mounted) return;
+              setState(() {
+                _zoneLogos[orgId] = BitmapDescriptor.bytes(
+                    png.buffer.asUint8List(),
+                    width: 48,
+                    height: 48);
+                _orgNames[orgId] =
+                    (data['name'] ?? data['orgName'] ?? 'Organization')
+                        .toString();
+              });
+            } finally {
+              image.dispose();
+            }
+          } finally {
+            frame.image.dispose();
+          }
+        } finally {
+          codec.dispose();
+        }
+      } catch (_) {
+        // A missing or unavailable logo must not hide the mapped areas.
+      }
+    }));
+  }
+
+  // Choose the middle of the widest interior span at the area's mid-latitude.
+  // Unlike averaging vertices, this keeps the logo inside concave zones too.
+  LatLng _zoneCenter(List<LatLng> vertices) {
+    final latitudes = vertices.map((v) => v.latitude).toList()..sort();
+    final latitude = (latitudes.first + latitudes.last) / 2;
+    final crossings = <double>[];
+    for (var i = 0; i < vertices.length; i++) {
+      final a = vertices[i];
+      final b = vertices[(i + 1) % vertices.length];
+      if ((a.latitude > latitude) != (b.latitude > latitude)) {
+        crossings.add(a.longitude +
+            (latitude - a.latitude) *
+                (b.longitude - a.longitude) /
+                (b.latitude - a.latitude));
+      }
+    }
+    crossings.sort();
+    var width = -1.0;
+    var longitude = vertices.first.longitude;
+    for (var i = 0; i + 1 < crossings.length; i += 2) {
+      final span = crossings[i + 1] - crossings[i];
+      if (span > width) {
+        width = span;
+        longitude = (crossings[i] + crossings[i + 1]) / 2;
+      }
+    }
+    return LatLng(latitude, longitude);
   }
 
   Set<Polygon> get _polygons => _zones
@@ -91,16 +205,31 @@ class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
           ))
       .toSet();
 
-  Set<Marker> get _markers => _dumpsites
-      .map((d) => Marker(
-            markerId: MarkerId('dump_${d.id}'),
-            position: d.position,
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-                d.isActive ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange),
-            infoWindow: InfoWindow(
-                title: d.name, snippet: d.isActive ? 'Active dumpsite' : 'Cleared'),
-          ))
-      .toSet();
+  Set<Marker> get _markers => {
+        if (_showZoneLogos)
+          for (final zone in _zones)
+            if (_zoneLogos.containsKey(zone.orgId))
+              Marker(
+                markerId: MarkerId('zone_logo_${zone.id}'),
+                position: _zoneCenter(zone.vertices),
+                anchor: const Offset(0.5, 0.5),
+                icon: _zoneLogos[zone.orgId]!,
+                infoWindow: InfoWindow(
+                    title: _orgNames[zone.orgId], snippet: zone.name),
+              ),
+        ..._dumpsites
+            .map((d) => Marker(
+                  markerId: MarkerId('dump_${d.id}'),
+                  position: d.position,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(d.isActive
+                      ? BitmapDescriptor.hueRed
+                      : BitmapDescriptor.hueOrange),
+                  infoWindow: InfoWindow(
+                      title: d.name,
+                      snippet: d.isActive ? 'Active dumpsite' : 'Cleared'),
+                ))
+            .toSet(),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -115,6 +244,12 @@ class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
             onMapCreated: (c) => c.setMapStyle(map_style.kCanopyMapStyle),
             polygons: _polygons,
             markers: _markers,
+            onCameraMove: (position) {
+              final show = position.zoom >= 15;
+              if (show != _showZoneLogos) {
+                setState(() => _showZoneLogos = show);
+              }
+            },
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
@@ -161,13 +296,32 @@ class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(width: 10),
+                _circleBtn(
+                  Icons.receipt_long_outlined,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const IncidentsFeedScreen()),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _circleBtn(
+                  Icons.add_location_alt_outlined,
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PostIncident()),
+                  ),
+                ),
               ],
             ),
           ),
 
           if (_loading)
             const Positioned(
-              top: 0, left: 0, right: 0, bottom: 0,
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               child: Center(
                 child: CircularProgressIndicator(
                     color: AppTheme.primary, strokeWidth: 2),
@@ -199,8 +353,7 @@ class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
                     value: '${_zones.length}',
                     label: 'Collection zones',
                   ),
-                  Container(
-                      width: 1, height: 36, color: Colors.grey.shade200),
+                  Container(width: 1, height: 36, color: Colors.grey.shade200),
                   _legend(
                     color: const Color(0xFFE53935),
                     icon: Icons.delete_outline,
@@ -246,7 +399,8 @@ class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
                       color: AppTheme.darkGreen)),
               Text(label,
                   style: TextStyle(
-                      fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.55))),
+                      fontSize: 11,
+                      color: AppTheme.darkGreen.withOpacity(0.55))),
             ],
           ),
         ],

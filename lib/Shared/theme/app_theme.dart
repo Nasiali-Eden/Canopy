@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'canopy_ui.dart';
+
 class AppTheme {
   // Extracted from Canopy logo
   static const Color primary = Color(0xFF2D7A4F); // Forest green
@@ -19,7 +21,7 @@ class AppTheme {
       surface: Colors.white,
     );
 
-    return ThemeData(
+    final base = ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: Colors.white,
@@ -152,6 +154,7 @@ class AppTheme {
         elevation: 8,
       ),
     );
+    return CanopyUi.theme(base);
   }
 
   static ThemeData dark() {
