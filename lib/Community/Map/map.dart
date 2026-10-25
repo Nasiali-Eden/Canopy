@@ -244,11 +244,10 @@ class _MapReport {
 // FILTERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _Layer { all, organisations, places, events, environment }
+enum _Layer { organisations, places, events, environment }
 
 extension on _Layer {
   String get label => switch (this) {
-        _Layer.all => 'All',
         _Layer.organisations => 'Organisations',
         _Layer.places => 'Places',
         _Layer.events => 'Events',
@@ -256,7 +255,6 @@ extension on _Layer {
       };
 
   IconData get icon => switch (this) {
-        _Layer.all => Icons.layers_outlined,
         _Layer.organisations => Icons.apartment_outlined,
         _Layer.places => Icons.place_outlined,
         _Layer.events => Icons.event_outlined,
@@ -331,6 +329,14 @@ class _SelPlace extends _Selection {
   const _SelPlace(this.place);
 }
 
+/// A tapped collection zone: what the organisation does inside its boundary.
+class _SelZone extends _Selection {
+  final _MapZone zone;
+  final MapOrganization? org;
+  final int dumpsites, sites, trees, reports;
+  const _SelZone(this.zone, this.org, {this.dumpsites = 0, this.sites = 0, this.trees = 0, this.reports = 0});
+}
+
 class _SelReport extends _Selection {
   final _MapReport report;
   const _SelReport(this.report);
@@ -348,7 +354,8 @@ class _MapScreenState extends State<MapScreen> {
   static const _dpr = 3.0;
 
   GoogleMapController? _map;
-  _Layer _layer = _Layer.all;
+  // The map opens on organisations; there is no "All".
+  _Layer _layer = _Layer.organisations;
   // Filters. Organisations: sector + who they serve. Places / Environment: the
   // kinds of thing to show ('zones', 'trees' and 'reports' are Environment only).
   final Set<String> _sub = {};
@@ -557,7 +564,6 @@ class _MapScreenState extends State<MapScreen> {
   int get _filterCount => _sub.length + (_layer == _Layer.organisations ? _subServed.length : 0);
 
   List<MapOrganization> get _visibleOrgs => switch (_layer) {
-        _Layer.all => _orgs,
         _Layer.organisations => [
             for (final o in _orgs)
               if ((_sub.isEmpty || _sub.contains(o.sectorId)) &&
@@ -570,7 +576,6 @@ class _MapScreenState extends State<MapScreen> {
   bool _wantsPin(AmenityType t) => _sub.isEmpty || _sub.contains(t.name);
 
   List<MapAmenity> get _visiblePlaces => switch (_layer) {
-        _Layer.all => _places,
         _Layer.places => [
             for (final a in _places)
               if (!_envAmenities.contains(a.amenityType) && !_eventAmenities.contains(a.amenityType) && _wantsPin(a.amenityType)) a,
@@ -585,13 +590,45 @@ class _MapScreenState extends State<MapScreen> {
 
   // Incident reports of dumping count as dumpsites, so they show in All and Environment.
   List<_MapReport> get _visibleReports =>
-      _layer == _Layer.all || (_layer == _Layer.environment && (_sub.isEmpty || _sub.contains('reports'))) ? _reports : const [];
+      _layer == _Layer.environment && (_sub.isEmpty || _sub.contains('reports')) ? _reports : const [];
 
   List<_MapEvent> get _visibleEvents =>
-      _layer == _Layer.all || _layer == _Layer.events ? _events : const [];
+      _layer == _Layer.events ? _events : const [];
 
   List<_MapTree> get _visibleTrees =>
       _layer == _Layer.environment && (_sub.isEmpty || _sub.contains('trees')) ? _trees : const [];
+
+  static bool _inside(LatLng p, List<LatLng> poly) {
+    var in_ = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      final a = poly[i], b = poly[j];
+      if ((a.latitude > p.latitude) != (b.latitude > p.latitude) &&
+          p.longitude < (b.longitude - a.longitude) * (p.latitude - a.latitude) / (b.latitude - a.latitude) + a.longitude) {
+        in_ = !in_;
+      }
+    }
+    return in_;
+  }
+
+  /// What is mapped inside this zone's boundary right now.
+  _SelZone _zoneSelection(_MapZone z) {
+    final org = _orgs.where((o) => o.id == z.orgId).firstOrNull;
+    var dump = 0, sites = 0;
+    for (final a in _places) {
+      if (!_inside(a.location, z.points)) continue;
+      if (a.amenityType == AmenityType.dumpsite) {
+        dump++;
+      } else if (_envAmenities.contains(a.amenityType)) {
+        sites++;
+      }
+    }
+    var trees = 0;
+    for (final t in _trees) {
+      if (_inside(t.position, z.points)) trees += t.count;
+    }
+    final reports = _reports.where((r) => _inside(r.location, z.points)).length;
+    return _SelZone(z, org, dumpsites: dump, sites: sites, trees: trees, reports: reports);
+  }
 
   // ── Markers ─────────────────────────────────────────────────────────────
 
@@ -648,7 +685,7 @@ class _MapScreenState extends State<MapScreen> {
         anchor: const Offset(0.5, 0.5),
         zIndex: 2,
         consumeTapEvents: true,
-        onTap: () => _select(_SelOrg(o), z.centroid),
+        onTap: () => _select(_zoneSelection(z), z.centroid),
       ));
     }
     for (final a in _visiblePlaces) {
@@ -698,15 +735,14 @@ class _MapScreenState extends State<MapScreen> {
     final out = <Polygon>{};
     for (final z in _visibleZones) {
       final c = _areaColor(z.orgId);
-      final org = _orgs.where((o) => o.id == z.orgId).firstOrNull;
       out.add(Polygon(
         polygonId: PolygonId('zone_${z.id}'),
         points: z.points,
         fillColor: c.withAlpha(0x40),
         strokeColor: c,
         strokeWidth: 3,
-        consumeTapEvents: org != null,
-        onTap: org == null ? null : () => _select(_SelOrg(org), z.centroid),
+        consumeTapEvents: true,
+        onTap: () => _select(_zoneSelection(z), z.centroid),
       ));
     }
     return out;
@@ -991,10 +1027,17 @@ class _MapScreenState extends State<MapScreen> {
       _SelOrg(:final org) => org.location,
       _SelPlace(:final place) => place.location,
       _SelReport(:final report) => report.location,
+      _SelZone(:final zone) => zone.centroid,
     };
     // Make sure the picked item's layer is visible.
     setState(() {
-      _layer = _Layer.all;
+      _layer = switch (picked) {
+        _SelOrg() => _Layer.organisations,
+        _SelPlace(:final place) => _envAmenities.contains(place.amenityType)
+            ? _Layer.environment
+            : (_eventAmenities.contains(place.amenityType) ? _Layer.events : _Layer.places),
+        _SelReport() || _SelZone() => _Layer.environment,
+      };
       _sub.clear();
       _subServed.clear();
     });
@@ -1216,9 +1259,7 @@ class _MapNotice extends StatelessWidget {
         ? "Couldn't load the map's places."
         : loading
             ? 'Loading places…'
-            : layer == _Layer.all
-                ? 'Nothing is mapped here yet.'
-                : 'Nothing mapped under ${layer.label.toLowerCase()} yet.';
+            : 'Nothing mapped under ${layer.label.toLowerCase()} yet.';
     return Container(
       padding: const EdgeInsets.only(left: 14, right: CanopySpace.s4),
       constraints: const BoxConstraints(minHeight: CanopySpace.minTouch),
@@ -1408,6 +1449,7 @@ class _SelectionSheet extends StatelessWidget {
                 _SelOrg(:final org) => _OrgBody(org: org),
                 _SelPlace(:final place) => _PlaceBody(place: place),
                 _SelReport(:final report) => _ReportBody(report: report),
+                _SelZone() => _ZoneBody(sel: selection as _SelZone),
               },
             ),
           ),
@@ -1759,4 +1801,98 @@ class _MapEvent {
   final LatLng at;
   final DateTime? when;
   const _MapEvent(this.id, this.title, this.at, this.when);
+}
+
+
+/// What an organisation does inside a collection zone: its schedule, what it
+/// collects, how much it has verified, and what is mapped within the boundary.
+class _ZoneBody extends StatefulWidget {
+  final _SelZone sel;
+  const _ZoneBody({required this.sel});
+
+  @override
+  State<_ZoneBody> createState() => _ZoneBodyState();
+}
+
+class _ZoneBodyState extends State<_ZoneBody> {
+  // The detailed record (schedule, materials, stats) lives under the organisation.
+  late final Future<Map<String, dynamic>> _detail = FirebaseFirestore.instance
+      .collection('organizations')
+      .doc(widget.sel.zone.orgId)
+      .collection('collectionZones')
+      .doc(widget.sel.zone.id)
+      .get()
+      .then((d) => d.data() ?? const <String, dynamic>{})
+      .catchError((_) => const <String, dynamic>{});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    final z = widget.sel.zone;
+    final org = widget.sel.org;
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _detail,
+      builder: (context, snap) {
+        final d = snap.data ?? const <String, dynamic>{};
+        final stats = (d['stats'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final sched = (d['schedule'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final days = ((sched['days'] as List?) ?? const []).map((e) => '$e').toList();
+        final time = [sched['startTime'], sched['endTime']].whereType<String>().where((t) => t.isNotEmpty).join(' – ');
+        final materials = ((d['materialTypes'] as List?) ?? const []).map((e) => '$e'.replaceAll('_', ' ')).toList();
+        final kg = (stats['totalKgVerified'] as num?)?.toDouble() ?? 0;
+        final runs = (stats['totalCollectionsLogged'] as num?)?.toInt() ?? 0;
+        final inactive = d['isActive'] == false;
+        final s = widget.sel;
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.polyline_outlined, size: CanopyIconSize.s32, color: p.primaryInk),
+            const SizedBox(width: CanopySpace.s12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                StatusLabel(inactive ? 'Collection zone · paused' : 'Collection zone', color: inactive ? p.warning : p.success),
+                Text(z.name, style: CanopyType.title.copyWith(color: p.ink)),
+                if (org != null) Text('Run by ${org.name}', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: CanopySpace.s12),
+          CanopyListGroup(children: [
+            CanopyListRow(
+              icon: Icons.recycling_outlined,
+              title: runs == 0 ? 'No collections logged yet' : '$runs collection${runs == 1 ? '' : 's'} logged',
+              subtitle: kg > 0 ? '${kg.round()} kg verified' : 'Collections done here',
+              chevron: false,
+            ),
+            if (days.isNotEmpty || time.isNotEmpty)
+              CanopyListRow(
+                icon: Icons.schedule_outlined,
+                title: days.isEmpty ? time : days.join(' · '),
+                subtitle: days.isEmpty ? 'Collection hours' : (time.isEmpty ? 'Collection days' : time),
+                chevron: false,
+              ),
+            if (materials.isNotEmpty)
+              CanopyListRow(icon: Icons.category_outlined, title: materials.join(' · '), subtitle: 'What they collect here', chevron: false),
+          ]),
+          const CanopySectionHeader(title: 'Inside this zone', padding: EdgeInsets.only(top: CanopySpace.section)),
+          CanopyListGroup(children: [
+            CanopyListRow(icon: Icons.park_outlined, title: '${s.trees} tree${s.trees == 1 ? '' : 's'} planted', chevron: false),
+            CanopyListRow(
+                icon: Icons.delete_outline,
+                title: '${s.dumpsites} dumpsite${s.dumpsites == 1 ? '' : 's'} mapped',
+                subtitle: s.reports > 0 ? '${s.reports} dumping report${s.reports == 1 ? '' : 's'}' : null,
+                chevron: false),
+            CanopyListRow(icon: Icons.inventory_2_outlined, title: '${s.sites} collection, sorting or recycling point${s.sites == 1 ? '' : 's'}', chevron: false),
+          ]),
+          if (org != null) ...[
+            const SizedBox(height: CanopySpace.s12),
+            CanopyButton.quiet(
+              label: 'About ${org.name}',
+              expand: true,
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrgViewScreen(orgId: org.id, orgData: org.raw))),
+            ),
+          ],
+        ]);
+      },
+    );
+  }
 }
