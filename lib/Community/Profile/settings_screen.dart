@@ -1,129 +1,70 @@
+// lib/Community/Profile/settings_screen.dart
+//
+// Settings (v2): appearance (System / Light / Dark), account, about, and the
+// version row. The long-press on the version opens a developer route and is
+// deliberately undiscoverable. Rows only link to screens that exist.
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../Models/user.dart';
 import '../../Providers/theme_provider.dart';
+import '../../theme/canopy_components.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<F_User?>(context);
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Settings')),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Appearance',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<ThemeMode>(
-                      value: themeProvider.mode,
-                      decoration: const InputDecoration(labelText: 'Theme'),
-                      items: const [
-                        DropdownMenuItem(
-                          value: ThemeMode.system,
-                          child: Text('System'),
-                        ),
-                        DropdownMenuItem(
-                          value: ThemeMode.light,
-                          child: Text('Light'),
-                        ),
-                        DropdownMenuItem(
-                          value: ThemeMode.dark,
-                          child: Text('Dark'),
-                        ),
-                      ],
-                      onChanged: (v) {
-                        if (v == null) return;
-                        themeProvider.setMode(v);
-                      },
-                    ),
-                  ],
-                ),
-              ),
+    final p = context.canopy;
+    final theme = context.watch<ThemeProvider>();
+    final user = FirebaseAuth.instance.currentUser;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Settings'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          const CanopySectionHeader(title: 'Appearance', padding: EdgeInsets.zero),
+          CanopySegmented<ThemeMode>(
+            options: const [(ThemeMode.system, 'System'), (ThemeMode.light, 'Light'), (ThemeMode.dark, 'Dark')],
+            value: theme.mode,
+            onChanged: theme.setMode,
+          ),
+          const SizedBox(height: CanopySpace.s4),
+          Text('Applies everywhere in Canopy.', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+          const CanopySectionHeader(title: 'Your account', padding: EdgeInsets.only(top: CanopySpace.section)),
+          CanopyListGroup(children: [
+            CanopyListRow(
+              icon: Icons.person_outline,
+              title: 'Edit profile',
+              subtitle: 'Name, photo and location',
+              onTap: () => Navigator.pushNamed(context, '/profile/edit'),
             ),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: const Text('Edit profile'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.pushNamed(context, '/profile/edit'),
-              ),
+            CanopyListRow(icon: Icons.lock_outline, title: 'Password & security', onTap: () => Navigator.pushNamed(context, '/security')),
+            CanopyListRow(icon: Icons.notifications_none, title: 'Notifications', onTap: () => Navigator.pushNamed(context, '/notifications')),
+          ]),
+          const CanopySectionHeader(title: 'About Canopy', padding: EdgeInsets.only(top: CanopySpace.section)),
+          CanopyListGroup(children: [
+            CanopyListRow(icon: Icons.info_outline, title: 'About', onTap: () => Navigator.pushNamed(context, '/about')),
+            CanopyListRow(icon: Icons.rule_outlined, title: 'Community guidelines', onTap: () => Navigator.pushNamed(context, '/guidelines')),
+            CanopyListRow(icon: Icons.privacy_tip_outlined, title: 'Privacy', onTap: () => Navigator.pushNamed(context, '/privacy')),
+            CanopyListRow(
+              icon: Icons.route_outlined,
+              title: 'Roadmap',
+              subtitle: "What's built and what's next",
+              onTap: () => Navigator.pushNamed(context, '/roadmap'),
             ),
-            const SizedBox(height: 12),
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.info_outline),
-                    title: const Text('Community info'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () =>
-                        Navigator.pushNamed(context, '/community/info'),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.rocket_launch_outlined),
-                    title: const Text('Roadmap'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.pushNamed(context, '/roadmap'),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.emoji_events_outlined),
-                    title: const Text('Hackathon context'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.pushNamed(context, '/hackathon'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.verified_outlined),
-                title: const Text('Transparency preview'),
-                subtitle:
-                    const Text('Cardano verification planned (preview only)'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () =>
-                    Navigator.pushNamed(context, '/blockchain/transparency'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: GestureDetector(
-                onLongPress: () {
-                  Navigator.pushNamed(context, '/dev/blockchain');
-                },
-                child: ListTile(
-                  leading: const Icon(Icons.code),
-                  title: const Text('Version'),
-                  subtitle:
-                      Text('v1.0.0  •  UID: ${user?.uid ?? 'signed out'}'),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ]),
+          const SizedBox(height: CanopySpace.section),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onLongPress: () => Navigator.pushNamed(context, '/dev/blockchain'),
+            child: Column(children: [
+              Text('Canopy 1.0.0', style: CanopyType.label.copyWith(color: p.inkMuted)),
+              if (user != null) Text(user.uid, style: CanopyType.micro.copyWith(color: p.inkFaint)),
+            ]),
+          ),
+        ],
       ),
     );
   }

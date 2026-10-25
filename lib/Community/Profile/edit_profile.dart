@@ -1,9 +1,17 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+// lib/Community/Profile/edit_profile.dart
+//
+// Edit profile (v2): photo, display name, location, phone. Password lives in
+// Password & security. The photo uploads only on Save.
 
-import '../../Models/user.dart';
+import 'dart:io';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../../Services/Profile/profile_service.dart';
+import '../../theme/canopy_components.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -13,14 +21,13 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final _formKey = GlobalKey<FormState>();
+  final _uid = FirebaseAuth.instance.currentUser?.uid;
   final _name = TextEditingController();
   final _location = TextEditingController();
   final _phone = TextEditingController();
-
-  bool _loading = true;
-  bool _saving = false;
-  bool _sendingReset = false;
+  String? _photoUrl;
+  File? _newPhoto;
+  bool _loading = true, _failed = false, _saving = false, _showErrors = false;
 
   @override
   void initState() {
@@ -28,192 +35,120 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    for (final c in [_name, _location, _phone]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
   Future<void> _load() async {
-    final user = Provider.of<F_User?>(context, listen: false);
-    if (user == null) {
-      setState(() {
-        _loading = false;
-      });
+    if (_uid == null) {
+      setState(() => _loading = false);
       return;
     }
-
-    final profile = await ProfileService().getProfile(userId: user.uid);
-    if (!mounted) return;
-
-    _name.text = profile?.name ?? '';
-    _location.text = profile?.location ?? '';
-    _phone.text = profile?.phone ?? '';
-
     setState(() {
-      _loading = false;
+      _loading = true;
+      _failed = false;
     });
+    try {
+      final p = await ProfileService().getProfile(userId: _uid);
+      _name.text = p?.name ?? '';
+      _location.text = p?.location ?? '';
+      _phone.text = p?.phone ?? '';
+      _photoUrl = p?.photoUrl;
+    } catch (_) {
+      _failed = true;
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _pick() async {
+    final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 800);
+    if (f != null) setState(() => _newPhoto = File(f.path));
   }
 
   Future<void> _save() async {
-    final user = Provider.of<F_User?>(context, listen: false);
-    if (user == null) {
-      Navigator.pushReplacementNamed(context, '/welcome');
-      return;
-    }
-
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-
+    setState(() => _showErrors = true);
+    if (_name.text.trim().isEmpty || _location.text.trim().isEmpty) return;
     setState(() => _saving = true);
     try {
+      String? photo;
+      if (_newPhoto != null) {
+        final ref = FirebaseStorage.instance.ref('users/$_uid/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await ref.putFile(_newPhoto!);
+        photo = await ref.getDownloadURL();
+      }
       await ProfileService().updateProfile(
-        userId: user.uid,
+        userId: _uid!,
         name: _name.text.trim(),
         location: _location.text.trim(),
         phone: _phone.text.trim(),
+        photoUrl: photo,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated')),
-      );
+      showCanopySnack(context, 'Profile saved.');
       Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't save. Try again.", error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  /// Phase 2.4 — "password at minimum for every role". Sends a Firebase Auth
-  /// reset-password email rather than an inline current/new-password form:
-  /// it needs no re-authentication step here, and reuses the same reset flow
-  /// login.dart already offers, so there's exactly one way this works.
-  Future<void> _sendPasswordReset() async {
-    final email = FirebaseAuth.instance.currentUser?.email;
-    if (email == null || email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No email on file for this account to send a reset link to.'),
-        ),
-      );
-      return;
-    }
-    setState(() => _sendingReset = true);
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Password reset link sent to $email')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not send reset link: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _sendingReset = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _location.dispose();
-    _phone.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<F_User?>(context);
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Edit Profile')),
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : Padding(
-                padding: const EdgeInsets.all(16),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              TextFormField(
-                                controller: _name,
-                                decoration: const InputDecoration(
-                                    labelText: 'Display name'),
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                        ? 'Name is required'
-                                        : null,
-                              ),
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                controller: _location,
-                                decoration: const InputDecoration(
-                                    labelText: 'Location / Zone'),
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                        ? 'Location is required'
-                                        : null,
-                              ),
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                controller: _phone,
-                                keyboardType: TextInputType.phone,
-                                decoration: const InputDecoration(
-                                    labelText: 'Phone number'),
-                              ),
-                              const SizedBox(height: 12),
-                              Card(
-                                child: ListTile(
-                                  leading: _sendingReset
-                                      ? const Padding(
-                                          padding: EdgeInsets.all(2),
-                                          child: SizedBox(
-                                              width: 20,
-                                              height: 20,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2)),
-                                        )
-                                      : const Icon(Icons.lock_outline),
-                                  title: const Text('Change password'),
-                                  subtitle: const Text(
-                                      'Sends a reset link to your account email'),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: _sendingReset ? null : _sendPasswordReset,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Card(
-                                child: ListTile(
-                                  leading: const Icon(Icons.info_outline),
-                                  title: const Text('Account'),
-                                  subtitle: Text('UID: ${user?.uid ?? ''}'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      FilledButton(
-                        onPressed: _saving ? null : _save,
-                        child: _saving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Save'),
-                      ),
-                    ],
-                  ),
-                ),
+    final p = context.canopy;
+    final bar = canopyAppBar(context, title: 'Edit profile');
+    if (_uid == null) return CanopyScaffold(appBar: bar, body: const CanopySignedOutState());
+    if (_loading) return CanopyScaffold(appBar: bar, body: const Center(child: CircularProgressIndicator()));
+    if (_failed) return CanopyScaffold(appBar: bar, body: CanopyErrorState(title: "Couldn't load your profile", onRetry: _load));
+    return CanopyScaffold(
+      appBar: bar,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          Center(
+            child: Semantics(
+              button: true,
+              label: 'Change photo',
+              child: GestureDetector(
+                onTap: _pick,
+                child: Column(children: [
+                  _newPhoto != null
+                      ? ClipOval(child: Image.file(_newPhoto!, width: 96, height: 96, fit: BoxFit.cover))
+                      : CanopyAvatar(url: _photoUrl, name: _name.text, size: 96),
+                  const SizedBox(height: CanopySpace.s8),
+                  Text('Change photo', style: CanopyType.label.copyWith(color: p.primaryInk)),
+                ]),
               ),
+            ),
+          ),
+          const SizedBox(height: CanopySpace.section),
+          CanopyTextField(
+            label: 'Display name',
+            controller: _name,
+            error: _showErrors && _name.text.trim().isEmpty ? 'Your name is needed.' : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField(
+            label: 'Where you are',
+            hint: 'e.g. Kibera, Nairobi',
+            controller: _location,
+            error: _showErrors && _location.text.trim().isEmpty ? 'Add your area so nearby activities show.' : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField.phone(label: 'Phone (optional)', controller: _phone),
+          const SizedBox(height: CanopySpace.section),
+          CanopyListGroup(children: [
+            CanopyListRow(icon: Icons.lock_outline, title: 'Password & security', onTap: () => Navigator.pushNamed(context, '/security')),
+          ]),
+        ],
       ),
+      sticky: StickyActionBar(children: [CanopyButton(label: 'Save', expand: true, loading: _saving, onPressed: _save)]),
     );
   }
 }

@@ -18,8 +18,6 @@ import 'package:impact_trail/Models/environmental/models/market_order.dart';
 import 'package:impact_trail/Models/environmental/models/transformation_record_summary.dart';
 import 'package:impact_trail/Models/environmental/models/monthly_tree_report.dart';
 import 'package:impact_trail/Models/environmental/models/tree_record.dart';
-import 'package:impact_trail/Models/environmental/shared/gps_coordinate.dart';
-import 'package:impact_trail/Models/geo/canopy_location.dart';
 import 'package:impact_trail/Models/marketplace/canopy_listing.dart';
 import 'package:impact_trail/Services/Geo/geo_registry.dart';
 import 'package:impact_trail/Services/Marketplace/listing_service.dart';
@@ -180,6 +178,10 @@ class EnvironmentOpsService {
     required bool canDeliver,
     String? imageUrl,
     bool isRecurring = false,
+    String contactPhone = '',
+    bool negotiable = false,
+    double? lat,
+    double? lng,
   }) async {
     final orderRef = _orgs.doc(orgId).collection('marketOrders').doc();
     final legacyRef = _db.collection('market_listings').doc(orderRef.id);
@@ -198,7 +200,7 @@ class EnvironmentOpsService {
       pricing: MarketOrderPricing(
         pricePerKg: pricePerUnit,
         currency: 'KES',
-        negotiable: false,
+        negotiable: negotiable,
       ),
       quantity: MarketOrderQuantity(
         minimumKg: quantityKg,
@@ -238,6 +240,8 @@ class EnvironmentOpsService {
     if (location.venue == null && locationText.isNotEmpty) {
       location = location.copyWith(venue: locationText);
     }
+    // A precise pin the poster dropped from their phone wins over the area centre.
+    if (lat != null && lng != null) location = location.copyWith(lat: lat, lng: lng);
 
     // The public, browsable record. This is what every member sees in the
     // marketplace — including buy orders, which were previously visible only
@@ -266,8 +270,10 @@ class EnvironmentOpsService {
       orgId: orgId,
       orgName: orgName,
       postedByUid: uid,
+      contactPhone: contactPhone,
       pricing: ListingPricing(
         amountKes: pricePerUnit,
+        negotiable: negotiable,
         unit: unit.toLowerCase() == 'kg' ? PriceUnit.perKg : PriceUnit.perItem,
       ),
       quantity: ListingQuantity(
@@ -476,6 +482,8 @@ class EnvironmentOpsService {
     required String area,
     String? zoneId,
     List<LatLng>? zoneVertices,
+    String? growthStage,
+    bool locationIsGps = true,
   }) async {
     final species = _resolveTreeSpecies(speciesName);
     final now = DateTime.now();
@@ -526,7 +534,10 @@ class EnvironmentOpsService {
         ),
         monthlyUpdates: const [],
         updateCount: 0,
-        notes: quantity > 1 ? 'Planted in batch of $quantity trees' : null,
+        notes: [
+          if (quantity > 1) 'Planted in batch of $quantity trees',
+          if (growthStage != null && growthStage.isNotEmpty) 'Planted as $growthStage',
+        ].join(' · ').ifEmptyNull,
         createdAt: now,
       );
       batch.set(treeRef, tree.toFirestore());
@@ -541,6 +552,9 @@ class EnvironmentOpsService {
       'lng': lng,
       'photo_urls': photoUrls,
       'stage': 'pending',
+      'org_id': orgId,
+      if (growthStage != null && growthStage.isNotEmpty) 'growth_stage': growthStage,
+      'location_source': locationIsGps ? 'gps' : 'manual_pin',
       'created_by': uid,
       'created_at': Timestamp.fromDate(now),
       'follow_up_30': Timestamp.fromDate(now.add(const Duration(days: 30))),
@@ -936,4 +950,8 @@ class EnvironmentOpsService {
     }
     return VerificationTier.registered;
   }
+}
+
+extension on String {
+  String? get ifEmptyNull => isEmpty ? null : this;
 }

@@ -28,8 +28,15 @@ class ImpactService {
         .snapshots()
         .map((doc) {
       final data = doc.data();
-      return (data?['totalImpactPoints'] as int?) ?? 0;
+      return (data?['totalImpactPoints'] as num?)?.toInt() ?? 0;
     });
+  }
+
+  /// Newest first, done here so these queries need no composite index (a
+  /// missing index made the server reject the stream after the cache showed).
+  static List<Contribution> _newestFirst(List<Contribution> all, int limit) {
+    all.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+    return all.length > limit ? all.sublist(0, limit) : all;
   }
 
   Stream<int> watchUserImpactPoints({required String userId}) {
@@ -46,12 +53,8 @@ class ImpactService {
     return _db
         .collection('contributions')
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map(Contribution.fromDoc).toList();
-    });
+        .map((snapshot) => _newestFirst(snapshot.docs.map(Contribution.fromDoc).toList(), limit));
   }
 
   Stream<List<Contribution>> watchCommunityContributions({
@@ -61,12 +64,8 @@ class ImpactService {
     return _db
         .collection('contributions')
         .where('communityId', isEqualTo: communityId)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map(Contribution.fromDoc).toList();
-    });
+        .map((snapshot) => _newestFirst(snapshot.docs.map(Contribution.fromDoc).toList(), limit));
   }
 
   ImpactSummary summarize(

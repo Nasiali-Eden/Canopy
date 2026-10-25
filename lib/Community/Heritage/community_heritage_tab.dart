@@ -1,429 +1,516 @@
 // lib/Community/Heritage/community_heritage_tab.dart
 //
-// Phase 4 — Heritage home, fully data-driven. Replaces the old 1.8k-line
-// hardcoded screen (country grid, tribe lists, foods, history, Luhya page) with
-// a registry-driven country grid + Firestore-driven featured rail. Navigation
-// goes Home → CountryScreen → Category/Community → Item (all in sibling files).
+// Heritage home + search (HERITAGE_HANDOFF §3.1–3.2).
 //
-// Backend ⇄ frontend parity: countries come from the bundled registry; liveness
-// + featured come from `cultural_entries`. No hardcoded cultural content, no
-// orphan `heritage_entries` read. The ONLY static image is `images/BG.png`.
-
-import 'dart:ui' as ui;
+// Home: backdrop images/BG.png (470) · app bar "HERITAGE" label + glass
+// search · lede (heritageTitle 30/38) · sheet: Countries — ≤3 live →
+// stacked live banners; 4+ → rail of live banners — then Soon countries in a
+// 2-col grid (6 shown, then a dashed "[N] more countries opening" row) ·
+// Featured rail (tiles with category label; hidden when empty) · glass nav
+// (owned by the shell; this tab reports scroll direction so it hides on
+// scroll down).
+// States: loading (skeleton banner + grid), error (callout + retry).
+//
+// Search: solid page, focused field, category filter chips with counts,
+// results grouped by category as row cards. No results: "Nothing in the
+// archive matches …" + category labels to browse.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
-import 'package:cached_network_image/cached_network_image.dart';
 
+import '../../Culture/Heritage/Services/heritage_bundled_images.dart';
+import '../../Culture/Heritage/Services/heritage_content_types.dart';
 import '../../Culture/Heritage/Services/heritage_data_service.dart';
+import '../../theme/canopy_components.dart';
+import 'category_browse_screen.dart';
 import 'country_screen.dart';
 import 'heritage_item_screen.dart';
-import 'heritage_widgets.dart';
+import 'heritage_map_screen.dart';
+import 'heritage_ui.dart';
 
-// ─── Heritage dark-theme tokens ───────────────────────────────────────────────
-const _textColor = Color(0xFFE8F0E9);
-const _textDim = Color(0x80E8F0E9);
-const _textFaint = Color(0x47E8F0E9);
-const _gold = Color(0xFFC4A961);
-const _border = Color(0x1F86BC9E);
-
-class CommunityHeritageTab extends StatelessWidget {
-  /// Phase 1.4 — reports scroll direction so the shared [CanopyBottomBar]
-  /// (owned by the parent shell, `community_home.dart`) can go transparent
-  /// while scrolling down and opaque at rest/scrolling up, scoped to this
-  /// screen only. Null when this tab isn't hosted inside that shell (e.g. if
-  /// ever pushed standalone) — the scroll listener is simply a no-op then.
+class CommunityHeritageTab extends StatefulWidget {
+  /// Reports scroll direction so the shell's glass nav hides on scroll down.
   final ValueChanged<ScrollDirection>? onScrollDirectionChanged;
 
   const CommunityHeritageTab({super.key, this.onScrollDirectionChanged});
 
   @override
-  Widget build(BuildContext context) {
-    final service = HeritageDataService();
-    final mq = MediaQuery.of(context);
-    final topInset = mq.padding.top;
-    final bottomInset = mq.padding.bottom;
+  State<CommunityHeritageTab> createState() => _CommunityHeritageTabState();
+}
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        title: const Text(
-          'Heritage',
-          style: TextStyle(
-            color: _textColor,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
+class _CommunityHeritageTabState extends State<CommunityHeritageTab> {
+  final _service = HeritageDataService();
+  late Future<List<HeritageCountry>> _countries = _service.loadCountries();
+  late Stream<Map<String, ({int entries, int communities})>> _stats =
+      _service.streamCountryStats();
+  late final Stream<List<HeritageItem>> _featured = _service.streamFeatured(limit: 40);
+
+  void _retry() => setState(() {
+        _countries = _service.loadCountries();
+        _stats = _service.streamCountryStats();
+      });
+
+  void _openCountry(HeritageCountry c) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => CountryScreen(country: c)));
+
+  void _openItem(HeritageItem i) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => HeritageItemScreen(item: i)));
+
+  @override
+  Widget build(BuildContext context) {
+    return HeritageBackdropPage(
+      showBack: false,
+      backdropHeight: 470,
+      onScrollDirection: widget.onScrollDirectionChanged,
+      bottomPadding: 96, // clears the floating glass nav
+      backdrop: Image.asset('images/BG.png',
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) =>
+              const HeritageFallback(category: HeritageCategory.places)),
+      actions: [
+        GlassIconButton(
+          icon: Icons.map_outlined,
+          tooltip: 'Culture map',
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HeritageMapScreen())),
+        ),
+        const SizedBox(width: CanopySpace.s8),
+        GlassIconButton(
+          icon: Icons.search,
+          tooltip: 'Search the archive',
+          onPressed: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const HeritageSearchScreen())),
+        ),
+      ],
+      titleBlock: Builder(builder: (context) {
+        final h = context.heritage;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('HERITAGE', style: CanopyType.heritageFieldLabel.copyWith(color: h.ink)),
+            const SizedBox(height: CanopySpace.s8),
+            Text('Every culture has its own logic, its own reason for being.',
+                style: CanopyType.heritageTitle
+                    .copyWith(color: h.ink, fontSize: 30, height: 38 / 30)),
+          ],
+        );
+      }),
+      sheetChildren: [
+        FutureBuilder<List<HeritageCountry>>(
+          future: _countries,
+          builder: (context, cs) => StreamBuilder<Map<String, ({int entries, int communities})>>(
+            stream: _stats,
+            builder: (context, st) {
+              if (cs.hasError || st.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(CanopySpace.gutter),
+                  child: CanopyErrorState(
+                      inline: true, title: "Couldn't load countries.", onRetry: _retry),
+                );
+              }
+              if (!cs.hasData || !st.hasData) return const _CountriesSkeleton();
+              return _Countries(
+                countries: cs.data!,
+                stats: st.data!,
+                service: _service,
+                onOpen: _openCountry,
+              );
+            },
           ),
         ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
-              borderRadius: BorderRadius.circular(50),
-              border: Border.all(color: _border),
-            ),
-            child: IconButton(
-              padding: const EdgeInsets.all(8),
-              onPressed: () => showSearch(
-                  context: context, delegate: _HeritageSearchDelegate(service)),
-              icon: const Icon(Icons.search, size: 20, color: _textColor),
+        StreamBuilder<List<HeritageItem>>(
+          stream: _featured,
+          builder: (context, snap) => _HomeSections(
+            items: snap.data ?? const <HeritageItem>[],
+            onOpen: _openItem,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Countries extends StatelessWidget {
+  final List<HeritageCountry> countries;
+  final Map<String, ({int entries, int communities})> stats;
+  final HeritageDataService service;
+  final ValueChanged<HeritageCountry> onOpen;
+  const _Countries(
+      {required this.countries, required this.stats, required this.service, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final live = countries.where((c) => (stats[c.id]?.entries ?? 0) > 0).toList()
+      ..sort((a, b) => (stats[b.id]!.entries).compareTo(stats[a.id]!.entries));
+
+    Widget liveCard(HeritageCountry c, {double? width}) =>
+        StreamBuilder<({String? bg, String? card})>(
+          stream: service.streamNodeImages(c.id),
+          builder: (_, img) => SizedBox(
+            width: width,
+            child: CountryCard(
+              country: c,
+              stats: stats[c.id],
+              imageUrl: img.data?.card ?? img.data?.bg,
+              onTap: () => onOpen(c),
             ),
           ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // The one static image that stays.
-          Positioned.fill(
-            child: Image.asset(
-              'images/BG.png',
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black),
-            ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        HeritageSectionHeader(title: 'Countries', accent: HeritageCategory.places.fill),
+        if (live.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: CanopySpace.gutter),
+            child: CheckBackLater(
+                line: 'The first country pages open as organisations publish entries.'),
+          )
+        else if (live.length <= 3)
+          for (final c in live)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  CanopySpace.gutter, 0, CanopySpace.gutter, CanopySpace.s12),
+              child: liveCard(c),
+            )
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: CanopySpace.gutter),
+            child: Row(children: [
+              for (final c in live) ...[
+                liveCard(c, width: 280),
+                const SizedBox(width: CanopySpace.s12),
+              ],
+            ]),
           ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.22),
-                    Colors.black.withOpacity(0.40),
-                    Colors.black.withOpacity(0.65),
-                    Colors.black.withOpacity(0.82),
-                  ],
-                  stops: const [0.0, 0.28, 0.60, 1.0],
+      ],
+    );
+  }
+}
+
+class _CountriesSkeleton extends StatelessWidget {
+  const _CountriesSkeleton();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s24, CanopySpace.gutter, 0),
+        child: Column(children: [
+          const CanopySkeleton(height: 260, radius: HeritageCardSize.radius),
+          const SizedBox(height: CanopySpace.s12),
+          Row(children: const [
+            Expanded(child: CanopySkeleton(height: 88, radius: HeritageCardSize.radius)),
+            SizedBox(width: CanopySpace.s12),
+            Expanded(child: CanopySkeleton(height: 88, radius: HeritageCardSize.radius)),
+          ]),
+        ]),
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEARCH
+// ─────────────────────────────────────────────────────────────────────────────
+
+class HeritageSearchScreen extends StatefulWidget {
+  const HeritageSearchScreen({super.key});
+
+  @override
+  State<HeritageSearchScreen> createState() => _HeritageSearchScreenState();
+}
+
+class _HeritageSearchScreenState extends State<HeritageSearchScreen> {
+  // Search runs over the recent public set, client-side (index-free).
+  late final Stream<List<HeritageItem>> _all = HeritageDataService().streamFeatured(limit: 300);
+  String _q = '';
+  String? _type;
+
+  bool _match(HeritageItem it) {
+    final q = _q.toLowerCase();
+    return it.title.toLowerCase().contains(q) ||
+        it.description.toLowerCase().contains(q) ||
+        it.tags.any((t) => t.toLowerCase().contains(q)) ||
+        (it.communityName ?? '').toLowerCase().contains(q);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return HeritagePlainPage(
+      title: 'Search',
+      body: StreamBuilder<List<HeritageItem>>(
+        stream: _all,
+        builder: (context, snap) {
+          final h = context.heritage;
+          final matching = _q.isEmpty ? const <HeritageItem>[] : (snap.data ?? const []).where(_match).toList();
+          final counts = <String, int>{};
+          for (final it in matching) {
+            counts[it.contentType] = (counts[it.contentType] ?? 0) + 1;
+          }
+          final shown = _type == null ? matching : matching.where((i) => i.contentType == _type).toList();
+
+          return ListView(
+            padding: const EdgeInsets.only(bottom: CanopySpace.s32),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                    CanopySpace.gutter, CanopySpace.s4, CanopySpace.gutter, CanopySpace.s4),
+                child: CanopyTextField.search(
+                  hint: 'Stories, food, music, places…',
+                  autofocus: true,
+                  onChanged: (v) => setState(() {
+                    _q = v.trim();
+                    _type = null;
+                  }),
                 ),
               ),
-            ),
-          ),
-          NotificationListener<UserScrollNotification>(
-            onNotification: (notification) {
-              onScrollDirectionChanged?.call(notification.direction);
-              return false; // keep bubbling — don't swallow the notification
-            },
-            child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(child: SizedBox(height: topInset + 52)),
-
-              // Quote — enlarged, the hero line of the Heritage home.
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(24, 0, 24, 7),
+              if (counts.isNotEmpty)
+                CanopyChipRail(chips: [
+                  CanopyFilterChip(
+                      label: 'All', count: matching.length, selected: _type == null,
+                      onTap: () => setState(() => _type = null)),
+                  for (final t in HeritageContentTypes.ordered)
+                    if (counts.containsKey(t.key))
+                      CanopyFilterChip(
+                        label: t.label,
+                        count: counts[t.key],
+                        selected: _type == t.key,
+                        onTap: () => setState(() => _type = t.key),
+                      ),
+                ]),
+              if (!snap.hasData && _q.isNotEmpty)
+                const Padding(
+                    padding: EdgeInsets.all(CanopySpace.gutter), child: CanopyListSkeleton(rows: 3))
+              else if (_q.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(CanopySpace.gutter),
+                  child: Text('Search entries published by organisations across the archive.',
+                      style: CanopyType.body.copyWith(color: h.inkMuted)),
+                )
+              else if (shown.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(CanopySpace.gutter),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(
-                          width: 36,
-                          child: Divider(color: _gold, thickness: 3)),
-                      SizedBox(height: 14),
-                      Text(
-                        'Every culture has its own logic,\nits own reason for being.',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontStyle: FontStyle.italic,
-                          fontWeight: FontWeight.w600,
-                          color: _textColor,
-                          height: 1.4,
-                          letterSpacing: -0.3,
-                        ),
+                      Text('Nothing in the archive matches "$_q" yet.',
+                          style: CanopyType.heritageSection.copyWith(color: h.ink)),
+                      const SizedBox(height: CanopySpace.s16),
+                      Text('BROWSE BY CATEGORY',
+                          style: CanopyType.heritageFieldLabel.copyWith(color: h.inkMuted)),
+                      const SizedBox(height: CanopySpace.s8),
+                      Wrap(
+                        spacing: CanopySpace.s16,
+                        runSpacing: CanopySpace.s12,
+                        children: [
+                          for (final t in HeritageContentTypes.ordered)
+                            InkWell(
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => HeritageBrowseScreen(contentType: t.key, title: t.label),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: CanopySpace.s8),
+                                child: CategoryLabel(t.label, category: t.category),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              // Country grid (registry-driven).
-              SliverToBoxAdapter(
-                child: FutureBuilder<List<HeritageCountry>>(
-                  future: service.loadCountries(),
-                  builder: (context, snap) {
-                    final countries = snap.data ?? const <HeritageCountry>[];
-                    if (snap.connectionState == ConnectionState.waiting) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 40),
-                        child: Center(
-                          child: CircularProgressIndicator(
-                              color: _gold, strokeWidth: 2),
-                        ),
-                      );
-                    }
-                    if (countries.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
-                        child: Text(
-                          'Countries will appear here soon.',
-                          style: TextStyle(color: _textFaint, fontSize: 13),
-                        ),
-                      );
-                    }
-                    // Curated three: Kenya full-width banner, then Nigeria +
-                    // South Africa side by side — all the same height.
-                    HeritageCountry? pick(String id) {
-                      for (final c in countries) {
-                        if (c.id == id) return c;
-                      }
-                      return null;
-                    }
-
-                    final kenya = pick('country_kenya');
-                    final nigeria = pick('country_nigeria');
-                    final southAfrica = pick('country_south_africa');
-
-                    void open(HeritageCountry c) => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CountryScreen(country: c),
-                          ),
-                        );
-
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: LayoutBuilder(
-                        builder: (context, c) {
-                          final cardW = (c.maxWidth - 12) / 2;
-                          final cardH = cardW / 0.92; // "normal shape" height
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (kenya != null)
-                                SizedBox(
-                                  height: cardH,
-                                  child: _CountryCard(
-                                    country: kenya,
-                                    service: service,
-                                    onTap: () => open(kenya),
-                                  ),
-                                ),
-                              if (kenya != null &&
-                                  (nigeria != null || southAfrica != null))
-                                const SizedBox(height: 12),
-                              if (nigeria != null || southAfrica != null)
-                                SizedBox(
-                                  height: cardH,
-                                  child: Row(
-                                    children: [
-                                      if (nigeria != null)
-                                        Expanded(
-                                          child: _CountryCard(
-                                            country: nigeria,
-                                            service: service,
-                                            onTap: () => open(nigeria),
-                                          ),
-                                        ),
-                                      if (nigeria != null && southAfrica != null)
-                                        const SizedBox(width: 12),
-                                      if (southAfrica != null)
-                                        Expanded(
-                                          child: _CountryCard(
-                                            country: southAfrica,
-                                            service: service,
-                                            onTap: () => open(southAfrica),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              // Featured items below the countries — real entries when present,
-              // glassy placeholder cards otherwise (represents the design).
-              SliverToBoxAdapter(
-                child: StreamBuilder<List<HeritageItem>>(
-                  stream: service.streamFeatured(limit: 8),
-                  builder: (context, snap) {
-                    final items = snap.data ?? const <HeritageItem>[];
-                    final has = items.isNotEmpty;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _SectionLabel('Featured'),
-                        SizedBox(
-                          height: 190,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            itemCount: has ? items.length : 4,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 12),
-                            itemBuilder: (_, i) => SizedBox(
-                              width: 240,
-                              child: has
-                                  ? HeritageItemCard(
-                                      item: items[i],
-                                      onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => HeritageItemScreen(
-                                              item: items[i]),
-                                        ),
-                                      ),
-                                    )
-                                  : HeritagePlaceholderCard(
-                                      icon: i.isEven
-                                          ? Icons.auto_stories_outlined
-                                          : Icons.restaurant_outlined,
-                                      accent: i.isEven
-                                          ? const Color(0xFFB87333)
-                                          : const Color(0xFFD4873A),
-                                    ),
+                )
+              else
+                for (final t in HeritageContentTypes.ordered)
+                  if (shown.any((i) => i.contentType == t.key)) ...[
+                    HeritageSectionHeader(title: t.label, accent: t.category.fill),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: CanopySpace.gutter),
+                      child: Column(children: [
+                        for (final it in shown.where((i) => i.contentType == t.key)) ...[
+                          LayoutBuilder(
+                            builder: (_, c) => HeritageCard(
+                              item: it,
+                              shape: HeritageCardShape.row,
+                              width: c.maxWidth,
+                              onTap: () => Navigator.push(context,
+                                  MaterialPageRoute(builder: (_) => HeritageItemScreen(item: it))),
                             ),
                           ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-
-              SliverToBoxAdapter(child: SizedBox(height: 80 + bottomInset)),
+                          const SizedBox(height: CanopySpace.s8),
+                        ],
+                      ]),
+                    ),
+                  ],
             ],
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 }
 
-// ─── Country card ─────────────────────────────────────────────────────────────
-class _CountryCard extends StatelessWidget {
-  final HeritageCountry country;
-  final HeritageDataService service;
-  final VoidCallback onTap;
 
-  const _CountryCard({
-    required this.country,
-    required this.service,
-    required this.onTap,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// HOME SECTIONS — mixed sizes, all from public entries, below the countries.
+//   Featured (bento: one tall poster + two tiles) · Featured food (wide banner
+//   strip) · Most discussed (one wide card, public) · Recently added (2-column
+//   grid). A section with nothing to show is not rendered.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _HomeSections extends StatelessWidget {
+  final List<HeritageItem> items; // newest activity first
+  final ValueChanged<HeritageItem> onOpen;
+  const _HomeSections({required this.items, required this.onOpen});
+
+  static const _foodTypes = {'food_tradition', 'ingredient'};
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _border),
+    if (items.isEmpty) return const SizedBox.shrink();
+    final h = context.heritage;
+
+    final featured = items.take(3).toList();
+    final food = items.where((i) => _foodTypes.contains(i.contentType)).take(8).toList();
+    final discussed = [...items.where((i) => i.commentCount > 0)]
+      ..sort((a, b) {
+        final c = b.commentCount.compareTo(a.commentCount);
+        return c != 0 ? c : b.viewCount.compareTo(a.viewCount);
+      });
+    final shownIds = {for (final i in featured) i.id};
+    final recent = items.where((i) => !shownIds.contains(i.id)).take(6).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (featured.length >= 3) ...[
+          HeritageSectionHeader(title: 'Featured', accent: h.inkMuted),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: CanopySpace.gutter),
+            child: LayoutBuilder(builder: (_, c) {
+              final w = (c.maxWidth - CanopySpace.s12) / 2;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  HeritageCard(
+                      item: featured[0], shape: HeritageCardShape.poster, width: w, showCategory: true, onTap: () => onOpen(featured[0])),
+                  const SizedBox(width: CanopySpace.s12),
+                  Column(children: [
+                    HeritageCard(
+                        item: featured[1], shape: HeritageCardShape.tile, width: w, showCategory: true, onTap: () => onOpen(featured[1])),
+                    const SizedBox(height: CanopySpace.s12),
+                    HeritageCard(
+                        item: featured[2], shape: HeritageCardShape.tile, width: w, showCategory: true, onTap: () => onOpen(featured[2])),
+                  ]),
+                ],
+              );
+            }),
           ),
-          child: Stack(
-            fit: StackFit.expand,
+        ] else if (featured.isNotEmpty) ...[
+          HeritageSectionHeader(title: 'Featured', accent: h.inkMuted),
+          HeritageRail(items: featured, shape: HeritageCardShape.tile, showCategory: true, onOpen: onOpen),
+        ],
+        if (food.isNotEmpty) ...[
+          HeritageSectionHeader(title: 'Featured food', accent: HeritageCategory.food.fill),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: CanopySpace.gutter),
+            child: Row(children: [
+              for (final it in food) ...[
+                HeritageCard(item: it, shape: HeritageCardShape.banner, width: 300, onTap: () => onOpen(it)),
+                const SizedBox(width: CanopySpace.s12),
+              ],
+            ]),
+          ),
+        ],
+        if (discussed.isNotEmpty) ...[
+          HeritageSectionHeader(title: 'Most discussed', accent: h.inkMuted),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: CanopySpace.gutter),
+            child: _MostDiscussedCard(item: discussed.first, onTap: () => onOpen(discussed.first)),
+          ),
+        ],
+        if (recent.isNotEmpty) ...[
+          HeritageSectionHeader(title: 'Recently added', accent: h.inkMuted),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: CanopySpace.gutter),
+            child: LayoutBuilder(builder: (_, c) {
+              final w = (c.maxWidth - CanopySpace.s12) / 2;
+              return Wrap(
+                spacing: CanopySpace.s12,
+                runSpacing: CanopySpace.s12,
+                children: [
+                  for (final it in recent)
+                    HeritageCard(item: it, shape: HeritageCardShape.tile, width: w, showCategory: true, onTap: () => onOpen(it)),
+                ],
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The public entry people are talking about most: photo, title, a short
+/// excerpt and the comment count.
+class _MostDiscussedCard extends StatelessWidget {
+  final HeritageItem item;
+  final VoidCallback onTap;
+  const _MostDiscussedCard({required this.item, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final h = context.heritage;
+    final cat = heritageCategoryFor(item.contentType);
+    final cover = (item.coverImageUrl ?? '').isNotEmpty
+        ? item.coverImageUrl
+        : HeritageBundledImages.forContentType(item.contentType);
+    final n = item.commentCount;
+    return Semantics(
+      button: true,
+      label: '${item.title}, $n comments',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: GlassSurface(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Backdrop: org-uploaded country image, else one glassy translucent
-              // style (frosted over the Heritage background) — never a coloured
-              // per-country gradient.
-              Positioned.fill(
-                child: StreamBuilder<({String? bg, String? card})>(
-                  stream: service.streamNodeImages(country.id),
-                  builder: (_, snap) {
-                    // Prefer the square "heritage card" image; fall back to the
-                    // rectangular banner, then to the glassy BG.png frost.
-                    final url = (snap.data?.card?.isNotEmpty ?? false)
-                        ? snap.data!.card
-                        : (snap.data?.bg?.isNotEmpty ?? false)
-                            ? snap.data!.bg
-                            : null;
-                    if (url != null && url.isNotEmpty) {
-                      return CachedNetworkImage(
-                        imageUrl: url,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => _glass(),
-                        placeholder: (_, __) => _glass(),
-                      );
-                    }
-                    return _glass();
-                  },
+              ClipRRect(
+                borderRadius: BorderRadius.circular(HeritageGlass.radiusMedia),
+                child: SizedBox(
+                  width: 112,
+                  height: 140,
+                  child: HeritageMedia(url: cover, category: cat, icon: heritageIconFor(item.contentType)),
                 ),
               ),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                    ),
-                  ),
-                ),
-              ),
-              // Live / Soon badge — from real entry presence.
-              Positioned(
-                top: 10,
-                right: 10,
-                child: StreamBuilder<bool>(
-                  stream: service.streamCountryHasEntries(country.id),
-                  builder: (_, snap) {
-                    final live = snap.data ?? false;
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: live ? _gold : Colors.white12,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        live ? 'Live' : 'Soon',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color:
-                              live ? const Color(0xFF1A0E00) : Colors.white60,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
+              const SizedBox(width: CanopySpace.s12),
+              Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.only(top: CanopySpace.s4, right: CanopySpace.s4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (country.flagEmoji.isNotEmpty)
-                        Text(country.flagEmoji,
-                            style: const TextStyle(fontSize: 20)),
-                      const SizedBox(height: 4),
-                      Text(
-                        country.name,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          height: 1.05,
-                        ),
-                      ),
-                      if (country.continent.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          country.continent,
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.white.withOpacity(0.55)),
-                        ),
+                      CategoryLabel(item.contentTypeLabel, category: cat),
+                      const SizedBox(height: CanopySpace.s4),
+                      Text(item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: CanopyType.heritageSection.copyWith(color: h.ink, fontSize: 20, height: 26 / 20)),
+                      if (item.description.trim().isNotEmpty) ...[
+                        const SizedBox(height: CanopySpace.s4),
+                        Text(item.description.trim(),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: CanopyType.body.copyWith(color: h.inkMuted, height: 20 / 14)),
                       ],
+                      const SizedBox(height: CanopySpace.s8),
+                      Row(children: [
+                        Icon(Icons.chat_bubble_outline, size: 16, color: h.ink),
+                        const SizedBox(width: CanopySpace.s4 + 2),
+                        Text('$n ${n == 1 ? 'comment' : 'comments'}',
+                            style: CanopyType.label.copyWith(color: h.ink)),
+                      ]),
                     ],
                   ),
                 ),
@@ -431,130 +518,6 @@ class _CountryCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  /// One consistent glassy translucent fill (frosts the Heritage background)
-  /// used for every country without an uploaded image.
-  Widget _glass() {
-    return BackdropFilter(
-      filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-      child: Container(color: Colors.white.withOpacity(0.07)),
-    );
-  }
-}
-
-// ─── Section label ────────────────────────────────────────────────────────────
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-      child: Text(
-        text.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 1.0,
-          color: _textFaint,
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Search — real entries (recent public set, filtered client-side) ──────────
-class _HeritageSearchDelegate extends SearchDelegate<String> {
-  final HeritageDataService service;
-  _HeritageSearchDelegate(this.service);
-
-  @override
-  ThemeData appBarTheme(BuildContext context) {
-    return Theme.of(context).copyWith(
-      scaffoldBackgroundColor: const Color(0xFF0D1F14),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Color(0xFF1A2B1E),
-        iconTheme: IconThemeData(color: _textColor),
-      ),
-      inputDecorationTheme: const InputDecorationTheme(
-        hintStyle: TextStyle(color: _textFaint),
-        border: InputBorder.none,
-      ),
-      textTheme: const TextTheme(
-        titleLarge: TextStyle(color: _textColor, fontSize: 16),
-      ),
-    );
-  }
-
-  @override
-  List<Widget> buildActions(BuildContext context) => [
-        IconButton(
-          icon: const Icon(Icons.clear, color: _textFaint),
-          onPressed: () => query = '',
-        )
-      ];
-
-  @override
-  Widget buildLeading(BuildContext context) => IconButton(
-        icon: const Icon(Icons.arrow_back, color: _textColor),
-        onPressed: () => close(context, ''),
-      );
-
-  @override
-  Widget buildResults(BuildContext context) => _results(context);
-
-  @override
-  Widget buildSuggestions(BuildContext context) => _results(context);
-
-  Widget _results(BuildContext context) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) {
-      return Container(
-        color: const Color(0xFF0D1F14),
-        child: const Center(
-          child: Text('Search stories, food, music, places…',
-              style: TextStyle(color: _textFaint, fontSize: 14)),
-        ),
-      );
-    }
-    return Container(
-      color: const Color(0xFF0D1F14),
-      child: StreamBuilder<List<HeritageItem>>(
-        stream: service.streamFeatured(limit: 50),
-        builder: (context, snap) {
-          final all = snap.data ?? const <HeritageItem>[];
-          final results = all.where((it) {
-            return it.title.toLowerCase().contains(q) ||
-                it.description.toLowerCase().contains(q) ||
-                it.tags.any((t) => t.toLowerCase().contains(q)) ||
-                (it.communityName ?? '').toLowerCase().contains(q);
-          }).toList();
-          if (results.isEmpty) {
-            return Center(
-              child: Text('No results for "$query" yet.',
-                  style: const TextStyle(color: _textDim, fontSize: 14)),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: results.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (_, i) => HeritageItemCard(
-              item: results[i],
-              compact: true,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => HeritageItemScreen(item: results[i]),
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }

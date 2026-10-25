@@ -1,160 +1,61 @@
 // lib/Shared/Pages/privacy_policy_screen.dart
 //
-// Phase 2.3 (Minimal Release Roadmap) — privacy policy draft. Covers, per the
-// roadmap's own scope for this deliverable: what's collected per role, the
-// community-owned-data principle already stated in the Community Platform
-// doc, what's anchored on Cardano versus kept off-chain (per the Cardano
-// pilot plan), M-Pesa payment data handling, and retention/deletion.
-//
-// Marked DRAFT in the UI on purpose — this is legal-facing content and the
-// roadmap explicitly calls it a draft, not a final policy. Worth a real
-// legal review before ship, and worth revisiting once the Phase 0.1 Konza
-// application (if pursued) clarifies any additional government-data-sharing
-// language needed.
+// Privacy policy (v2) — a DRAFT pending legal review, labelled as such.
+// Rule: it describes only what the app does today. Nothing planned goes in
+// here until it ships; update this screen in the same change that ships it.
 
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
-import 'about_screen.dart' show kCanopyDescription;
+import '../../theme/canopy_components.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
   const PrivacyPolicyScreen({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppTheme.darkGreen,
-        title: const Text('Privacy Policy',
-            style: TextStyle(
-                color: AppTheme.darkGreen, fontWeight: FontWeight.w800)),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppTheme.tertiary.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'DRAFT — pending legal review',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                    color: AppTheme.darkGreen),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(kCanopyDescription,
-                style: TextStyle(
-                    fontSize: 14,
-                    height: 1.6,
-                    color: AppTheme.darkGreen.withOpacity(0.75))),
-            const SizedBox(height: 24),
-            const _Section(
-              title: 'What we collect',
-              body:
-                  'What Canopy collects depends on your role. Every account has '
-                  'a phone number and an approximate location (your community/'
-                  'zone). Residents and Volunteers add photos when logging '
-                  'contributions. Collectors and Processors add material and '
-                  'transaction details. Verifiers may optionally link a '
-                  'national ID to unlock verification duties. Organisations '
-                  'provide organisation details (name, sector, logo, cover '
-                  'photo, contact info) at registration.',
-            ),
-            const _Section(
-              title: 'Community-owned data',
-              body:
-                  'Canopy does not sell your data. Aggregated, anonymised '
-                  'insights — dumpsite density, verified cleanup outcomes, '
-                  'material-recovery volumes — may be shared with county '
-                  'governments and policymakers, but only with community '
-                  'consent, and never as data that identifies you individually.',
-            ),
-            const _Section(
-              title: 'What goes on the blockchain — and what never does',
-              body:
-                  'Canopy anchors proof of verified environmental action on '
-                  'the Cardano blockchain (currently Preprod, a test network — '
-                  'see the app\'s Transparency screen for status). What\'s '
-                  'anchored is a cryptographic hash: a fingerprint that proves '
-                  'a record existed and hasn\'t been altered, not the record '
-                  'itself. Your name, phone number, exact GPS coordinates, '
-                  'photos, and M-Pesa details are never included in anything '
-                  'anchored on-chain — only opaque, derived, or aggregate '
-                  'values ever are, and that\'s enforced in code, not just '
-                  'policy.',
-            ),
-            const _Section(
-              title: 'Payments',
-              body:
-                  'Marketplace and collection payouts run through M-Pesa. '
-                  'Canopy stores what\'s needed to complete and reconcile a '
-                  'payment (transaction reference, amount, timestamp) — never '
-                  'your M-Pesa PIN, and payment references are treated the '
-                  'same as other sensitive fields: never anchored on-chain.',
-            ),
-            const _Section(
-              title: 'Retention & deletion',
-              body:
-                  'You can request deletion of your account and personal data '
-                  'at any time from Settings. Verified contribution records '
-                  'that other users or organisations rely on (e.g. a '
-                  'collection handoff another party confirmed) may be retained '
-                  'in de-identified form after account deletion, consistent '
-                  'with the verification history those other parties depend '
-                  'on. Anchored hashes, by the nature of a public blockchain, '
-                  'cannot be deleted after the fact — this is exactly why no '
-                  'personal data is ever put into one.',
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Questions about this policy can be sent through the Help '
-              'screen once it\'s live, or directly to SHIELD International.',
-              style: TextStyle(
-                  fontSize: 12.5,
-                  fontStyle: FontStyle.italic,
-                  color: AppTheme.darkGreen.withOpacity(0.5)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  final String title;
-  final String body;
-  const _Section({required this.title, required this.body});
+  static const _sections = [
+    (
+      'What we collect',
+      'When you sign up: your name, username, email and the county or area you choose. In Edit profile you can '
+          'add a photo and a phone number. When you log a contribution or report an issue: the photos, description '
+          'and location you add. Organisations give their name, sector, logo, contact details and location when '
+          'they register. Makers and field teams add listings, zones, tree plantings and collection handoffs.'
+    ),
+    (
+      'Who can see it',
+      'Your name and photo appear on the leaderboard and on contributions you log. Reported issues can be seen by '
+          "anyone signed in. Each organisation's contact details are shown on its public page. When you send a maker "
+          'or material request, the phone number you enter goes to that seller. Heritage entries are shown according '
+          'to the visibility the archive chose.'
+    ),
+    (
+      'Payments',
+      'When you pay for a home service with M-Pesa, Canopy keeps the M-Pesa receipt number with the booking. '
+          'Canopy never sees or stores your M-Pesa PIN. Marketplace purchases are arranged directly with the maker; '
+          'the app does not take payment for them.'
+    ),
+    (
+      'Changing your details',
+      'You can change your name, photo, location and phone number at any time in Edit profile.'
+    ),
+    ('Selling data', 'Canopy does not sell your data.'),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final p = context.canopy;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Privacy policy'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.darkGreen)),
-          const SizedBox(height: 6),
-          Text(body,
-              style: TextStyle(
-                  fontSize: 13.5,
-                  height: 1.6,
-                  color: AppTheme.darkGreen.withOpacity(0.75))),
+          const CanopyCallout(kind: CalloutKind.warning, text: 'Draft, pending legal review.'),
+          for (final (title, body) in _sections) ...[
+            const SizedBox(height: CanopySpace.section),
+            Text(title, style: CanopyType.title.copyWith(color: p.ink)),
+            const SizedBox(height: CanopySpace.s8),
+            Text(body, style: CanopyType.body.copyWith(fontSize: 16, height: 1.5, color: p.ink)),
+          ],
+          const SizedBox(height: CanopySpace.section),
+          Text('Questions about this policy can go to SHIELD International.', style: CanopyType.caption.copyWith(color: p.inkMuted)),
         ],
       ),
     );

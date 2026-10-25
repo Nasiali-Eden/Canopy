@@ -1,9 +1,14 @@
-import 'package:flutter/material.dart';
+// lib/Community/Articles/articles_list_screen.dart
+//
+// Community updates — every published article, newest first, paginated.
+// Search field + category filter chips (client-side), ArticleCards, and the
+// five data states.
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../Shared/theme/app_theme.dart';
-import '../../Shared/utils/rich_body.dart';
-import '../Home/community_home.dart' show timeAgo;
-import 'article_view_screen.dart';
+import 'package:flutter/material.dart';
+
+import '../../theme/canopy_components.dart';
+import 'article_card.dart';
 
 const _kArticles = 'articles';
 
@@ -15,419 +20,189 @@ class ArticlesListScreen extends StatefulWidget {
 }
 
 class _ArticlesListScreenState extends State<ArticlesListScreen> {
-  String? _selectedCategory;
-  bool _searchActive = false;
-  String _searchQuery = '';
+  String? _category;
+  String _query = '';
 
-  final List<DocumentSnapshot> _docs = [];
-  DocumentSnapshot? _lastDocument;
-  bool _loadingMore = false;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs = [];
+  DocumentSnapshot? _last;
+  bool _loading = false;
   bool _hasMore = true;
-  final ScrollController _scrollController = ScrollController();
-  static const int _pageSize = 20;
+  bool _failed = false;
+  final _scroll = ScrollController();
+  final _search = TextEditingController();
+  static const _pageSize = 20;
 
-  static const _categories = [
-    {'label': 'All', 'value': null},
-    {'label': 'News', 'value': 'news'},
-    {'label': 'Announcement', 'value': 'announcement'},
-    {'label': 'Education', 'value': 'education'},
-    {'label': 'Impact Story', 'value': 'impact_story'},
-    {'label': 'Event Recap', 'value': 'event_recap'},
-    // Phase 5.1 — blockchain/financial-literacy pieces from the Super Admin
-    // org. Anyone can filter to read them; only that org can publish them.
-    {'label': 'Special', 'value': 'special'},
+  static const _categories = <(String?, String)>[
+    (null, 'All'),
+    ('news', 'News'),
+    ('announcement', 'Announcement'),
+    ('education', 'Education'),
+    ('impact_story', 'Impact story'),
+    ('event_recap', 'Event recap'),
+    // Blockchain/financial-literacy pieces from the Super Admin org.
+    ('special', 'Special'),
   ];
 
   @override
   void initState() {
     super.initState();
     _loadPage();
-    _scrollController.addListener(_onScroll);
+    _scroll.addListener(() {
+      if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
+        _loadPage();
+      }
+    });
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _scroll.dispose();
+    _search.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      _loadPage();
-    }
-  }
-
   Future<void> _loadPage() async {
-    if (_loadingMore || !_hasMore) return;
-    setState(() => _loadingMore = true);
+    if (_loading || !_hasMore) return;
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     try {
-      // Firestore: articles — newest published first, paginated.
-      // Index-free: ordering by `publishedAt` alone (a single-field index that
-      // always exists) returns only docs that have a publishedAt, i.e. live
-      // articles — drafts carry a null publishedAt and are excluded. Category
-      // is filtered client-side (see `_filtered`).
-      Query query = FirebaseFirestore.instance
+      // Index-free: ordering by publishedAt alone returns only live articles.
+      Query<Map<String, dynamic>> q = FirebaseFirestore.instance
           .collection(_kArticles)
           .orderBy('publishedAt', descending: true)
           .limit(_pageSize);
-
-      if (_lastDocument != null) {
-        query = query.startAfterDocument(_lastDocument!);
-      }
-
-      final snap = await query.get();
+      if (_last != null) q = q.startAfterDocument(_last!);
+      final snap = await q.get();
       if (!mounted) return;
       setState(() {
         if (snap.docs.length < _pageSize) _hasMore = false;
-        if (snap.docs.isNotEmpty) _lastDocument = snap.docs.last;
+        if (snap.docs.isNotEmpty) _last = snap.docs.last;
         _docs.addAll(snap.docs);
-        _loadingMore = false;
+        _loading = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loadingMore = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
+      }
     }
   }
 
-  void _applyCategory(String? cat) {
-    // Category is filtered client-side, so just re-render — no refetch needed.
-    setState(() => _selectedCategory = cat);
-  }
-
-  List<DocumentSnapshot> get _filtered {
-    final q = _searchQuery.toLowerCase();
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> get _filtered {
+    final q = _query.toLowerCase();
     return _docs.where((d) {
-      final data = d.data() as Map<String, dynamic>;
-      if (_selectedCategory != null &&
-          (data['category'] ?? data['topic']) != _selectedCategory) {
+      final data = d.data();
+      if (_category != null && (data['category'] ?? data['topic']) != _category) {
         return false;
       }
-      if (q.isEmpty) return true;
-      final title = (data['title']?.toString() ?? '').toLowerCase();
-      return title.contains(q);
+      return q.isEmpty ||
+          (data['title']?.toString() ?? '').toLowerCase().contains(q);
     }).toList();
   }
 
+  Map<String?, int> get _counts {
+    final m = <String?, int>{null: _docs.length};
+    for (final d in _docs) {
+      final c = (d.data()['category'] ?? d.data()['topic']) as String?;
+      m[c] = (m[c] ?? 0) + 1;
+    }
+    return m;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F3EE),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: AppTheme.darkGreen,
-        title: _searchActive
-            ? TextField(
-                autofocus: true,
-                onChanged: (v) => setState(() => _searchQuery = v),
-                decoration: InputDecoration(
-                  hintText: 'Search articles...',
-                  border: InputBorder.none,
-                  hintStyle:
-                      TextStyle(color: AppTheme.darkGreen.withOpacity(0.4)),
-                ),
-                style:
-                    const TextStyle(color: AppTheme.darkGreen, fontSize: 16),
-              )
-            : const Text('Community Updates',
-                style: TextStyle(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16)),
-        actions: [
-          IconButton(
-            icon: Icon(
-                _searchActive ? Icons.close : Icons.search_outlined,
-                color: AppTheme.darkGreen),
-            onPressed: () => setState(() {
-              _searchActive = !_searchActive;
-              _searchQuery = '';
-            }),
-          ),
-        ],
-      ),
+    final items = _filtered;
+    final counts = _counts;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Community updates'),
       body: Column(
         children: [
-          Container(
-            color: Colors.white,
-            child: SizedBox(
-              height: 52,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                children: _categories.map((c) {
-                  final String? val = c['value'];
-                  final selected = _selectedCategory == val;
-                  return GestureDetector(
-                    onTap: () => _applyCategory(val),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppTheme.primary
-                            : AppTheme.lightGreen.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(c['label'] as String,
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: selected
-                                  ? Colors.white
-                                  : AppTheme.darkGreen.withOpacity(0.8))),
-                    ),
-                  );
-                }).toList(),
-              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                CanopySpace.gutter, CanopySpace.s4, CanopySpace.gutter, 0),
+            child: CanopyTextField.search(
+              hint: 'Search articles',
+              controller: _search,
+              onChanged: (v) => setState(() => _query = v),
             ),
           ),
-          Expanded(
-            child: _filtered.isEmpty && !_loadingMore
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.search_off,
-                            size: 64,
-                            color: AppTheme.lightGreen.withOpacity(0.5)),
-                        const SizedBox(height: 12),
-                        const Text('No articles found',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                                color: AppTheme.darkGreen)),
-                        if (_searchQuery.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          const Text('Try a different search term',
-                              style: TextStyle(color: Colors.grey)),
-                        ],
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filtered.length + (_loadingMore ? 1 : 0),
-                    itemBuilder: (_, i) {
-                      if (i == _filtered.length) {
-                        return const Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Center(
-                              child: CircularProgressIndicator(
-                                  color: AppTheme.primary)),
-                        );
-                      }
-                      final doc = _filtered[i];
-                      final data = doc.data() as Map<String, dynamic>;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: _ArticleCard(
-                          data: data,
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ArticleViewScreen(
-                                articleId: doc.id,
-                                articleData: data,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
+          const SizedBox(height: CanopySpace.s4),
+          CanopyChipRail(chips: [
+            for (final c in _categories)
+              if (c.$1 == null || (counts[c.$1] ?? 0) > 0)
+                CanopyFilterChip(
+                  label: c.$2,
+                  count: counts[c.$1],
+                  selected: _category == c.$1,
+                  onTap: () => setState(() => _category = c.$1),
+                ),
+          ]),
+          Expanded(child: _body(items)),
         ],
       ),
     );
   }
-}
 
-// ── Article list card ─────────────────────────────────────────────────────────
-
-class _ArticleCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final VoidCallback onTap;
-
-  const _ArticleCard({required this.data, required this.onTap});
-
-  String _categoryLabel(String? cat) {
-    switch (cat) {
-      case 'news':
-        return 'News';
-      case 'announcement':
-        return 'Announcement';
-      case 'education':
-        return 'Education';
-      case 'impact_story':
-        return 'Impact Story';
-      case 'event_recap':
-        return 'Event Recap';
-      case 'special':
-        return 'Special';
-      default:
-        return cat ?? '';
+  Widget _body(List<QueryDocumentSnapshot<Map<String, dynamic>>> items) {
+    if (_docs.isEmpty && _loading) {
+      return ListView(
+        padding: const EdgeInsets.all(CanopySpace.gutter),
+        children: const [
+          CanopyCardSkeleton(),
+          SizedBox(height: CanopySpace.s12),
+          CanopyCardSkeleton(),
+        ],
+      );
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final title = data['title'] as String? ?? '';
-    final body = richBodyToPlainText(data['body']);
-    final coverImageUrl =
-        (data['coverImageUrl'] ?? data['coverPhotoUrl']) as String?;
-    final category = data['category'] as String?;
-    final authorName = data['authorName'] as String? ?? '';
-    final authorAvatarUrl = data['authorAvatarUrl'] as String?;
-    final publishedAt = data['publishedAt'] as Timestamp?;
-    final readTime = data['readTimeMinutes'] as int? ?? 1;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-                color: AppTheme.primary.withOpacity(0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 3)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: coverImageUrl != null
-                      ? Image.network(
-                          coverImageUrl,
-                          height: 180,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _coverFallback(),
-                          loadingBuilder: (_, child, prog) =>
-                              prog == null ? child : _coverFallback(),
-                        )
-                      : _coverFallback(),
-                ),
-                if (category != null && category.isNotEmpty)
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.darkGreen.withOpacity(0.75),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(_categoryLabel(category),
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.darkGreen,
-                            fontSize: 15,
-                          ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 6),
-                  Text(body,
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: AppTheme.darkGreen.withOpacity(0.6),
-                          height: 1.4),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      if (authorAvatarUrl != null)
-                        CircleAvatar(
-                          radius: 12,
-                          backgroundImage: NetworkImage(authorAvatarUrl),
-                          onBackgroundImageError: (_, __) {},
-                        )
-                      else
-                        CircleAvatar(
-                          radius: 12,
-                          backgroundColor: AppTheme.primary.withOpacity(0.15),
-                          child: Text(
-                              authorName.isNotEmpty
-                                  ? authorName[0].toUpperCase()
-                                  : 'A',
-                              style: const TextStyle(
-                                  fontSize: 10,
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.w700)),
-                        ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '$authorName${publishedAt != null ? ' · ${timeAgo(publishedAt)}' : ''}',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.darkGreen.withOpacity(0.6)),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Icon(Icons.schedule_outlined,
-                          size: 12,
-                          color: AppTheme.darkGreen.withOpacity(0.5)),
-                      const SizedBox(width: 4),
-                      Text('$readTime min read',
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.darkGreen.withOpacity(0.5))),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    if (_docs.isEmpty && _failed) {
+      return CanopyErrorState(
+        title: "Couldn't load community updates",
+        onRetry: _loadPage,
+      );
+    }
+    if (_docs.isEmpty) {
+      return const CanopyEmptyState(
+        icon: Icons.article_outlined,
+        title: 'No community updates yet',
+        line: 'News from organisations in your area will show up here.',
+      );
+    }
+    if (items.isEmpty) {
+      return CanopyEmptyState(
+        icon: Icons.search_off_outlined,
+        title: 'No articles match',
+        line: _query.isNotEmpty
+            ? 'Nothing matches "$_query".'
+            : 'No articles in this category yet.',
+        actionLabel: 'Clear filters',
+        onAction: () => setState(() {
+          _query = '';
+          _search.clear();
+          _category = null;
+        }),
+      );
+    }
+    return ListView.separated(
+      controller: _scroll,
+      padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8,
+          CanopySpace.gutter, CanopySpace.s32),
+      itemCount: items.length + (_loading || _failed ? 1 : 0),
+      separatorBuilder: (_, __) => const SizedBox(height: CanopySpace.s12),
+      itemBuilder: (_, i) {
+        if (i == items.length) {
+          return _failed
+              ? CanopyErrorState(
+                  inline: true,
+                  title: "Couldn't load more.",
+                  onRetry: _loadPage)
+              : const CanopyCardSkeleton();
+        }
+        return ArticleCard(id: items[i].id, data: items[i].data());
+      },
     );
   }
-
-  Widget _coverFallback() => Container(
-        height: 180,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppTheme.lightGreen.withOpacity(0.4),
-              AppTheme.primary.withOpacity(0.4),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: const Center(
-            child:
-                Icon(Icons.article, size: 32, color: AppTheme.primary)),
-      );
 }

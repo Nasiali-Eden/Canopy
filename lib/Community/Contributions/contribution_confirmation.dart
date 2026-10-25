@@ -1,277 +1,113 @@
+// lib/Community/Contributions/contribution_confirmation.dart
+//
+// Log Contribution confirmation (DESIGN_HANDOFF.md §3). Says what happens
+// next, honestly: points are estimated and count after verification. A
+// transformation project shows its month timeline and when the first
+// reminder lands.
+
 import 'package:flutter/material.dart';
-import '../../Shared/theme/app_theme.dart';
-import '../Home/community_home.dart';
+
+import '../../theme/canopy_components.dart';
 import '../Impact/impact_dashboard.dart';
 import 'log_contribution.dart';
 
 class ContributionConfirmationScreen extends StatelessWidget {
   final int points;
+  final bool transformation;
+  final String? linkedActivity;
 
-  const ContributionConfirmationScreen({super.key, required this.points});
+  const ContributionConfirmationScreen({
+    super.key,
+    required this.points,
+    this.transformation = false,
+    this.linkedActivity,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        automaticallyImplyLeading: false,
-        title: Text(
-          'Contribution Submitted',
-          style: TextStyle(
-            color: AppTheme.darkGreen,
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
+    final p = context.canopy;
+    final reminder = DateTime.now().add(const Duration(days: 30));
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+
+    return CanopyScaffold(
+      appBar: canopyAppBar(
+        context,
+        showBack: false,
+        actions: [
+          CanopyIconButton(
+            icon: Icons.close,
+            tooltip: 'Close',
+            onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            CanopySpace.gutter, 0, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          Icon(Icons.check_circle_outline,
+              size: CanopyIconSize.empty, color: p.success),
+          const SizedBox(height: CanopySpace.s12),
+          Text('Contribution sent',
+              style: CanopyType.display.copyWith(color: p.ink)),
+          const SizedBox(height: CanopySpace.s8),
+          LabelRow(children: [
+            StatusLabel('Pending verification', color: p.warning),
+            PointsLabel(points),
+          ]),
+          const SizedBox(height: CanopySpace.s12),
+          Text(
+            linkedActivity != null
+                ? '$linkedActivity\'s organisation will review it. Your $points estimated points count toward your total and the leaderboard once it\'s verified.'
+                : 'Your $points estimated points count toward your total once an organisation verifies the work. Link an organisation activity next time to get it reviewed.',
+            style: CanopyType.body.copyWith(color: p.inkMuted),
+          ),
+          const SizedBox(height: CanopySpace.section),
+          CanopySectionHeader(title: 'What happens next', padding: EdgeInsets.zero),
+          CanopyCard(
+            child: CanopyTimeline(steps: [
+              const TimelineStep('Sent',
+                  line: 'Photos and details saved to your profile.',
+                  state: TimelineState.done),
+              TimelineStep('Verification',
+                  line: linkedActivity != null
+                      ? 'The organisation checks the work.'
+                      : 'Waiting for an organisation to review it.',
+                  state: TimelineState.now),
+              if (transformation) ...[
+                TimelineStep(
+                    'Month 1 · ${reminder.day} ${months[reminder.month - 1]}',
+                    line: "We'll remind you to add progress photos."),
+                const TimelineStep('Each month after',
+                    line: 'Add photos so the change over time is visible.'),
+              ] else
+                const TimelineStep('Points added',
+                    line: 'Your total and rank update.'),
+            ]),
+          ),
+        ],
+      ),
+      sticky: StickyActionBar(children: [
+        CanopyButton(
+          label: 'View my impact',
+          expand: true,
+          onPressed: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const ImpactDashboardScreen()),
           ),
         ),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 40),
-              
-              // Success Animation Container
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppTheme.primary,
-                      AppTheme.accent,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppTheme.primary.withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.emoji_events,
-                        size: 50,
-                        color: AppTheme.tertiary,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Thank you for\ncontributing!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Pending verification',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.bolt,
-                                color: AppTheme.tertiary,
-                                size: 32,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '$points',
-                                style: TextStyle(
-                                  fontSize: 42,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.white,
-                                  height: 1,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            'estimated impact points',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 32),
-              
-              // Info Card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: AppTheme.lightGreen.withOpacity(0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: AppTheme.primary,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Points count toward ranking after verification. An organisation activity must be linked for review.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: AppTheme.darkGreen.withOpacity(0.8),
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const Spacer(),
-              
-              // Action Buttons
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Direct push: the app has no `routes` table, so named
-                    // routes throw "Could not find a generator for route".
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ImpactDashboardScreen(),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    'View My Impact',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 12),
-              
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const LogContributionScreen(),
-                      ),
-                    );
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.primary,
-                    side: BorderSide(color: AppTheme.primary, width: 1.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    'Log Another Contribution',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 12),
-              
-              TextButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const CommunityHomeScreen(),
-                    ),
-                  );
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: AppTheme.accent,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: Text(
-                  'Back to Community Home',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 8),
-            ],
+        CanopyButton.quiet(
+          label: 'Log another',
+          expand: true,
+          onPressed: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LogContributionScreen()),
           ),
         ),
-      ),
+      ]),
     );
   }
 }

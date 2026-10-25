@@ -25,6 +25,11 @@
   },
   "functions": [
     {
+      "source": "functions-access",
+      "codebase": "access",
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    },
+    {
       "source": "functions",
       "codebase": "default",
       "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]

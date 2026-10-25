@@ -1,15 +1,33 @@
-import 'package:flutter/material.dart';
+// lib/Organization/Home/Operations/org_operations.dart
+//
+// Operations (ORG_HANDOFF §3.5). Tabs Events · Broadcast · Partners (badge) ·
+// Impact.
+//   Events: Upcoming / Past / Drafts; check-in events (QR) with Live / Ended;
+//     a past-date card carries "Your turn · Date has passed" + Close out /
+//     Verify check-ins.
+//   Broadcast: New announcement + sent list (Urgent label, audience, expiry).
+//   Partners: Awaiting your response · Active · Invitations sent; "Find
+//     organisations nearby" → send a partnership request.
+//   Impact: records In review / In verification / Verified, plus one dashed
+//     "Permanent public records — on the roadmap" note. No chain links or
+//     "anchored" claims.
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-import '../../../Shared/theme/app_theme.dart';
-import '../../../Shared/utils/rich_body.dart';
+import '../../../Services/Events/events_service.dart';
+import '../../../Shared/Activities/activity_detail_screen.dart';
 import '../../../Shared/Activities/create_activity.dart';
+import '../../../Shared/utils/rich_body.dart';
+import '../../../theme/canopy_components.dart';
+import '../../Events/create_event_screen.dart';
+import '../../org_ui.dart';
+import '../Dashboard/contribution_review_screen.dart';
+import '../org_home.dart';
+import 'broadcast_composer.dart';
 import 'send_partnership_request.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
 
 class OrgOperations extends StatefulWidget {
   const OrgOperations({super.key});
@@ -18,422 +36,401 @@ class OrgOperations extends StatefulWidget {
   State<OrgOperations> createState() => _OrgOperationsState();
 }
 
-class _OrgOperationsState extends State<OrgOperations>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _OrgOperationsState extends State<OrgOperations> {
+  static const _tabs = ['events', 'broadcast', 'partners', 'impact'];
   String? _orgId;
-  bool _orgLoaded = false;
-  int _refreshKey = 0;
+  String _orgName = '';
+  String? _orgLogo;
+  bool _loaded = false;
+  int _tab = 0;
+  ValueNotifier<String?>? _sub;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _tabController.addListener(() => setState(() {}));
-    _loadOrgId();
+    _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final sub = OrgShellScope.of(context)?.subTab;
+    if (sub != _sub) {
+      _sub?.removeListener(_onSub);
+      _sub = sub?..addListener(_onSub);
+      _onSub();
+    }
+  }
+
+  void _onSub() {
+    final i = _tabs.indexOf(_sub?.value ?? '');
+    if (i >= 0 && mounted) setState(() => _tab = i);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _sub?.removeListener(_onSub);
     super.dispose();
   }
 
-  Future<void> _loadOrgId() async {
+  Future<void> _load() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (mounted) setState(() => _orgLoaded = true);
-        return;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final u = await FirebaseFirestore.instance.collection('Users').doc(uid).get();
+        _orgId = u.data()?['orgId'] as String?;
+        if (_orgId != null) {
+          final o = await FirebaseFirestore.instance.collection('organizations').doc(_orgId).get();
+          _orgName = ((o.data()?['org_name'] ?? o.data()?['name']) as String?) ?? '';
+          _orgLogo = (o.data()?['logoUrl'] ?? o.data()?['profilePhoto']) as String?;
+          _adoptOrphans(uid, _orgId!);
+        }
       }
-      final doc = await FirebaseFirestore.instance
-          .collection('Users')
-          .doc(user.uid)
-          .get();
-      if (!mounted) return;
-      final orgId = doc.exists
-          ? (doc.data() as Map<String, dynamic>)['orgId'] as String?
-          : null;
-      setState(() {
-        _orgId = orgId;
-        _orgLoaded = true;
-      });
-      if (orgId != null) {
-        _adoptOrphanedEvents(user.uid, orgId);
-      }
-    } catch (e) {
-      debugPrint('OrgOperations._loadOrgId error: $e');
-      if (mounted) setState(() => _orgLoaded = true);
-    }
+    } catch (_) {}
+    if (mounted) setState(() => _loaded = true);
   }
 
-  /// Self-heal: events this user created while their org id couldn't be
-  /// resolved (a dropped read) were written with a null/empty orgId. They show
-  /// in the community feed but never here. Reclaim them for this org.
-  Future<void> _adoptOrphanedEvents(String uid, String orgId) async {
+  /// Self-heal: activities created while the org id couldn't be resolved
+  /// were written with an empty orgId — reclaim them for this org.
+  Future<void> _adoptOrphans(String uid, String orgId) async {
     try {
-      final mine = await FirebaseFirestore.instance
-          .collection('activities')
-          .where('createdBy', isEqualTo: uid)
-          .get();
+      final mine =
+          await FirebaseFirestore.instance.collection('activities').where('createdBy', isEqualTo: uid).get();
       final orphans = mine.docs.where((d) {
         final v = d.data()['orgId'];
         return v == null || (v is String && v.isEmpty);
-      }).toList();
+      });
       if (orphans.isEmpty) return;
       final batch = FirebaseFirestore.instance.batch();
       for (final d in orphans) {
         batch.update(d.reference, {'orgId': orgId});
       }
       await batch.commit();
-      debugPrint('OrgOperations: adopted ${orphans.length} orphaned event(s)');
-    } catch (e) {
-      debugPrint('OrgOperations._adoptOrphanedEvents error: $e');
-    }
-  }
-
-  void _refresh() => setState(() => _refreshKey++);
-
-  void _onAdd() async {
-    switch (_tabController.index) {
-      case 0:
-        final createdId = await Navigator.of(context).push<String>(
-          MaterialPageRoute(
-            builder: (_) =>
-                CreateActivityScreen(returnOnSuccess: true, orgId: _orgId),
-          ),
-        );
-        if (createdId != null && mounted) {
-          _refresh();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Event created successfully'),
-              backgroundColor: AppTheme.primary,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              margin: const EdgeInsets.all(16),
-            ),
-          );
-        }
-        break;
-      case 1:
-        if (_orgId != null) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => SendPartnershipRequestScreen(orgId: _orgId!),
-            ),
-          );
-        }
-        break;
-      default:
-        break;
-    }
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Header ───────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Operations',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: AppTheme.darkGreen,
-                        height: 1.1,
-                      ),
-                    ),
-                  ),
-                  _IconBtn(
-                    icon: Icons.refresh_rounded,
-                    onTap: _refresh,
-                  ),
-                  const SizedBox(width: 8),
-                  _IconBtn(
-                    icon: Icons.add_rounded,
-                    gradient: true,
-                    onTap: _onAdd,
-                  ),
-                ],
-              ),
+    if (!_loaded) {
+      return CanopyScaffold(
+          appBar: canopyAppBar(context, title: 'Operations', showBack: false),
+          body: const Center(child: CircularProgressIndicator()));
+    }
+    final orgId = _orgId;
+    if (orgId == null) {
+      return CanopyScaffold(
+          appBar: canopyAppBar(context, title: 'Operations', showBack: false),
+          body: const CanopyEmptyState(icon: Icons.apartment_outlined, title: 'No organisation is linked to this account'));
+    }
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Operations', showBack: false),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance.collection('orgPartners').where('orgId', isEqualTo: orgId).snapshots(),
+        builder: (context, snap) {
+          final awaiting = (snap.data?.docs ?? const []).where((d) => d.data()['status'] == 'pending').length;
+          return Column(children: [
+            CanopyUnderlineTabs(
+              tabs: const ['Events', 'Broadcast', 'Partners', 'Impact'],
+              index: _tab,
+              badges: {2: awaiting},
+              scrollable: true,
+              onChanged: (i) => setState(() => _tab = i),
             ),
-
-            const SizedBox(height: 16),
-
-            // ── Tab bar ──────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  indicator: BoxDecoration(
-                    color: AppTheme.darkGreen,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerColor: Colors.transparent,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: AppTheme.darkGreen.withOpacity(0.55),
-                  labelStyle: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w700),
-                  unselectedLabelStyle: const TextStyle(
-                      fontSize: 11, fontWeight: FontWeight.w500),
-                  tabs: const [
-                    Tab(text: 'Events'),
-                    Tab(text: 'Partners'),
-                    Tab(text: 'Broadcast'),
-                    Tab(text: 'Impact'),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 4),
-
-            // ── Tab views ────────────────────────────────────────────
             Expanded(
-              child: !_orgLoaded
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                          color: AppTheme.primary, strokeWidth: 2))
-                  : _orgId == null
-                      ? Center(
-                          child: Text(
-                            'No organisation linked to this account',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: AppTheme.darkGreen.withOpacity(0.45)),
-                          ),
-                        )
-                      : TabBarView(
-                          controller: _tabController,
-                          children: [
-                            _EventsTab(
-                                orgId: _orgId!,
-                                key: ValueKey('ev-$_refreshKey')),
-                            _PartnersTab(
-                                orgId: _orgId!,
-                                key: ValueKey('pa-$_refreshKey')),
-                            _BroadcastTab(
-                                orgId: _orgId!,
-                                key: ValueKey('bc-$_refreshKey')),
-                            _ImpactTab(
-                                orgId: _orgId!,
-                                key: ValueKey('im-$_refreshKey')),
-                          ],
-                        ),
+              child: switch (_tab) {
+                0 => _EventsTab(orgId: orgId, orgName: _orgName),
+                1 => _BroadcastTab(orgId: orgId, orgName: _orgName, orgLogo: _orgLogo),
+                2 => _PartnersTab(orgId: orgId, docs: snap.data?.docs, error: snap.hasError),
+                _ => _ImpactTab(orgId: orgId),
+              },
             ),
-          ],
-        ),
+          ]);
+        },
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EVENTS TAB
+// EVENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _EventsTab extends StatelessWidget {
+DateTime? _when(Map<String, dynamic> d) {
+  final raw = d['scheduledAt'] ?? d['dateTime'] ?? d['date'];
+  return raw is Timestamp ? raw.toDate() : null;
+}
+
+class _EventsTab extends StatefulWidget {
   final String orgId;
-  const _EventsTab({super.key, required this.orgId});
+  final String orgName;
+  const _EventsTab({required this.orgId, required this.orgName});
 
-  static String _stage(Map<String, dynamic> d) {
-    final status = (d['status'] as String? ?? '').toLowerCase();
-    final impact = d['impactStatus'] as String? ?? '';
-    if (impact == 'confirmed') return 'onChain';
-    if (status == 'completed' && impact == 'pending') return 'verifying';
-    if (status == 'ongoing') return 'executing';
+  @override
+  State<_EventsTab> createState() => _EventsTabState();
+}
 
-    // Only a row explicitly marked draft (or one with neither a status nor a
-    // date) is a draft. 'closed' means registration is closed, NOT that the
-    // event is unpublished — such events are live and were wrongly landing
-    // here. Everything real is staged by its schedule instead of its status,
-    // which is written once at creation and never expires.
-    if (status == 'draft') return 'draft';
-    if (status.isEmpty && _scheduledAt(d) == null) return 'draft';
-    return _isPast(d) ? 'past' : 'active';
-  }
+class _EventsTabState extends State<_EventsTab> {
+  int _view = 0; // 0 upcoming · 1 past · 2 drafts
 
-  static DateTime? _scheduledAt(Map<String, dynamic> d) {
-    final raw = d['scheduledAt'] ?? d['dateTime'] ?? d['date'];
-    return raw is Timestamp ? raw.toDate() : null;
-  }
-
-  static bool _isPast(Map<String, dynamic> d) {
-    final dt = _scheduledAt(d);
-    return dt != null && dt.isBefore(DateTime.now());
-  }
-
-  static String _locationLabel(Map<String, dynamic> data) {
-    final locationName = data['locationName'] as String?;
-    if (locationName != null && locationName.isNotEmpty) return locationName;
-
-    final raw = data['location'];
-    if (raw is String && raw.isNotEmpty) return raw;
-    if (raw is Map<String, dynamic>) {
-      final venue = raw['venue'] as String? ?? '';
-      final area = raw['area'] as String? ?? '';
-      final city = raw['city'] as String? ?? '';
-      return [
-        if (venue.isNotEmpty) venue,
-        if (area.isNotEmpty) area,
-        if (city.isNotEmpty) city,
-      ].join(', ');
+  Future<void> _closeOut(String id, String title) async {
+    final ok = await showCanopyConfirm(context,
+        title: 'Close out "$title"?',
+        message: 'It moves to Past as completed. Members can still link contributions for you to confirm.',
+        confirmLabel: 'Close out');
+    if (!ok) return;
+    try {
+      await FirebaseFirestore.instance.collection('activities').doc(id).update({
+        'status': 'completed',
+        'impactStatus': 'pending',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) showCanopySnack(context, 'Closed out.');
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't close it out. Try again.", error: true);
     }
-    return '';
   }
 
-  Future<void> _openCreate(BuildContext context) async {
-    final createdId = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) =>
-            CreateActivityScreen(returnOnSuccess: true, orgId: orgId),
-      ),
-    );
-    if (createdId == null || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Event created successfully'),
-        backgroundColor: AppTheme.primary,
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
+  void _create() => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+      builder: (_) => CreateActivityScreen(returnOnSuccess: true, orgId: widget.orgId)));
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('activities')
-          .where('orgId', isEqualTo: orgId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(
-                  color: AppTheme.primary, strokeWidth: 2));
-        }
+    final p = context.canopy;
+    final db = FirebaseFirestore.instance;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: db.collection('activities').where('orgId', isEqualTo: widget.orgId).snapshots(),
+      builder: (context, act) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: db.collection('Events').where('orgId', isEqualTo: widget.orgId).snapshots(),
+        builder: (context, ev) {
+          if (act.hasError) return const CanopyErrorState(title: "Couldn't load events");
+          if (!act.hasData) {
+            return ListView(padding: const EdgeInsets.all(CanopySpace.gutter), children: const [CanopyListSkeleton(rows: 4, leadingSize: 56)]);
+          }
+          final now = DateTime.now();
+          final docs = act.data!.docs;
+          bool draft(Map<String, dynamic> d) =>
+              (d['status'] as String? ?? '') == 'draft' || ((d['status'] ?? '') == '' && _when(d) == null);
+          final drafts = docs.where((d) => draft(d.data())).toList();
+          final past = docs.where((d) => !draft(d.data()) && (_when(d.data())?.isBefore(now) ?? false)).toList()
+            ..sort((a, b) => _when(b.data())!.compareTo(_when(a.data())!));
+          final upcoming = docs.where((d) => !draft(d.data()) && !(_when(d.data())?.isBefore(now) ?? true)).toList()
+            ..sort((a, b) => _when(a.data())!.compareTo(_when(b.data())!));
+          final checkins = (ev.data?.docs ?? const []).map(CanopyEvent.fromDoc).toList()
+            ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
 
-        final docs = snapshot.data?.docs ?? [];
-
-        if (docs.isEmpty) {
-          return _EmptyState(
-            icon: Icons.event_note_outlined,
-            title: 'No events yet',
-            subtitle: 'Create your first event to mobilise volunteers',
-            actionLabel: 'Create Event',
-            onAction: () => _openCreate(context),
+          final list = switch (_view) { 1 => past, 2 => drafts, _ => upcoming };
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s12, CanopySpace.gutter, CanopySpace.s32),
+            children: [
+              CanopySegmented<int>(
+                options: const [(0, 'Upcoming'), (1, 'Past'), (2, 'Drafts')],
+                value: _view,
+                counts: {1: past.where((d) => d.data()['status'] != 'completed' && d.data()['status'] != 'cancelled').length},
+                onChanged: (v) => setState(() => _view = v),
+              ),
+              const SizedBox(height: CanopySpace.s16),
+              if (_view == 0 && checkins.any((e) => e.active)) ...[
+                Text('CHECK-IN OPEN', style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+                const SizedBox(height: CanopySpace.s8),
+                CanopyListGroup(children: [
+                  for (final e in checkins.where((e) => e.active))
+                    DenseRow(
+                      title: e.title,
+                      subtitle: e.meetingPoint,
+                      status: LabelRow(children: [StatusLabel('Live', color: p.danger, live: true), PointsLabel(e.pointsPerCheckin)]),
+                      trailing: CanopyButton.secondary(
+                          label: 'Show QR',
+                          size: CanopyButtonSize.compact,
+                          onPressed: () => Navigator.of(context, rootNavigator: true)
+                              .push(MaterialPageRoute(builder: (_) => EventLiveScreen(eventId: e.id)))),
+                    ),
+                ]),
+                const SizedBox(height: CanopySpace.s16),
+              ],
+              if (list.isEmpty)
+                CanopyEmptyState(
+                  boxed: true,
+                  icon: Icons.event_note_outlined,
+                  title: switch (_view) { 1 => 'Nothing in the past yet', 2 => 'No drafts', _ => 'No upcoming events' },
+                  actionLabel: _view == 0 ? 'Create an event' : null,
+                  onAction: _view == 0 ? _create : null,
+                )
+              else
+                for (final d in list) ...[
+                  _eventCard(d.id, d.data(), p, pastDate: _view == 1),
+                  const SizedBox(height: CanopySpace.s12),
+                ],
+              if (_view == 1 && checkins.any((e) => !e.active)) ...[
+                const SizedBox(height: CanopySpace.s8),
+                Text('CHECK-IN EVENTS', style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+                const SizedBox(height: CanopySpace.s8),
+                CanopyListGroup(children: [
+                  for (final e in checkins.where((e) => !e.active))
+                    DenseRow(
+                      title: e.title,
+                      subtitle: e.endedAt == null ? 'Ended' : 'Ended ${DateFormat('d MMM').format(e.endedAt!)}',
+                      trailing: Icon(Icons.chevron_right, color: p.inkFaint),
+                      onTap: () => Navigator.of(context, rootNavigator: true)
+                          .push(MaterialPageRoute(builder: (_) => EventLiveScreen(eventId: e.id))),
+                    ),
+                ]),
+              ],
+              const SizedBox(height: CanopySpace.s16),
+              Row(children: [
+                Expanded(child: CanopyButton.secondary(label: 'New activity', onPressed: _create)),
+                const SizedBox(width: CanopySpace.s12),
+                Expanded(
+                  child: CanopyButton.secondary(
+                    label: 'Host check-in event',
+                    onPressed: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+                        builder: (_) => CreateEventScreen(orgId: widget.orgId, orgName: widget.orgName))),
+                  ),
+                ),
+              ]),
+            ],
           );
-        }
+        },
+      ),
+    );
+  }
 
-        final grouped = <String, List<Map<String, dynamic>>>{};
-        for (final doc in docs) {
-          final data = doc.data() as Map<String, dynamic>;
-          final s = _stage(data);
-          grouped.putIfAbsent(s, () => []).add(data);
-        }
+  Widget _eventCard(String id, Map<String, dynamic> d, CanopyPalette p, {required bool pastDate}) {
+    final title = (d['title'] ?? d['name'] ?? 'Untitled') as String;
+    final at = _when(d);
+    final status = d['status'] as String? ?? 'open';
+    final open = status != 'completed' && status != 'cancelled';
+    final going = d['registeredCount'] as int? ?? d['participants'] as int? ?? 0;
+    final max = d['maxParticipants'] as int? ?? 0;
+    final needsCloseOut = pastDate && open;
+    return CanopyCard(
+      borderColor: needsCloseOut ? p.primary : null,
+      borderWidth: needsCloseOut ? 1.5 : 1,
+      padding: const EdgeInsets.all(CanopyWorkspace.cardPadding),
+      onTap: () => Navigator.of(context, rootNavigator: true)
+          .push(MaterialPageRoute(builder: (_) => ActivityDetailScreen(activityId: id, activity: d))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (at != null) ...[CanopyDateBlock(date: at), const SizedBox(width: CanopySpace.s12)],
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              LabelRow(children: [
+                if (needsCloseOut) const YourTurnLabel(text: 'Date has passed'),
+                StatusLabel(
+                    switch (status) {
+                      'completed' => 'Completed',
+                      'cancelled' => 'Cancelled',
+                      'draft' => 'Draft',
+                      'full' => 'Full',
+                      _ => pastDate ? 'Ended' : 'Upcoming',
+                    },
+                    color: switch (status) {
+                      'completed' => p.success,
+                      'cancelled' => p.danger,
+                      'draft' => p.inkMuted,
+                      'full' => p.warning,
+                      _ => pastDate ? p.inkMuted : p.info,
+                    }),
+              ]),
+              const SizedBox(height: CanopySpace.s2),
+              Text(title, style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+              Text(
+                [
+                  if (at != null) DateFormat('HH:mm').format(at),
+                  max > 0 ? '$going of $max going' : '$going going',
+                ].join(' · '),
+                style: CanopyType.caption.copyWith(color: p.inkMuted),
+              ),
+            ]),
+          ),
+        ]),
+        if (max > 0 && !pastDate) ...[
+          const SizedBox(height: CanopySpace.s8),
+          CanopyProgressBar(value: going / max, ink: true),
+        ],
+        if (needsCloseOut) ...[
+          const SizedBox(height: CanopySpace.s8),
+          Row(children: [
+            CanopyButton.secondary(label: 'Close out', size: CanopyButtonSize.compact, onPressed: () => _closeOut(id, title)),
+            const SizedBox(width: CanopySpace.s8),
+            CanopyButton.quiet(
+              label: 'Verify check-ins',
+              size: CanopyButtonSize.compact,
+              onPressed: () => Navigator.of(context, rootNavigator: true)
+                  .push(MaterialPageRoute(builder: (_) => ContributionReviewScreen(orgId: widget.orgId))),
+            ),
+          ]),
+        ],
+      ]),
+    );
+  }
+}
 
-        final counts = {
-          'draft': grouped['draft']?.length ?? 0,
-          'active': grouped['active']?.length ?? 0,
-          'executing': grouped['executing']?.length ?? 0,
-          'verifying': grouped['verifying']?.length ?? 0,
-          'onChain': grouped['onChain']?.length ?? 0,
-        };
+// ─────────────────────────────────────────────────────────────────────────────
+// BROADCAST
+// ─────────────────────────────────────────────────────────────────────────────
 
-        // Soonest first for anything still ahead; most recent first for
-        // anything already behind us.
-        for (final entry in grouped.entries) {
-          final past = entry.key == 'past';
-          entry.value.sort((a, b) {
-            final da = _scheduledAt(a);
-            final db = _scheduledAt(b);
-            if (da == null || db == null) return 0;
-            return past ? db.compareTo(da) : da.compareTo(db);
+class _BroadcastTab extends StatelessWidget {
+  final String orgId;
+  final String orgName;
+  final String? orgLogo;
+  const _BroadcastTab({required this.orgId, required this.orgName, this.orgLogo});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('announcements').where('orgId', isEqualTo: orgId).snapshots(),
+      builder: (context, snap) {
+        final docs = [...(snap.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[])]
+          ..sort((a, b) {
+            final ta = (a.data()['createdAt'] ?? a.data()['sentAt']) as Timestamp?;
+            final tb = (b.data()['createdAt'] ?? b.data()['sentAt']) as Timestamp?;
+            return (tb?.millisecondsSinceEpoch ?? 0).compareTo(ta?.millisecondsSinceEpoch ?? 0);
           });
-        }
-
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s32),
           children: [
-            _EventPipelineStrip(counts: counts),
-            const SizedBox(height: 16),
-            if ((grouped['executing'] ?? []).isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.play_circle_outline,
-                  label: 'Executing Now',
-                  color: AppTheme.accent),
-              ...grouped['executing']!
-                  .map((d) => _EventCard(data: d, stage: 'executing')),
-              const SizedBox(height: 4),
-            ],
-            if ((grouped['verifying'] ?? []).isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.fact_check_outlined,
-                  label: 'In Verification',
-                  color: AppTheme.tertiary),
-              ...grouped['verifying']!
-                  .map((d) => _EventCard(data: d, stage: 'verifying')),
-              const SizedBox(height: 4),
-            ],
-            if ((grouped['active'] ?? []).isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.event_available_outlined,
-                  label: 'Upcoming',
-                  color: AppTheme.primary),
-              ...grouped['active']!
-                  .map((d) => _EventCard(data: d, stage: 'active')),
-              const SizedBox(height: 4),
-            ],
-            if ((grouped['draft'] ?? []).isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.edit_outlined,
-                  label: 'Drafts',
-                  color: AppTheme.lightGreen),
-              ...grouped['draft']!
-                  .map((d) => _EventCard(data: d, stage: 'draft')),
-              const SizedBox(height: 4),
-            ],
-            if ((grouped['onChain'] ?? []).isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.verified_outlined,
-                  label: 'On-Chain',
-                  color: Colors.teal.shade600,
-                  subtitle: 'Permanently recorded'),
-              ...grouped['onChain']!
-                  .map((d) => _EventCard(data: d, stage: 'onChain')),
-              const SizedBox(height: 4),
-            ],
-            if ((grouped['past'] ?? []).isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.history_outlined,
-                  label: 'Past',
-                  color: AppTheme.darkGreen.withOpacity(0.45),
-                  subtitle: 'Date has passed — close out or verify'),
-              ...grouped['past']!.map((d) => _EventCard(data: d, stage: 'past')),
-            ],
+            CanopyButton(
+              label: 'New announcement',
+              expand: true,
+              onPressed: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+                  builder: (_) => BroadcastComposerScreen(orgId: orgId, orgName: orgName, orgLogoUrl: orgLogo))),
+            ),
+            const SizedBox(height: CanopySpace.section),
+            const CanopySectionHeader(title: 'Sent', padding: EdgeInsets.zero),
+            if (snap.hasError)
+              const CanopyErrorState(inline: true, title: "Couldn't load sent announcements.")
+            else if (!snap.hasData)
+              const CanopyListSkeleton(rows: 2)
+            else if (docs.isEmpty)
+              const CanopyEmptyState(
+                  boxed: true, icon: Icons.campaign_outlined, title: 'Nothing sent yet', line: 'Announcements reach members on their Home feed.')
+            else
+              CanopyListGroup(children: [
+                for (final d in docs)
+                  Builder(builder: (_) {
+                    final a = d.data();
+                    final sent = ((a['createdAt'] ?? a['sentAt']) as Timestamp?)?.toDate();
+                    final exp = (a['expiresAt'] as Timestamp?)?.toDate();
+                    final expired = exp != null && exp.isBefore(DateTime.now());
+                    final audience = switch (a['audience'] ?? a['reach']) {
+                      'team' => 'A team',
+                      'partners' => 'Partners',
+                      'nearby' => 'Nearby',
+                      _ => 'All members',
+                    };
+                    final title = (a['title'] as String?)?.trim();
+                    return DenseRow(
+                      title: title?.isNotEmpty == true ? title! : richBodyToPlainText(a['body']),
+                      subtitle: [
+                        audience,
+                        if (sent != null) DateFormat('d MMM').format(sent),
+                        if (exp != null) expired ? 'Expired' : 'Until ${DateFormat('d MMM').format(exp)}',
+                      ].join(' · '),
+                      status: a['isUrgent'] == true ? StatusLabel('Urgent', color: p.danger) : null,
+                    );
+                  }),
+              ]),
           ],
         );
       },
@@ -441,1718 +438,239 @@ class _EventsTab extends StatelessWidget {
   }
 }
 
-class _EventPipelineStrip extends StatelessWidget {
-  final Map<String, int> counts;
-  const _EventPipelineStrip({required this.counts});
-
-  @override
-  Widget build(BuildContext context) {
-    final stages = ['draft', 'active', 'executing', 'verifying', 'onChain'];
-    final labels = ['Draft', 'Active', 'Running', 'Verify', 'Done'];
-    final colors = [
-      AppTheme.lightGreen,
-      AppTheme.primary,
-      AppTheme.accent,
-      AppTheme.tertiary,
-      Colors.teal.shade600,
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: AppTheme.primary.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3))
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Event Pipeline',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.darkGreen.withOpacity(0.6),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: List.generate(stages.length, (i) {
-              final count = counts[stages[i]] ?? 0;
-              final isLast = i == stages.length - 1;
-              return Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: count > 0
-                                  ? colors[i].withOpacity(0.12)
-                                  : Colors.grey.withOpacity(0.06),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: count > 0
-                                    ? colors[i].withOpacity(0.4)
-                                    : Colors.grey.withOpacity(0.2),
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '$count',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: count > 0
-                                      ? colors[i]
-                                      : Colors.grey.shade400,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            labels[i],
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              color: count > 0
-                                  ? colors[i]
-                                  : Colors.grey.shade400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!isLast)
-                      Container(
-                          width: 16,
-                          height: 1,
-                          color: AppTheme.lightGreen.withOpacity(0.3)),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EventCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  final String stage;
-  const _EventCard({required this.data, required this.stage});
-
-  Color get _stageColor {
-    switch (stage) {
-      case 'draft':
-        return AppTheme.lightGreen;
-      case 'active':
-        return AppTheme.primary;
-      case 'executing':
-        return AppTheme.accent;
-      case 'verifying':
-        return AppTheme.tertiary;
-      case 'past':
-        return AppTheme.darkGreen.withOpacity(0.45);
-      default:
-        return Colors.teal.shade600;
-    }
-  }
-
-  String get _stageLabel {
-    switch (stage) {
-      case 'draft':
-        return 'Draft';
-      case 'active':
-        return 'Upcoming';
-      case 'executing':
-        return 'Running';
-      case 'verifying':
-        return 'Verifying';
-      case 'past':
-        return 'Ended';
-      default:
-        return 'On-Chain';
-    }
-  }
-
-  String _formatDate(dynamic raw) {
-    if (raw == null) return '—';
-    DateTime? dt;
-    if (raw is Timestamp) dt = raw.toDate();
-    if (dt == null) return '—';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '${dt.day} ${months[dt.month - 1]} · $h:$m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final name =
-        data['name'] as String? ?? data['title'] as String? ?? 'Untitled';
-    final location = _EventsTab._locationLabel(data);
-    final participants = data['participants'] as int? ??
-        data['registeredCount'] as int? ??
-        ((data['participantIds'] as List?)?.length ?? 0);
-    final maxParticipants = data['maxParticipants'] as int? ??
-        data['requiredParticipants'] as int? ??
-        0;
-    final bountyAmount = (data['bountyAmount'] as num?)?.toDouble();
-    final txHash = data['txHash'] as String?;
-    final pct = maxParticipants > 0
-        ? (participants / maxParticipants).clamp(0.0, 1.0)
-        : 0.0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: stage == 'onChain'
-              ? Colors.teal.withOpacity(0.2)
-              : AppTheme.lightGreen.withOpacity(0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: _stageColor.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _stageColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.eco_outlined, size: 16, color: _stageColor),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        if (location.isNotEmpty) ...[
-                          Icon(Icons.location_on_outlined,
-                              size: 11,
-                              color: AppTheme.darkGreen.withOpacity(0.4)),
-                          const SizedBox(width: 3),
-                          Flexible(
-                            child: Text(
-                              location,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.darkGreen.withOpacity(0.5),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
-                        Icon(Icons.calendar_today_outlined,
-                            size: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.4)),
-                        const SizedBox(width: 3),
-                        Text(
-                          _formatDate(
-                              data['date'] ?? data['scheduledAt'] ?? data['dateTime']),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.5),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _stageColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _stageColor.withOpacity(0.3)),
-                ),
-                child: Text(
-                  _stageLabel,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: _stageColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(
-                '$participants/$maxParticipants volunteers',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _stageColor,
-                ),
-              ),
-              const Spacer(),
-              if (bountyAmount != null && bountyAmount > 0)
-                Row(
-                  children: [
-                    Icon(Icons.account_balance_wallet_outlined,
-                        size: 11, color: AppTheme.tertiary),
-                    const SizedBox(width: 3),
-                    Text(
-                      'KES ${bountyAmount.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.tertiary,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: pct,
-              minHeight: 4,
-              backgroundColor: _stageColor.withOpacity(0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(_stageColor),
-            ),
-          ),
-          if (txHash != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.link_rounded,
-                    size: 11, color: Colors.teal.shade600),
-                const SizedBox(width: 4),
-                Text(
-                  'TX: $txHash',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.teal.shade600,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'View on chain →',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.teal.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// PARTNERS TAB
+// PARTNERS
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _PartnersTab extends StatelessWidget {
   final String orgId;
-  const _PartnersTab({super.key, required this.orgId});
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>>? docs;
+  final bool error;
+  const _PartnersTab({required this.orgId, required this.docs, required this.error});
+
+  void _find(BuildContext context) => Navigator.of(context, rootNavigator: true)
+      .push(MaterialPageRoute(builder: (_) => SendPartnershipRequestScreen(orgId: orgId)));
+
+  /// Both halves of a partnership (ours + the mirror in the other org).
+  Future<List<DocumentReference<Map<String, dynamic>>>> _halves(String id) async {
+    final col = FirebaseFirestore.instance.collection('orgPartners');
+    final doc = await col.doc(id).get();
+    final pair = doc.data()?['pairId'] as String?;
+    if (pair == null) return [col.doc(id)];
+    final s = await col.where('pairId', isEqualTo: pair).get();
+    return {col.doc(id), ...s.docs.map((d) => d.reference)}.toList();
+  }
+
+  Future<void> _set(BuildContext context, String id, String status) async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final r in await _halves(id)) {
+        batch.update(r, {'status': status, 'respondedAt': FieldValue.serverTimestamp()});
+      }
+      await batch.commit();
+      if (context.mounted) showCanopySnack(context, status == 'active' ? 'Partnership accepted.' : 'Updated.');
+    } catch (_) {
+      if (context.mounted) showCanopySnack(context, "Couldn't update. Try again.", error: true);
+    }
+  }
+
+  Future<void> _remove(BuildContext context, String id, String title, String confirm) async {
+    final ok = await showCanopyConfirm(context, title: title, message: 'The other organisation is no longer shown as a partner.', confirmLabel: confirm, danger: true);
+    if (!ok) return;
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final r in await _halves(id)) {
+        batch.delete(r);
+      }
+      await batch.commit();
+    } catch (_) {
+      if (context.mounted) showCanopySnack(context, "Couldn't update. Try again.", error: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('orgPartners')
-          .where('orgId', isEqualTo: orgId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(
-                  color: AppTheme.primary, strokeWidth: 2));
-        }
+    final p = context.canopy;
+    if (error) return const CanopyErrorState(title: "Couldn't load partners");
+    if (docs == null) {
+      return ListView(padding: const EdgeInsets.all(CanopySpace.gutter), children: const [CanopyListSkeleton(rows: 3)]);
+    }
+    final pending = docs!.where((d) => d.data()['status'] == 'pending').toList();
+    final active = docs!.where((d) => d.data()['status'] == 'active').toList();
+    final invited = docs!.where((d) => d.data()['status'] == 'invited').toList();
 
-        final docs = snapshot.data?.docs ?? [];
+    Widget card(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+      final a = d.data();
+      final name = (a['partnerName'] as String?) ?? 'Organisation';
+      final status = a['status'] as String? ?? 'invited';
+      final msg = (a['message'] as String?)?.trim() ?? '';
+      return CanopyCard(
+        borderColor: status == 'pending' ? p.primary : null,
+        borderWidth: status == 'pending' ? 1.5 : 1,
+        padding: const EdgeInsets.all(CanopyWorkspace.cardPadding),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            CanopyAvatar(url: a['partnerLogoUrl'] as String?, name: name, size: 40, org: true),
+            const SizedBox(width: CanopySpace.s12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(name, style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+                LabelRow(children: [
+                  if (status == 'pending') const YourTurnLabel(text: 'Awaiting your response'),
+                  if (status == 'active') StatusLabel('Active', color: p.success),
+                  if (status == 'invited') StatusLabel('Invited', color: p.info),
+                  if ((a['partnerSector'] as String?)?.isNotEmpty ?? false) StatusLabel(a['partnerSector'] as String, color: p.inkMuted),
+                ]),
+              ]),
+            ),
+          ]),
+          if (msg.isNotEmpty) ...[
+            const SizedBox(height: CanopySpace.s8),
+            Container(
+              padding: const EdgeInsets.only(left: CanopySpace.s12),
+              decoration: BoxDecoration(border: Border(left: BorderSide(color: p.outlineStrong, width: 2))),
+              child: Text('"$msg"', style: CanopyType.body.copyWith(color: p.ink)),
+            ),
+          ],
+          const SizedBox(height: CanopySpace.s8),
+          if (status == 'pending')
+            Row(children: [
+              CanopyButton(label: 'Accept', size: CanopyButtonSize.compact, onPressed: () => _set(context, d.id, 'active')),
+              const SizedBox(width: CanopySpace.s8),
+              CanopyButton.quiet(
+                  label: 'Decline',
+                  size: CanopyButtonSize.compact,
+                  onPressed: () => _remove(context, d.id, 'Decline $name?', 'Decline')),
+            ])
+          else if (status == 'active')
+            CanopyButton.secondary(
+              label: 'Contact',
+              size: CanopyButtonSize.compact,
+              onPressed: () => showCanopySheet(context,
+                  builder: (ctx) => CanopySheetBody(title: name, children: [
+                        CanopyListGroup(children: [
+                          if ((a['partnerEmail'] as String?)?.isNotEmpty ?? false)
+                            CanopyListRow(icon: Icons.mail_outline, title: a['partnerEmail'] as String, subtitle: 'Email'),
+                          if ((a['partnerPhone'] as String?)?.isNotEmpty ?? false)
+                            CanopyListRow(icon: Icons.phone_outlined, title: a['partnerPhone'] as String, subtitle: 'Phone'),
+                          if (!((a['partnerEmail'] as String?)?.isNotEmpty ?? false) &&
+                              !((a['partnerPhone'] as String?)?.isNotEmpty ?? false))
+                            const CanopyListRow(
+                                icon: Icons.info_outline, title: 'No contact details shared', subtitle: 'Open their public page from Explore'),
+                        ]),
+                      ])),
+            )
+          else
+            CanopyButton.quietDanger(
+                label: 'Cancel invite',
+                size: CanopyButtonSize.compact,
+                onPressed: () => _remove(context, d.id, 'Cancel the invite to $name?', 'Cancel invite')),
+        ]),
+      );
+    }
 
-        if (docs.isEmpty) {
-          return _EmptyState(
+    Widget group(String title, List<QueryDocumentSnapshot<Map<String, dynamic>>> list) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CanopySectionHeader(title: '$title · ${list.length}', padding: EdgeInsets.zero),
+            for (final d in list) ...[card(d), const SizedBox(height: CanopySpace.s12)],
+          ],
+        );
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s12, CanopySpace.gutter, CanopySpace.s32),
+      children: [
+        if (docs!.isEmpty)
+          CanopyEmptyState(
+            boxed: true,
             icon: Icons.handshake_outlined,
             title: 'No partners yet',
-            subtitle:
-                'Invite another organisation to collaborate on events and programmes',
-            actionLabel: 'Send Partnership Request',
-            onAction: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SendPartnershipRequestScreen(orgId: orgId),
-              ),
-            ),
-          );
-        }
-
-        final active = docs
-            .where((d) =>
-                (d.data() as Map<String, dynamic>)['status'] == 'active')
-            .toList();
-        final pending = docs
-            .where((d) =>
-                (d.data() as Map<String, dynamic>)['status'] == 'pending')
-            .toList();
-        final invited = docs
-            .where((d) =>
-                (d.data() as Map<String, dynamic>)['status'] == 'invited')
-            .toList();
-
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-          children: [
-            // Stats row
-            _MiniStatsRow(items: [
-              _MiniStat(
-                  label: 'Active',
-                  value: '${active.length}',
-                  color: AppTheme.primary),
-              _MiniStat(
-                  label: 'Pending',
-                  value: '${pending.length}',
-                  color: AppTheme.tertiary),
-              _MiniStat(
-                  label: 'Invited',
-                  value: '${invited.length}',
-                  color: AppTheme.lightGreen),
-            ]),
-            const SizedBox(height: 8),
-
-            if (pending.isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.hourglass_top_outlined,
-                  label: 'Awaiting Your Response',
-                  color: AppTheme.tertiary),
-              ...pending.map((d) => _PartnerCard(
-                    docId: d.id,
-                    data: d.data() as Map<String, dynamic>,
-                  )),
-              const SizedBox(height: 4),
-            ],
-            if (active.isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.handshake_outlined,
-                  label: 'Active Partners',
-                  color: AppTheme.primary),
-              ...active.map((d) => _PartnerCard(
-                    docId: d.id,
-                    data: d.data() as Map<String, dynamic>,
-                  )),
-              const SizedBox(height: 4),
-            ],
-            if (invited.isNotEmpty) ...[
-              _SectionHeader(
-                  icon: Icons.mail_outline_rounded,
-                  label: 'Invitations Sent',
-                  color: AppTheme.lightGreen),
-              ...invited.map((d) => _PartnerCard(
-                    docId: d.id,
-                    data: d.data() as Map<String, dynamic>,
-                  )),
-            ],
-            const SizedBox(height: 16),
-            _OutlineButton(
-              label: 'Send Partnership Request',
-              icon: Icons.add_rounded,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => SendPartnershipRequestScreen(orgId: orgId),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _PartnerCard extends StatelessWidget {
-  final String docId;
-  final Map<String, dynamic> data;
-  const _PartnerCard({required this.docId, required this.data});
-
-  String get _status => data['status'] as String? ?? 'invited';
-  String get _name => data['partnerName'] as String? ?? 'Unknown';
-  String get _sector => data['partnerSector'] as String? ?? '';
-  int get _shared => data['sharedEvents'] as int? ?? 0;
-
-  String get _initials {
-    final parts = _name.trim().split(' ');
-    if (parts.length >= 2) return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    return _name.isNotEmpty ? _name[0].toUpperCase() : '?';
-  }
-
-  Color get _statusColor {
-    switch (_status) {
-      case 'active':
-        return AppTheme.primary;
-      case 'pending':
-        return AppTheme.tertiary;
-      default:
-        return AppTheme.lightGreen;
-    }
-  }
-
-  Future<void> _updateStatus(String newStatus) =>
-      FirebaseFirestore.instance
-          .collection('orgPartners')
-          .doc(docId)
-          .update({'status': newStatus});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: AppTheme.primary.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 3))
+            line: 'Work with other organisations on events and programmes.',
+            actionLabel: 'Find organisations nearby',
+            onAction: () => _find(context),
+            primaryAction: true,
+          )
+        else ...[
+          if (pending.isNotEmpty) group('Awaiting your response', pending),
+          if (active.isNotEmpty) group('Active', active),
+          if (invited.isNotEmpty) group('Invitations sent', invited),
+          CanopyButton.secondary(label: 'Find organisations nearby', expand: true, onPressed: () => _find(context)),
         ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // Initials circle
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: _statusColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                  border:
-                      Border.all(color: _statusColor.withOpacity(0.3), width: 1.5),
-                ),
-                child: Center(
-                  child: Text(
-                    _initials,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: _statusColor,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        if (_sector.isNotEmpty)
-                          Text(
-                            _sector,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.darkGreen.withOpacity(0.5)),
-                          ),
-                        if (_shared > 0) ...[
-                          const SizedBox(width: 10),
-                          Icon(Icons.event_outlined,
-                              size: 11,
-                              color: AppTheme.darkGreen.withOpacity(0.4)),
-                          const SizedBox(width: 3),
-                          Text(
-                            '$_shared shared events',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.darkGreen.withOpacity(0.5)),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Action buttons per status
-          if (_status == 'pending') ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _SmallActionButton(
-                    label: 'Accept',
-                    color: AppTheme.primary,
-                    onTap: () => _updateStatus('active'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _SmallActionButton(
-                    label: 'Review',
-                    color: AppTheme.tertiary,
-                    onTap: () => _showMessageDialog(context),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _SmallActionButton(
-                    label: 'Decline',
-                    color: Colors.redAccent,
-                    onTap: () => _confirmDecline(context),
-                  ),
-                ),
-              ],
-            ),
-          ] else if (_status == 'active') ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _SmallActionButton(
-                    label: 'Contact',
-                    color: AppTheme.primary,
-                    onTap: () => _showMessageDialog(context),
-                  ),
-                ),
-              ],
-            ),
-          ] else ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _SmallActionButton(
-                    label: 'Cancel Invite',
-                    color: AppTheme.darkGreen.withOpacity(0.5),
-                    onTap: () => _confirmDecline(context),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  void _showMessageDialog(BuildContext context) {
-    final msg = data['message'] as String? ?? '';
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(_name,
-            style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.darkGreen)),
-        content: msg.isNotEmpty
-            ? Text(msg,
-                style: TextStyle(
-                    fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.7)))
-            : Text('No message provided.',
-                style: TextStyle(
-                    fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.4))),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close',
-                style: TextStyle(
-                    color: AppTheme.primary, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmDecline(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Confirm',
-            style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.darkGreen)),
-        content: Text(
-            _status == 'pending'
-                ? 'Decline partnership request from $_name?'
-                : 'Cancel invitation to $_name?',
-            style: TextStyle(
-                fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.7))),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppTheme.primary)),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              FirebaseFirestore.instance
-                  .collection('orgPartners')
-                  .doc(docId)
-                  .delete();
-            },
-            child: const Text('Confirm',
-                style: TextStyle(
-                    color: Colors.redAccent, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BROADCAST TAB
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _BroadcastTab extends StatefulWidget {
-  final String orgId;
-  const _BroadcastTab({super.key, required this.orgId});
-
-  @override
-  State<_BroadcastTab> createState() => _BroadcastTabState();
-}
-
-class _BroadcastTabState extends State<_BroadcastTab> {
-  final _bodyController = TextEditingController();
-  String _reach = 'followers';
-  bool _sending = false;
-
-  @override
-  void dispose() {
-    _bodyController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    final text = _bodyController.text.trim();
-    if (text.isEmpty) return;
-    setState(() => _sending = true);
-    try {
-      await FirebaseFirestore.instance.collection('announcements').add({
-        'orgId': widget.orgId,
-        'body': text,
-        'reach': _reach,
-        'sentAt': FieldValue.serverTimestamp(),
-        'recipientCount': 0,
-      });
-      _bodyController.clear();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Announcement sent'),
-              backgroundColor: AppTheme.primary),
-        );
-      }
-    } catch (e) {
-      debugPrint('Broadcast error: $e');
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-      children: [
-        // Compose card
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppTheme.darkGreen, AppTheme.primary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.darkGreen.withOpacity(0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.campaign_outlined,
-                      color: Colors.white.withOpacity(0.9), size: 20),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'New Announcement',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _bodyController,
-                maxLines: 3,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Write your announcement...',
-                  hintStyle:
-                      TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.12),
-                  contentPadding: const EdgeInsets.all(12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        BorderSide(color: Colors.white.withOpacity(0.5)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  _ReachChip(
-                    label: 'Followers',
-                    active: _reach == 'followers',
-                    onTap: () => setState(() => _reach = 'followers'),
-                  ),
-                  const SizedBox(width: 6),
-                  _ReachChip(
-                    label: 'Nearby',
-                    active: _reach == 'nearby',
-                    onTap: () => setState(() => _reach = 'nearby'),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: _sending ? null : _send,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: _sending
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppTheme.darkGreen),
-                            )
-                          : const Text(
-                              'Send',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.darkGreen,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // History
-        StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('announcements')
-                .where('orgId', isEqualTo: widget.orgId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final docs = snapshot.data?.docs ?? [];
-              // sort client-side — avoid composite index
-              final sorted = List.of(docs)
-                ..sort((a, b) {
-                  final at = (a.data() as Map)['sentAt'];
-                  final bt = (b.data() as Map)['sentAt'];
-                  if (at is Timestamp && bt is Timestamp) {
-                    return bt.compareTo(at);
-                  }
-                  return 0;
-                });
-
-              if (sorted.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: _EmptyState(
-                    icon: Icons.history_outlined,
-                    title: 'No announcements yet',
-                    subtitle: 'Your sent announcements will appear here',
-                  ),
-                );
-              }
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SectionHeader(
-                      icon: Icons.history_outlined,
-                      label: 'Sent Announcements',
-                      color: AppTheme.primary),
-                  ...sorted.map((d) => _AnnouncementCard(
-                      data: d.data() as Map<String, dynamic>)),
-                ],
-              );
-            },
-          ),
       ],
     );
   }
 }
 
-class _ReachChip extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-  const _ReachChip(
-      {required this.label, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: active
-              ? Colors.white.withOpacity(0.2)
-              : Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active
-                ? Colors.white.withOpacity(0.5)
-                : Colors.white.withOpacity(0.15),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: active ? Colors.white : Colors.white.withOpacity(0.5),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AnnouncementCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  const _AnnouncementCard({required this.data});
-
-  String _timeAgo(dynamic raw) {
-    if (raw == null) return '';
-    DateTime? dt;
-    if (raw is Timestamp) dt = raw.toDate();
-    if (dt == null) return '';
-    final diff = DateTime.now().difference(dt);
-    if (diff.inDays == 0) return 'Today';
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${(diff.inDays / 7).floor()}w ago';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final body = richBodyToMarkdown(data['body']);
-    final reach = data['reach'] as String? ?? 'followers';
-    final recipients = data['recipientCount'] as int? ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: AppTheme.primary.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3))
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  body,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.darkGreen,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _timeAgo(data['sentAt']),
-                style: TextStyle(
-                    fontSize: 10, color: AppTheme.darkGreen.withOpacity(0.4)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.people_outline,
-                  size: 12, color: AppTheme.darkGreen.withOpacity(0.4)),
-              const SizedBox(width: 4),
-              Text(
-                '$recipients reached',
-                style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  reach[0].toUpperCase() + reach.substring(1),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.darkGreen.withOpacity(0.6),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// IMPACT TAB
+// IMPACT
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ImpactTab extends StatelessWidget {
   final String orgId;
-  const _ImpactTab({super.key, required this.orgId});
+  const _ImpactTab({required this.orgId});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('activities')
-          .where('orgId', isEqualTo: orgId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            !snapshot.hasData) {
-          return const Center(
-              child: CircularProgressIndicator(
-                  color: AppTheme.primary, strokeWidth: 2));
+    final p = context.canopy;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('activities').where('orgId', isEqualTo: orgId).snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) return const CanopyErrorState(title: "Couldn't load impact records");
+        if (!snap.hasData) {
+          return ListView(padding: const EdgeInsets.all(CanopySpace.gutter), children: const [CanopyListSkeleton(rows: 3)]);
+        }
+        final docs = snap.data!.docs;
+        final inReview = docs.where((d) => d.data()['status'] == 'completed' && (d.data()['impactStatus'] ?? 'pending') == 'pending').toList();
+        final inVerification = docs.where((d) => d.data()['impactStatus'] == 'verifying').toList();
+        final verified = docs.where((d) => d.data()['impactStatus'] == 'confirmed').toList();
+
+        Widget row(QueryDocumentSnapshot<Map<String, dynamic>> d, String label, Color c) {
+          final a = d.data();
+          final metrics = (a['metrics'] as Map?)?.cast<String, dynamic>() ?? const {};
+          return DenseRow(
+            title: (a['title'] ?? a['name'] ?? 'Activity') as String,
+            subtitle: [
+              if (_when(a) != null) DateFormat('d MMM yyyy').format(_when(a)!),
+              for (final e in metrics.entries) '${e.value} ${e.key}',
+            ].join(' · '),
+            status: StatusLabel(label, color: c),
+          );
         }
 
-        final all = snapshot.data?.docs ?? [];
-        final verified = all
-            .where((d) =>
-                (d.data() as Map<String, dynamic>)['impactStatus'] ==
-                'confirmed')
-            .toList();
-
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+          padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s32),
           children: [
-            // On-chain summary
-            _OnChainSummaryCard(totalRecords: verified.length),
-            const SizedBox(height: 16),
-
-            if (verified.isEmpty)
-              _EmptyState(
-                icon: Icons.verified_outlined,
-                title: 'No verified records yet',
-                subtitle:
-                    'Impact records appear here once an event passes verification',
+            Row(children: [
+              Expanded(child: MetricTile(value: '${inReview.length}', label: 'In review')),
+              const SizedBox(width: CanopySpace.s16),
+              Expanded(child: MetricTile(value: '${inVerification.length}', label: 'In verification')),
+              const SizedBox(width: CanopySpace.s16),
+              Expanded(child: MetricTile(value: '${verified.length}', label: 'Verified')),
+            ]),
+            const SizedBox(height: CanopySpace.section),
+            if (inReview.isEmpty && inVerification.isEmpty && verified.isEmpty)
+              const CanopyEmptyState(
+                boxed: true,
+                icon: Icons.fact_check_outlined,
+                title: 'No impact records yet',
+                line: 'Close out an event to start its record.',
               )
-            else ...[
-              _SectionHeader(
-                icon: Icons.verified_outlined,
-                label: 'Verified Records',
-                color: Colors.teal.shade600,
-                subtitle: 'Permanently anchored',
-              ),
-              ...verified.map((d) => _ImpactRecordCard(
-                  data: d.data() as Map<String, dynamic>)),
-            ],
+            else
+              CanopyListGroup(children: [
+                for (final d in inReview) row(d, 'In review', p.warning),
+                for (final d in inVerification) row(d, 'In verification', p.info),
+                for (final d in verified) row(d, 'Verified', p.success),
+              ]),
+            const SizedBox(height: CanopySpace.section),
+            const CanopyComingSoon(
+              boxed: true,
+              icon: Icons.public_outlined,
+              title: 'Permanent public records',
+              line: 'Verified impact published as a record anyone can check. Not built yet — nothing here is recorded publicly today.',
+            ),
           ],
         );
       },
-    );
-  }
-}
-
-class _OnChainSummaryCard extends StatelessWidget {
-  final int totalRecords;
-  const _OnChainSummaryCard({required this.totalRecords});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.teal.shade700,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.teal.withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.link_rounded,
-                  color: Colors.white.withOpacity(0.85), size: 18),
-              const SizedBox(width: 8),
-              const Text(
-                'On-Chain Summary',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Cardano',
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white.withOpacity(0.9)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _OnChainStat(value: '$totalRecords', label: 'Records'),
-              _VertDivider(),
-              const _OnChainStat(value: '—', label: 'Plastic'),
-              _VertDivider(),
-              const _OnChainStat(value: '—', label: 'Trees'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OnChainStat extends StatelessWidget {
-  final String value;
-  final String label;
-  const _OnChainStat({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white)),
-          const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.white.withOpacity(0.6),
-                  fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-}
-
-class _VertDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 1, height: 32, color: Colors.white.withOpacity(0.15));
-  }
-}
-
-class _ImpactRecordCard extends StatelessWidget {
-  final Map<String, dynamic> data;
-  const _ImpactRecordCard({required this.data});
-
-  String _formatDate(dynamic raw) {
-    if (raw == null) return '—';
-    DateTime? dt;
-    if (raw is Timestamp) dt = raw.toDate();
-    if (dt == null) return '—';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final name = data['name'] as String? ?? 'Untitled';
-    final type = data['type'] as String? ?? '';
-    final location = data['location'] as String? ?? '';
-    final txHash = data['txHash'] as String? ?? '';
-    final metrics = (data['metrics'] as Map?)?.cast<String, dynamic>() ?? {};
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.teal.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.teal.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 3))
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: Colors.teal.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(Icons.verified_outlined,
-                    size: 15, color: Colors.teal.shade600),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name,
-                        style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.darkGreen)),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        if (type.isNotEmpty)
-                          Text(type,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.teal.shade600,
-                                  fontWeight: FontWeight.w600)),
-                        if (location.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Text('· $location',
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color:
-                                      AppTheme.darkGreen.withOpacity(0.45))),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Text(_formatDate(data['date']),
-                  style: TextStyle(
-                      fontSize: 10,
-                      color: AppTheme.darkGreen.withOpacity(0.4))),
-            ],
-          ),
-          if (metrics.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: metrics.entries.map((e) {
-                return Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppTheme.lightGreen.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: AppTheme.lightGreen.withOpacity(0.2)),
-                  ),
-                  child: RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '${e.value} ',
-                          style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.darkGreen),
-                        ),
-                        TextSpan(
-                          text: e.key,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: AppTheme.darkGreen.withOpacity(0.5)),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-          if (txHash.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.link_rounded,
-                    size: 12, color: Colors.teal.shade600),
-                const SizedBox(width: 5),
-                Text(txHash,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.teal.shade600)),
-                const Spacer(),
-                Text('View on Cardano →',
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.teal.shade600)),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SHARED WIDGETS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 60),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.lightGreen.withOpacity(0.18),
-                    AppTheme.accent.withOpacity(0.1),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Icon(icon,
-                  size: 34, color: AppTheme.lightGreen.withOpacity(0.7)),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.darkGreen,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 13,
-                color: AppTheme.darkGreen.withOpacity(0.45),
-                height: 1.4,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 24),
-              GestureDetector(
-                onTap: onAction,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 13),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.darkGreen, AppTheme.primary],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.3),
-                        blurRadius: 14,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    actionLabel!,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final String? subtitle;
-  const _SectionHeader({
-    required this.icon,
-    required this.label,
-    required this.color,
-    this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 10),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 14, color: color),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: color)),
-              if (subtitle != null)
-                Text(subtitle!,
-                    style: TextStyle(
-                        fontSize: 10,
-                        color: AppTheme.darkGreen.withOpacity(0.4),
-                        fontWeight: FontWeight.w500)),
-            ],
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(height: 1, color: color.withOpacity(0.12)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniStatsRow extends StatelessWidget {
-  final List<_MiniStat> items;
-  const _MiniStatsRow({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: AppTheme.primary.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Row(
-        children: items.map((item) {
-          return Expanded(
-            child: Column(
-              children: [
-                Text(item.value,
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: item.color)),
-                const SizedBox(height: 2),
-                Text(item.label,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.darkGreen.withOpacity(0.45))),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _MiniStat {
-  final String label;
-  final String value;
-  final Color color;
-  const _MiniStat({required this.label, required this.value, required this.color});
-}
-
-class _SmallActionButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  const _SmallActionButton(
-      {required this.label, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w700, color: color),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OutlineButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  const _OutlineButton(
-      {required this.label, required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.primary.withOpacity(0.35)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 16, color: AppTheme.primary),
-            const SizedBox(width: 8),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.primary)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _IconBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool gradient;
-  const _IconBtn({required this.icon, required this.onTap, this.gradient = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          gradient: gradient
-              ? const LinearGradient(
-                  colors: [AppTheme.darkGreen, AppTheme.primary],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: gradient ? null : AppTheme.lightGreen.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: gradient
-              ? [
-                  BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
-        ),
-        child: Icon(icon,
-            size: 18,
-            color: gradient
-                ? Colors.white
-                : AppTheme.darkGreen.withOpacity(0.7)),
-      ),
     );
   }
 }

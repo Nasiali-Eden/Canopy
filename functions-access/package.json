@@ -1,0 +1,13 @@
+{
+  "name": "canopy-access-functions",
+  "description": "Organisation access: invite, accept, remove, switch. Separate codebase so it deploys without payment secrets.",
+  "scripts": { "build": "tsc" },
+  "engines": { "node": "20" },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^12.3.1",
+    "firebase-functions": "^5.0.1"
+  },
+  "devDependencies": { "typescript": "^5.5.4" },
+  "private": true
+}

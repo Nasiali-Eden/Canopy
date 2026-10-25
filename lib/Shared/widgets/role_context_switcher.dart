@@ -1,5 +1,14 @@
+// lib/Shared/widgets/role_context_switcher.dart
+//
+// RoleSwitcher (DESIGN_HANDOFF.md §2): a card at the top of Profile, shown
+// only to people with more than one context. It says which context you're in
+// and opens a sheet that explains what each of the others unlocks. Used by
+// the member, org, marketplace, env-ops and culture shells.
+
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
+
+import '../../Organization/Access/org_picker.dart';
+import '../../theme/canopy_components.dart';
 
 class RoleContextSwitcher extends StatelessWidget {
   final String activeContext; // 'org' | 'member' | 'marketplace' | 'envOps' | 'cultural'
@@ -25,117 +34,78 @@ class RoleContextSwitcher extends StatelessWidget {
     this.onCulturalTap,
   });
 
+  List<(String, String, String, IconData, VoidCallback?)> get _contexts => [
+        ('member', 'Member', 'Your impact, events and community feed',
+            Icons.person_outline, onMemberTap),
+        ('org', 'Organisation workspace', 'Host events, publish articles, manage people',
+            Icons.apartment_outlined, onOrgTap),
+        if (hasMarketplace)
+          ('marketplace', 'Marketplace seller', 'Your shop, listings and buy orders',
+              Icons.storefront_outlined, onMarketplaceTap),
+        if (hasEnvOps)
+          ('envOps', 'Environmental Ops', 'Territory, trees, fleet and material market',
+              Icons.eco_outlined, onEnvOpsTap),
+        if (hasCultural)
+          ('cultural', 'Cultural Archive', 'Catalogue heritage entries for your communities',
+              Icons.auto_stories_outlined, onCulturalTap),
+      ];
+
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            // ── Org Tab ────────────────────────────────────────────────────
-            _buildTab(
-              label: 'Org',
-              icon: Icons.business_outlined,
-              color: AppTheme.primary,
-              isActive: activeContext == 'org',
-              onTap: onOrgTap,
+    final p = context.canopy;
+    final current = _contexts.firstWhere((c) => c.$1 == activeContext,
+        orElse: () => _contexts.first);
+    return CanopyCard(
+      onTap: () => openSheet(context),
+      child: Row(
+        children: [
+          Icon(current.$4, size: CanopyIconSize.nav, color: p.ink),
+          const SizedBox(width: CanopySpace.s12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("YOU'RE IN", style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+                Text(current.$2, style: CanopyType.subhead.copyWith(color: p.ink)),
+                Text('${_contexts.length - 1} other workspace${_contexts.length == 2 ? '' : 's'}',
+                    style: CanopyType.caption.copyWith(color: p.inkMuted)),
+              ],
             ),
-            const SizedBox(width: 8),
-
-            // ── My Profile Tab ─────────────────────────────────────────────
-            _buildTab(
-              label: 'My Profile',
-              icon: Icons.person_outline,
-              color: AppTheme.accent,
-              isActive: activeContext == 'member',
-              onTap: onMemberTap,
-            ),
-
-            // ── Marketplace Tab (conditional) ──────────────────────────────
-            if (hasMarketplace) ...[
-              const SizedBox(width: 8),
-              _buildTab(
-                label: 'Marketplace',
-                icon: Icons.storefront_outlined,
-                color: AppTheme.tertiary,
-                isActive: activeContext == 'marketplace',
-                onTap: onMarketplaceTap ?? () {},
-              ),
-            ],
-
-            // ── Environmental Ops Tab (conditional) ───────────────────────
-            if (hasEnvOps) ...[
-              const SizedBox(width: 8),
-              _buildTab(
-                label: 'Env Ops',
-                icon: Icons.eco_outlined,
-                color: const Color(0xFF2E7D5E),
-                isActive: activeContext == 'envOps',
-                onTap: onEnvOpsTap ?? () {},
-              ),
-            ],
-
-            // ── Cultural Archive Tab (conditional) ────────────────────────
-            if (hasCultural) ...[
-              const SizedBox(width: 8),
-              _buildTab(
-                label: 'Culture',
-                icon: Icons.auto_stories_outlined,
-                color: const Color(0xFF7A5230),
-                isActive: activeContext == 'cultural',
-                onTap: onCulturalTap ?? () {},
-              ),
-            ],
-          ],
-        ),
+          ),
+          Text('Switch', style: CanopyType.label.copyWith(color: p.primaryInk)),
+          Icon(Icons.chevron_right, size: CanopyIconSize.s18, color: p.primaryInk),
+        ],
       ),
     );
   }
 
-  Widget _buildTab({
-    required String label,
-    required IconData icon,
-    required Color color,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: isActive ? color : Colors.transparent,
-          border: isActive
-              ? null
-              : Border.all(
-                  color: color.withOpacity(0.35),
-                  width: 1.5,
-                ),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isActive ? Colors.white : color,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isActive ? Colors.white : color,
+  void openSheet(BuildContext context) {
+    showCanopySheet<void>(
+      context,
+      builder: (ctx) => CanopySheetBody(
+        title: 'Switch workspace',
+        caption: 'Each workspace shows the tools for that role.',
+        children: [
+          CanopyListGroup(children: [
+            for (final c in _contexts)
+              CanopyListRow(
+                icon: c.$4,
+                title: c.$2,
+                subtitle: c.$3,
+                chevron: c.$1 != activeContext,
+                trailing: c.$1 == activeContext
+                    ? StatusLabel('Current', color: ctx.canopy.success)
+                    : null,
+                onTap: c.$1 == activeContext || c.$5 == null
+                    ? null
+                    : () {
+                        Navigator.pop(ctx);
+                        c.$5!();
+                      },
               ),
-            ),
-          ],
-        ),
+          ]),
+          OrgPickerGroup(onClose: () => Navigator.pop(ctx)),
+        ],
       ),
     );
   }

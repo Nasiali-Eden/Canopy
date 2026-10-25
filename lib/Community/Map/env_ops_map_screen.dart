@@ -1,22 +1,23 @@
 // lib/Community/Map/env_ops_map_screen.dart
 //
-// Public, read-only environmental-operations map: shows collection zones
-// (polygons) and dumpsites (markers) across the platform. Reached from the
-// community map's "View Environmental Operations" button.
+// Public, read-only environmental operations map (v2): collection zones and
+// dumpsites across the platform, with a legend that doubles as the list.
+// Org logos appear inside zones once you zoom in. Reached from the
+// community map's layers sheet.
 
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import '../../Shared/theme/app_theme.dart';
-import '../../EnvironmentalOps/Territory/env_territory.dart'
-    show CollectionZone;
-import 'map_style.dart' as map_style;
-import 'org_logo_cache.dart';
-import '../Incidents/incidents_feed_screen.dart';
+import '../../EnvironmentalOps/Territory/env_territory.dart' show CollectionZone;
+import '../../EnvironmentalOps/envops_ui.dart' show CanopyField, MapLegend;
 import '../../Shared/Inputs/post_incident.dart';
+import '../../theme/canopy_components.dart';
+import '../../theme/canopy_map_style.dart';
+import '../Incidents/incidents_feed_screen.dart';
+import 'org_logo_cache.dart';
 
 class EnvOpsMapScreen extends StatefulWidget {
   const EnvOpsMapScreen({super.key});
@@ -25,18 +26,19 @@ class EnvOpsMapScreen extends StatefulWidget {
   State<EnvOpsMapScreen> createState() => _EnvOpsMapScreenState();
 }
 
-class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
-  List<CollectionZone> _zones = [];
-  final List<_Dumpsite> _dumpsites = [];
-  bool _loading = true;
-  bool _showZoneLogos = false;
-  final Map<String, BitmapDescriptor> _zoneLogos = {};
-  final Map<String, String> _orgNames = {};
+class _Dumpsite {
+  final String id, name;
+  final LatLng position;
+  final bool active;
+  const _Dumpsite(this.id, this.name, this.position, this.active);
+}
 
-  static const CameraPosition _initial = CameraPosition(
-    target: LatLng(-1.2921, 36.8219),
-    zoom: 12,
-  );
+class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
+  List<CollectionZone> _zones = const [];
+  List<_Dumpsite> _dumpsites = const [];
+  bool _loading = true, _failed = false, _showLogos = false;
+  final Map<String, BitmapDescriptor> _logos = {};
+  final Map<String, String> _orgNames = {};
 
   @override
   void initState() {
@@ -45,397 +47,213 @@ class _EnvOpsMapScreenState extends State<EnvOpsMapScreen> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     try {
-      final results = await Future.wait([
-        FirebaseFirestore.instance
-            .collection('collection_zones')
-            .limit(100)
-            .get(),
-        FirebaseFirestore.instance
-            .collection('map_pins')
-            .where('pin_type', isEqualTo: 'dumpsite')
-            .limit(200)
-            .get(),
+      final db = FirebaseFirestore.instance;
+      final r = await Future.wait([
+        db.collection('collection_zones').limit(200).get(),
+        db.collection('map_pins').where('pin_type', isEqualTo: 'dumpsite').limit(300).get(),
       ]);
-
-      final zones = (results[0])
-          .docs
-          .map(CollectionZone.fromFirestore)
-          .where((z) => z.vertices.length >= 3)
-          .toList();
-
+      final zones = r[0].docs.map(CollectionZone.fromFirestore).where((z) => z.vertices.length >= 3).toList();
       final dumps = <_Dumpsite>[];
-      for (final d in (results[1]).docs) {
-        final data = d.data();
-        final gp = data['location'] as GeoPoint?;
-        if (gp == null) continue;
-        dumps.add(_Dumpsite(
-          id: d.id,
-          name: (data['name'] ?? 'Dumpsite') as String,
-          position: LatLng(gp.latitude, gp.longitude),
-          isActive: data['is_active'] as bool? ?? true,
-        ));
+      for (final d in r[1].docs) {
+        final m = d.data();
+        final gp = m['location'];
+        if (gp is! GeoPoint) continue;
+        dumps.add(_Dumpsite(d.id, '${m['name'] ?? 'Dumpsite'}', LatLng(gp.latitude, gp.longitude), m['is_active'] as bool? ?? true));
       }
-
       if (!mounted) return;
       setState(() {
         _zones = zones;
-        _dumpsites
-          ..clear()
-          ..addAll(dumps);
+        _dumpsites = dumps;
         _loading = false;
       });
-      await _loadZoneLogos(zones);
+      _loadLogos(zones);
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
+      }
     }
   }
 
-  Future<void> _loadZoneLogos(List<CollectionZone> zones) async {
-    await Future.wait(zones
-        .map((z) => z.orgId)
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .map((orgId) async {
+  Future<void> _loadLogos(List<CollectionZone> zones) async {
+    final ring = context.canopy.ink;
+    for (final orgId in zones.map((z) => z.orgId).where((id) => id.isNotEmpty).toSet()) {
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('organizations')
-            .doc(orgId)
-            .get();
-        final data = doc.data();
-        if (data == null || !mounted) return;
-        final url = [data['logoUrl'], data['profilePhoto']]
-            .whereType<String>()
-            .where((value) => value.trim().isNotEmpty)
-            .firstOrNull;
-        if (url == null) return;
+        final data = (await FirebaseFirestore.instance.collection('organizations').doc(orgId).get()).data();
+        if (data == null || !mounted) continue;
+        _orgNames[orgId] = '${data['org_name'] ?? data['name'] ?? 'Organisation'}';
+        final url = [data['logoUrl'], data['profilePhoto']].whereType<String>().where((v) => v.trim().isNotEmpty).firstOrNull;
+        if (url == null) continue;
         final bytes = await OrgLogoCache.instance.bytes(url);
-        if (bytes == null || !mounted) return;
+        if (bytes == null || !mounted) continue;
         final codec = await ui.instantiateImageCodec(bytes, targetWidth: 128);
-        try {
-          final frame = await codec.getNextFrame();
-          try {
-            final recorder = ui.PictureRecorder();
-            final canvas = Canvas(recorder);
-            const bounds = Rect.fromLTWH(0, 0, 128, 128);
-            canvas.drawCircle(
-                const Offset(64, 64), 62, Paint()..color = Colors.white);
-            canvas.save();
-            canvas.clipPath(Path()..addOval(bounds.deflate(8)));
-            paintImage(
-                canvas: canvas,
-                rect: bounds.deflate(12),
-                image: frame.image,
-                fit: BoxFit.contain);
-            canvas.restore();
-            canvas.drawCircle(
-                const Offset(64, 64),
-                62,
-                Paint()
-                  ..color = AppTheme.primary
-                  ..style = PaintingStyle.stroke
-                  ..strokeWidth = 4);
-            final picture = recorder.endRecording();
-            final image = await picture.toImage(128, 128);
-            picture.dispose();
-            try {
-              final png =
-                  await image.toByteData(format: ui.ImageByteFormat.png);
-              if (png == null || !mounted) return;
-              setState(() {
-                _zoneLogos[orgId] = BitmapDescriptor.bytes(
-                    png.buffer.asUint8List(),
-                    width: 48,
-                    height: 48);
-                _orgNames[orgId] =
-                    (data['name'] ?? data['orgName'] ?? 'Organization')
-                        .toString();
-              });
-            } finally {
-              image.dispose();
-            }
-          } finally {
-            frame.image.dispose();
-          }
-        } finally {
-          codec.dispose();
-        }
+        final frame = await codec.getNextFrame();
+        final rec = ui.PictureRecorder();
+        final c = Canvas(rec);
+        const b = Rect.fromLTWH(0, 0, 128, 128);
+        c.drawCircle(const Offset(64, 64), 62, Paint()..color = const Color(0xFFFFFFFF));
+        c.save();
+        c.clipPath(Path()..addOval(b.deflate(8)));
+        paintImage(canvas: c, rect: b.deflate(12), image: frame.image, fit: BoxFit.contain);
+        c.restore();
+        c.drawCircle(const Offset(64, 64), 62, Paint()
+          ..color = ring
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4);
+        final img = await rec.endRecording().toImage(128, 128);
+        final png = await img.toByteData(format: ui.ImageByteFormat.png);
+        frame.image.dispose();
+        codec.dispose();
+        img.dispose();
+        if (png == null || !mounted) continue;
+        setState(() => _logos[orgId] = BitmapDescriptor.bytes(png.buffer.asUint8List(), width: 44, height: 44));
       } catch (_) {
-        // A missing or unavailable logo must not hide the mapped areas.
-      }
-    }));
-  }
-
-  // Choose the middle of the widest interior span at the area's mid-latitude.
-  // Unlike averaging vertices, this keeps the logo inside concave zones too.
-  LatLng _zoneCenter(List<LatLng> vertices) {
-    final latitudes = vertices.map((v) => v.latitude).toList()..sort();
-    final latitude = (latitudes.first + latitudes.last) / 2;
-    final crossings = <double>[];
-    for (var i = 0; i < vertices.length; i++) {
-      final a = vertices[i];
-      final b = vertices[(i + 1) % vertices.length];
-      if ((a.latitude > latitude) != (b.latitude > latitude)) {
-        crossings.add(a.longitude +
-            (latitude - a.latitude) *
-                (b.longitude - a.longitude) /
-                (b.latitude - a.latitude));
+        // A missing logo must not hide the mapped areas.
       }
     }
-    crossings.sort();
-    var width = -1.0;
-    var longitude = vertices.first.longitude;
-    for (var i = 0; i + 1 < crossings.length; i += 2) {
-      final span = crossings[i + 1] - crossings[i];
-      if (span > width) {
-        width = span;
-        longitude = (crossings[i] + crossings[i + 1]) / 2;
-      }
-    }
-    return LatLng(latitude, longitude);
   }
 
-  Set<Polygon> get _polygons => _zones
-      .map((z) => Polygon(
-            polygonId: PolygonId('zone_${z.id}'),
-            points: z.vertices,
-            fillColor: AppTheme.primary.withOpacity(0.18),
-            strokeColor: AppTheme.primary,
-            strokeWidth: 2,
-          ))
-      .toSet();
-
-  Set<Marker> get _markers => {
-        if (_showZoneLogos)
-          for (final zone in _zones)
-            if (_zoneLogos.containsKey(zone.orgId))
-              Marker(
-                markerId: MarkerId('zone_logo_${zone.id}'),
-                position: _zoneCenter(zone.vertices),
-                anchor: const Offset(0.5, 0.5),
-                icon: _zoneLogos[zone.orgId]!,
-                infoWindow: InfoWindow(
-                    title: _orgNames[zone.orgId], snippet: zone.name),
-              ),
-        ..._dumpsites
-            .map((d) => Marker(
-                  markerId: MarkerId('dump_${d.id}'),
-                  position: d.position,
-                  icon: BitmapDescriptor.defaultMarkerWithHue(d.isActive
-                      ? BitmapDescriptor.hueRed
-                      : BitmapDescriptor.hueOrange),
-                  infoWindow: InfoWindow(
-                      title: d.name,
-                      snippet: d.isActive ? 'Active dumpsite' : 'Cleared'),
-                ))
-            .toSet(),
-      };
+  /// Middle of the widest interior span at mid-latitude — stays inside
+  /// concave zones, unlike a vertex average.
+  LatLng _inside(List<LatLng> v) {
+    final lats = v.map((x) => x.latitude).toList()..sort();
+    final lat = (lats.first + lats.last) / 2;
+    final xs = <double>[];
+    for (var i = 0; i < v.length; i++) {
+      final a = v[i], b = v[(i + 1) % v.length];
+      if ((a.latitude > lat) != (b.latitude > lat)) {
+        xs.add(a.longitude + (lat - a.latitude) * (b.longitude - a.longitude) / (b.latitude - a.latitude));
+      }
+    }
+    xs.sort();
+    var best = -1.0, lng = v.first.longitude;
+    for (var i = 0; i + 1 < xs.length; i += 2) {
+      if (xs[i + 1] - xs[i] > best) {
+        best = xs[i + 1] - xs[i];
+        lng = (xs[i] + xs[i + 1]) / 2;
+      }
+    }
+    return LatLng(lat, lng);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final topPad = MediaQuery.of(context).padding.top;
-    final bottomPad = MediaQuery.of(context).padding.bottom;
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          GoogleMap(
-            initialCameraPosition: _initial,
-            onMapCreated: (c) => c.setMapStyle(map_style.kCanopyMapStyle),
-            polygons: _polygons,
-            markers: _markers,
-            onCameraMove: (position) {
-              final show = position.zoom >= 15;
-              if (show != _showZoneLogos) {
-                setState(() => _showZoneLogos = show);
-              }
-            },
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
-          ),
-
-          // Header
-          Positioned(
-            top: topPad + 12,
-            left: 16,
-            right: 16,
-            child: Row(
-              children: [
-                _circleBtn(
-                  Icons.arrow_back_ios_new_rounded,
-                  () => Navigator.pop(context),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 12),
-                      ],
-                    ),
-                    alignment: Alignment.centerLeft,
-                    child: const Row(
-                      children: [
-                        Icon(Icons.recycling_rounded,
-                            color: AppTheme.primary, size: 20),
-                        SizedBox(width: 10),
-                        Text('Environmental Operations',
-                            style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.darkGreen)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                _circleBtn(
-                  Icons.receipt_long_outlined,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const IncidentsFeedScreen()),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                _circleBtn(
-                  Icons.add_location_alt_outlined,
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PostIncident()),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          if (_loading)
-            const Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Center(
-                child: CircularProgressIndicator(
-                    color: AppTheme.primary, strokeWidth: 2),
+    final p = context.canopy;
+    final top = MediaQuery.paddingOf(context).top;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return CanopyScaffold(
+      body: Stack(children: [
+        GoogleMap(
+          initialCameraPosition: const CameraPosition(target: LatLng(-1.2921, 36.8219), zoom: 12),
+          style: canopyMapStyle(context),
+          polygons: {
+            for (final z in _zones)
+              Polygon(
+                polygonId: PolygonId('z_${z.id}'),
+                points: z.vertices,
+                fillColor: CanopyField.zoneFill(p),
+                strokeColor: CanopyField.zoneStroke(p),
+                strokeWidth: 2,
               ),
-            ),
-
-          // Legend / summary
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: bottomPad + 16,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.10),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4)),
-                ],
-              ),
-              child: Row(
-                children: [
-                  _legend(
-                    color: AppTheme.primary,
-                    icon: Icons.layers_outlined,
-                    value: '${_zones.length}',
-                    label: 'Collection zones',
+          },
+          markers: {
+            if (_showLogos)
+              for (final z in _zones)
+                if (_logos.containsKey(z.orgId))
+                  Marker(
+                    markerId: MarkerId('logo_${z.id}'),
+                    position: _inside(z.vertices),
+                    anchor: const Offset(.5, .5),
+                    icon: _logos[z.orgId]!,
+                    infoWindow: InfoWindow(title: _orgNames[z.orgId], snippet: z.name),
                   ),
-                  Container(width: 1, height: 36, color: Colors.grey.shade200),
-                  _legend(
-                    color: const Color(0xFFE53935),
-                    icon: Icons.delete_outline,
-                    value: '${_dumpsites.length}',
-                    label: 'Dumpsites',
-                  ),
-                ],
+            for (final d in _dumpsites)
+              Marker(
+                markerId: MarkerId('d_${d.id}'),
+                position: d.position,
+                icon: BitmapDescriptor.defaultMarkerWithHue(d.active ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange),
+                infoWindow: InfoWindow(title: d.name, snippet: d.active ? 'Active dumpsite' : 'Cleared'),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _legend({
-    required Color color,
-    required IconData icon,
-    required String value,
-    required String label,
-  }) {
-    return Expanded(
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.darkGreen)),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.darkGreen.withOpacity(0.55))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _circleBtn(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 10),
-          ],
+          },
+          onCameraMove: (pos) {
+            final show = pos.zoom >= 15;
+            if (show != _showLogos) setState(() => _showLogos = show);
+          },
+          myLocationEnabled: true,
+          myLocationButtonEnabled: false,
+          zoomControlsEnabled: false,
+          mapToolbarEnabled: false,
         ),
-        child: Icon(icon, size: 18, color: AppTheme.darkGreen),
-      ),
+        Positioned(
+          top: top + CanopySpace.s8,
+          left: CanopySpace.s12,
+          right: CanopySpace.s12,
+          child: Row(children: [
+            CanopyIconButton(icon: Icons.arrow_back, tooltip: 'Back', float: true, onPressed: () => Navigator.maybePop(context)),
+            const SizedBox(width: CanopySpace.s8),
+            Expanded(
+              child: Container(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: CanopySpace.s16),
+                alignment: Alignment.centerLeft,
+                decoration: BoxDecoration(
+                  color: p.surface,
+                  borderRadius: BorderRadius.circular(CanopyRadius.pill),
+                  border: Border.all(color: p.outline),
+                ),
+                child: Text('Environmental operations', style: CanopyType.subhead.copyWith(color: p.ink)),
+              ),
+            ),
+            const SizedBox(width: CanopySpace.s8),
+            CanopyIconButton(
+              icon: Icons.receipt_long_outlined,
+              tooltip: 'Reports',
+              float: true,
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const IncidentsFeedScreen())),
+            ),
+            const SizedBox(width: CanopySpace.s8),
+            CanopyIconButton(
+              icon: Icons.add_location_alt_outlined,
+              tooltip: 'Report a problem',
+              float: true,
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PostIncident())),
+            ),
+          ]),
+        ),
+        Positioned(
+          left: CanopySpace.gutter,
+          right: CanopySpace.gutter,
+          bottom: bottom + CanopySpace.s16,
+          child: Container(
+            padding: const EdgeInsets.all(CanopySpace.s16),
+            decoration: BoxDecoration(
+              color: p.surface,
+              borderRadius: BorderRadius.circular(CanopyRadius.md),
+              border: Border.all(color: p.outline),
+            ),
+            child: _loading
+                ? const LinearProgressIndicator()
+                : _failed
+                    ? CanopyErrorState(inline: true, title: "Couldn't load the map layers.", onRetry: _load)
+                    : Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        MapLegend(items: [
+                          (CanopyField.zoneStroke(p), '${_zones.length} collection zone${_zones.length == 1 ? '' : 's'}'),
+                          (p.danger, '${_dumpsites.length} dumpsite${_dumpsites.length == 1 ? '' : 's'}'),
+                        ]),
+                        const SizedBox(height: CanopySpace.s4),
+                        Text('Zoom in to see which organisation works each zone.',
+                            style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                      ]),
+          ),
+        ),
+      ]),
     );
   }
-}
-
-class _Dumpsite {
-  final String id;
-  final String name;
-  final LatLng position;
-  final bool isActive;
-  const _Dumpsite({
-    required this.id,
-    required this.name,
-    required this.position,
-    required this.isActive,
-  });
 }

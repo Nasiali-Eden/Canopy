@@ -1,23 +1,32 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// CulturalComment — feedback/comment on an archive entry
+/// CulturalComment — a member's question, addition or dispute on an entry,
+/// and the archive's reply.
 class CulturalComment {
   final String id;
   final String entryId;
+  final String? orgId;
   final String commenterId;
   final String commenterName;
   final String voiceTier; // 'community_voice', 'contributor', 'open'
   final String commentBody;
-  final String
-      commentAction; // ask_question, add_variation, propose_relation, dispute, general
+  final String commentAction; // ask_question, add_variation, propose_relation, dispute, general
   final bool hasReply;
   final String? replyText;
   final DateTime createdAt;
   final bool isResolved;
 
+  /// pending · under_review · resolved
+  final String status;
+  final String? ownerUid;
+  final String? ownerName;
+  final DateTime? repliedAt;
+  final String? resolutionNote;
+
   CulturalComment({
     required this.id,
     required this.entryId,
+    this.orgId,
     required this.commenterId,
     required this.commenterName,
     required this.voiceTier,
@@ -27,65 +36,37 @@ class CulturalComment {
     this.replyText,
     required this.createdAt,
     this.isResolved = false,
+    this.status = 'pending',
+    this.ownerUid,
+    this.ownerName,
+    this.repliedAt,
+    this.resolutionNote,
   });
 
+  bool get isDispute => commentAction == 'dispute';
+
   factory CulturalComment.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? const {};
+    final resolved = data['is_resolved'] as bool? ?? false;
+    final hasReply = data['has_reply'] as bool? ?? false;
     return CulturalComment(
       id: doc.id,
       entryId: data['entry_id'] as String? ?? '',
+      orgId: data['org_id'] as String?,
       commenterId: data['commenter_id'] as String? ?? '',
       commenterName: data['commenter_name'] as String? ?? '',
       voiceTier: data['voice_tier'] as String? ?? 'open',
       commentBody: data['comment_body'] as String? ?? '',
       commentAction: data['comment_action'] as String? ?? 'general',
-      hasReply: data['has_reply'] as bool? ?? false,
+      hasReply: hasReply,
       replyText: data['reply_text'] as String?,
       createdAt: (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      isResolved: data['is_resolved'] as bool? ?? false,
-    );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'entry_id': entryId,
-      'commenter_id': commenterId,
-      'commenter_name': commenterName,
-      'voice_tier': voiceTier,
-      'comment_body': commentBody,
-      'comment_action': commentAction,
-      'has_reply': hasReply,
-      'reply_text': replyText,
-      'created_at': Timestamp.fromDate(createdAt),
-      'is_resolved': isResolved,
-    };
-  }
-
-  CulturalComment copyWith({
-    String? id,
-    String? entryId,
-    String? commenterId,
-    String? commenterName,
-    String? voiceTier,
-    String? commentBody,
-    String? commentAction,
-    bool? hasReply,
-    String? replyText,
-    DateTime? createdAt,
-    bool? isResolved,
-  }) {
-    return CulturalComment(
-      id: id ?? this.id,
-      entryId: entryId ?? this.entryId,
-      commenterId: commenterId ?? this.commenterId,
-      commenterName: commenterName ?? this.commenterName,
-      voiceTier: voiceTier ?? this.voiceTier,
-      commentBody: commentBody ?? this.commentBody,
-      commentAction: commentAction ?? this.commentAction,
-      hasReply: hasReply ?? this.hasReply,
-      replyText: replyText ?? this.replyText,
-      createdAt: createdAt ?? this.createdAt,
-      isResolved: isResolved ?? this.isResolved,
+      isResolved: resolved,
+      status: data['status'] as String? ?? (resolved ? 'resolved' : (hasReply ? 'under_review' : 'pending')),
+      ownerUid: data['owner_uid'] as String?,
+      ownerName: data['owner_name'] as String?,
+      repliedAt: (data['replied_at'] as Timestamp?)?.toDate(),
+      resolutionNote: data['resolution_note'] as String?,
     );
   }
 }

@@ -1,1177 +1,144 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+// lib/MarketPlace/Shop/seller_shop.dart
+//
+// Seller › Shop (MARKETPLACE_SELLER_DESIGN_BRIEF §4, F). The seller's real
+// inventory from /listings (Live · Paused · Sold out), each with its buyer
+// requests, pause/resume, sold out, edit and close — and a sticky
+// "New listing" into the listing wizard, which publishes for real.
+//
+// Wizard: Category → Materials → Details → Studio → Photos → Review →
+// "Publish listing". Provenance (source, kg) is optional and shown to
+// buyers only when entered — nothing is invented.
+
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart' hide MaterialType;
 import 'package:image_picker/image_picker.dart';
-import '../../Shared/theme/app_theme.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MODELS
-// ─────────────────────────────────────────────────────────────────────────────
+import '../../Models/geo/canopy_location.dart';
+import '../../Models/marketplace/canopy_listing.dart';
+import '../../Services/Geo/geo_registry.dart';
+import '../../Services/Marketplace/listing_service.dart';
+import '../../theme/canopy_components.dart';
+import '../market_ui.dart';
 
-enum ListingSide {
-  regenerative,
-  creative;
-
-  String get label => this == regenerative ? 'Regenerative' : 'Creative';
-}
-
-enum PricingUnit {
-  perKg('per kg'),
-  perUnit('per unit'),
-  perTonne('per tonne'),
-  perBale('per bale'),
-  perLitre('per litre'),
-  fixed('fixed price');
-
-  final String label;
-  const PricingUnit(this.label);
-}
-
-enum MaterialCondition {
-  raw('Raw', 'Unprocessed'),
-  sorted('Sorted', 'Cleaned & separated'),
-  processed('Processed', 'Pellets / sheets');
-
-  final String label;
-  final String sublabel;
-  const MaterialCondition(this.label, this.sublabel);
-}
-
-class _Category {
-  final String label;
-  final IconData icon;
-  final int impactScore;
-  final String impactLabel;
-
-  const _Category({
-    required this.label,
-    required this.icon,
-    required this.impactScore,
-    required this.impactLabel,
-  });
-}
-
-const _regenerativeCategories = <_Category>[
-  _Category(label: 'Plastics', icon: Icons.recycling, impactScore: 90, impactLabel: 'Plastics — High Impact'),
-  _Category(label: 'Metals', icon: Icons.hardware_outlined, impactScore: 70, impactLabel: 'Metals — Medium Impact'),
-  _Category(label: 'Glass', icon: Icons.wine_bar_outlined, impactScore: 50, impactLabel: 'Glass — Medium Impact'),
-  _Category(label: 'Paper & Cardboard', icon: Icons.inventory_2_outlined, impactScore: 60, impactLabel: 'Paper — Medium Impact'),
-  _Category(label: 'Rubber & Composites', icon: Icons.settings_outlined, impactScore: 55, impactLabel: 'Rubber — Medium Impact'),
-  _Category(label: 'Reclaimed Wood', icon: Icons.forest_outlined, impactScore: 45, impactLabel: 'Wood — Lower Impact'),
-  _Category(label: 'Textiles', icon: Icons.dry_cleaning_outlined, impactScore: 65, impactLabel: 'Textiles — Medium-High'),
-  _Category(label: 'Electronics & Parts', icon: Icons.memory_outlined, impactScore: 75, impactLabel: 'Electronics — High Impact'),
-];
-
-const _creativeCategories = <_Category>[
-  _Category(label: 'Sculpture & 3D Art', icon: Icons.architecture_outlined, impactScore: 80, impactLabel: 'Sculpture — High Craft'),
-  _Category(label: 'Furniture & Objects', icon: Icons.chair_outlined, impactScore: 75, impactLabel: 'Furniture — High Value'),
-  _Category(label: 'Jewellery & Accessories', icon: Icons.diamond_outlined, impactScore: 70, impactLabel: 'Jewellery — Premium'),
-  _Category(label: 'Fashion & Textiles', icon: Icons.checkroom_outlined, impactScore: 65, impactLabel: 'Fashion — Upcycled'),
-  _Category(label: 'Painting & Mixed Media', icon: Icons.palette_outlined, impactScore: 72, impactLabel: 'Painting — Original'),
-  _Category(label: 'Ceramics & Glass Art', icon: Icons.emoji_food_beverage_outlined, impactScore: 68, impactLabel: 'Ceramics — Handmade'),
-  _Category(label: 'Home & Lifestyle', icon: Icons.home_outlined, impactScore: 60, impactLabel: 'Home — Functional'),
-  _Category(label: 'Print & Paper Art', icon: Icons.print_outlined, impactScore: 55, impactLabel: 'Print — Limited Edition'),
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
-
-class SellerShopPage extends StatefulWidget {
+class SellerShopPage extends StatelessWidget {
   const SellerShopPage({super.key});
 
-  @override
-  State<SellerShopPage> createState() => _SellerShopPageState();
-}
-
-class _SellerShopPageState extends State<SellerShopPage>
-    with SingleTickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-
-  // ── State ────────────────────────────────────────────────────────────────
-  ListingSide _side = ListingSide.regenerative;
-  int _selectedCategoryIndex = 0;
-  MaterialCondition _condition = MaterialCondition.raw;
-  PricingUnit _pricingUnit = PricingUnit.perKg;
-  bool _circularCraftBadge = false;
-
-  final _titleController = TextEditingController();
-  final _descController = TextEditingController();
-  final _makerController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _venueController = TextEditingController();
-  final _qtyController = TextEditingController();
-  final _storyController = TextEditingController();
-  final _dnaController = TextEditingController();
-
-  final List<XFile?> _images = [null, null, null, null];
-  final _picker = ImagePicker();
-  bool _saving = false;
-
-  // ── Computed ─────────────────────────────────────────────────────────────
-  List<_Category> get _categories =>
-      _side == ListingSide.regenerative ? _regenerativeCategories : _creativeCategories;
-
-  _Category get _selectedCategory => _categories[_selectedCategoryIndex];
-
-  Color get _sideAccent =>
-      _side == ListingSide.regenerative ? AppTheme.primary : AppTheme.tertiary;
-
-  Color get _sideAccentLight =>
-      _side == ListingSide.regenerative
-          ? AppTheme.lightGreen.withOpacity(0.18)
-          : AppTheme.tertiary.withOpacity(0.12);
-
-  bool get _canSubmit =>
-      _titleController.text.trim().isNotEmpty &&
-      _makerController.text.trim().isNotEmpty &&
-      _priceController.text.trim().isNotEmpty &&
-      _images[0] != null;
-
-  int get _progressScore {
-    int s = 0;
-    if (_titleController.text.trim().isNotEmpty) s++;
-    if (_makerController.text.trim().isNotEmpty) s++;
-    if (_priceController.text.trim().isNotEmpty) s++;
-    if (_images[0] != null) s++;
-    return s;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-        duration: const Duration(milliseconds: 380), vsync: this)
-      ..forward();
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-
-    for (final c in [_titleController, _makerController, _priceController]) {
-      c.addListener(() => setState(() {}));
+  Future<void> _set(BuildContext context, CanopyListing l, ListingStatus s, String done) async {
+    try {
+      await ListingService.instance.setStatus(l.id, s);
+      if (context.mounted) showCanopySnack(context, done);
+    } catch (_) {
+      if (context.mounted) showCanopySnack(context, "Couldn't update. Try again.", error: true);
     }
   }
 
-  @override
-  void dispose() {
-    _animController.dispose();
-    for (final c in [
-      _titleController, _descController, _makerController,
-      _priceController, _venueController, _qtyController,
-      _storyController, _dnaController,
-    ]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  // ── Image helpers ─────────────────────────────────────────────────────────
-  Future<void> _pickImage(int slot) async {
-    final file =
-        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (!mounted || file == null) return;
-    setState(() => _images[slot] = file);
-  }
-
-  void _removeImage(int slot) => setState(() => _images[slot] = null);
-
-  // ── Side switch ───────────────────────────────────────────────────────────
-  void _setSide(ListingSide side) {
-    if (_side == side) return;
-    setState(() {
-      _side = side;
-      _selectedCategoryIndex = 0;
+  Future<void> _actions(BuildContext context, CanopyListing l) async {
+    final action = await showCanopySheet<String>(context, builder: (ctx) {
+      return CanopySheetBody(title: l.title, children: [
+        CanopyListGroup(children: [
+          CanopyListRow(
+            icon: Icons.forum_outlined,
+            title: 'Buyer requests',
+            subtitle: l.responseCount == 0 ? 'None yet' : '${l.responseCount}',
+            onTap: () => Navigator.pop(ctx, 'requests'),
+          ),
+          CanopyListRow(icon: Icons.edit_outlined, title: 'Edit listing', onTap: () => Navigator.pop(ctx, 'edit')),
+          if (l.status == ListingStatus.active)
+            CanopyListRow(icon: Icons.pause_circle_outline, title: 'Pause — hide from buyers', onTap: () => Navigator.pop(ctx, 'pause')),
+          if (l.status == ListingStatus.paused || l.status == ListingStatus.fulfilled)
+            CanopyListRow(icon: Icons.play_circle_outline, title: 'Put back on sale', onTap: () => Navigator.pop(ctx, 'live')),
+          if (l.status == ListingStatus.active)
+            CanopyListRow(icon: Icons.inventory_outlined, title: 'Mark sold out', onTap: () => Navigator.pop(ctx, 'sold')),
+          CanopyListRow(icon: Icons.close, title: 'Close listing', titleColor: ctx.canopy.danger, onTap: () => Navigator.pop(ctx, 'close')),
+        ]),
+      ]);
     });
-    _animController
-      ..reset()
-      ..forward();
+    if (!context.mounted || action == null) return;
+    switch (action) {
+      case 'requests':
+        showListingResponses(context, l);
+      case 'edit':
+        Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => ListingWizardScreen(existing: l)));
+      case 'pause':
+        _set(context, l, ListingStatus.paused, 'Paused — buyers can\'t see it.');
+      case 'live':
+        _set(context, l, ListingStatus.active, 'Back on sale.');
+      case 'sold':
+        _set(context, l, ListingStatus.fulfilled, 'Marked sold out.');
+      case 'close':
+        final ok = await showCanopyConfirm(context,
+            title: 'Close this listing?', message: 'It leaves your shop for good. Requests stay in your history.', confirmLabel: 'Close listing', danger: true);
+        if (ok && context.mounted) _set(context, l, ListingStatus.closed, 'Listing closed.');
+    }
   }
 
-  // ── Submit placeholder ────────────────────────────────────────────────────
-  Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() => _saving = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Listing ready for submission'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppTheme.primary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: _buildAppBar(),
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: Form(
-          key: _formKey,
-          child: Column(children: [
-            _ProgressBar(score: _progressScore),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildSideToggle(),
-                    const SizedBox(height: 22),
-                    _buildCategorySection(),
-                    const SizedBox(height: 22),
-                    _buildBasicInfo(),
-                    const SizedBox(height: 22),
-                    if (_side == ListingSide.regenerative) ...[
-                      _buildMaterialSpec(),
-                      const SizedBox(height: 22),
-                      _buildStoryField(),
-                      const SizedBox(height: 22),
-                    ] else ...[
-                      _buildCreatorDetails(),
-                      const SizedBox(height: 22),
-                    ],
-                    _buildPhotos(),
-                    const SizedBox(height: 22),
-                    _buildImpactScore(),
-                    const SizedBox(height: 22),
-                    _buildPriceSection(),
-                    const SizedBox(height: 32),
-                  ],
-                ),
-              ),
-            ),
-            _buildBottomBar(),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // APP BAR
-  // ─────────────────────────────────────────────────────────────────────────
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      systemOverlayStyle: SystemUiOverlayStyle.dark,
-      leading: Padding(
-        padding: const EdgeInsets.all(10),
-        child: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppTheme.lightGreen.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.close, size: 18, color: AppTheme.darkGreen),
-          ),
-        ),
-      ),
-      centerTitle: true,
-      title: const Text(
-        'Create Listing',
-        style: TextStyle(
-          color: AppTheme.darkGreen,
-          fontWeight: FontWeight.w800,
-          fontSize: 18,
-        ),
-      ),
-      actions: [
-        Container(
-          margin: const EdgeInsets.only(right: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppTheme.accent.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.accent.withOpacity(0.2)),
-          ),
-          child: const Text(
-            'MARKETPLACE',
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.accent,
-              letterSpacing: 0.8,
-            ),
-          ),
-        ),
-      ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(height: 1, color: AppTheme.lightGreen.withOpacity(0.18)),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // SIDE TOGGLE
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildSideToggle() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.storefront_outlined,
-          label: 'Listing Side',
-          color: AppTheme.primary,
-        ),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-            child: _SideCard(
-              selected: _side == ListingSide.regenerative,
-              icon: Icons.recycling_rounded,
-              name: 'Regenerative',
-              desc: 'Raw or processed materials for processors & manufacturers',
-              accentColor: AppTheme.primary,
-              lightColor: AppTheme.lightGreen.withOpacity(0.18),
-              onTap: () => _setSide(ListingSide.regenerative),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _SideCard(
-              selected: _side == ListingSide.creative,
-              icon: Icons.palette_outlined,
-              name: 'Creative',
-              desc: 'Original works made from recycled or recovered materials',
-              accentColor: AppTheme.tertiary,
-              lightColor: AppTheme.tertiary.withOpacity(0.1),
-              onTap: () => _setSide(ListingSide.creative),
-            ),
-          ),
-        ]),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // CATEGORY
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildCategorySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.grid_view_rounded,
-          label: 'Category',
-          color: _sideAccent,
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: List.generate(_categories.length, (i) {
-            final cat = _categories[i];
-            final selected = _selectedCategoryIndex == i;
-            return GestureDetector(
-              onTap: () => setState(() => _selectedCategoryIndex = i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: selected ? _sideAccent : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: selected
-                        ? _sideAccent
-                        : AppTheme.lightGreen.withOpacity(0.3),
-                    width: selected ? 0 : 1.2,
-                  ),
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                            color: _sideAccent.withOpacity(0.22),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          )
-                        ]
-                      : [],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      cat.icon,
-                      size: 13,
-                      color: selected ? Colors.white : _sideAccent.withOpacity(0.7),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      cat.label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: selected
-                            ? Colors.white
-                            : AppTheme.darkGreen.withOpacity(0.7),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+    final p = context.canopy;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const CanopySignedOutState();
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Your shop', showBack: false),
+      body: StreamBuilder<List<CanopyListing>>(
+        stream: ListingService.instance.watchByMember(uid),
+        builder: (context, snap) {
+          if (snap.hasError) return const CanopyErrorState(title: "Couldn't load your listings");
+          if (!snap.hasData) {
+            return ListView(padding: const EdgeInsets.all(CanopySpace.gutter), children: const [CanopyListSkeleton(rows: 4, leadingSize: 56)]);
+          }
+          final all = snap.data!.where((l) => l.isCreative && l.status != ListingStatus.closed).toList();
+          if (all.isEmpty) {
+            return CanopyEmptyState(
+              icon: Icons.storefront_outlined,
+              title: 'Your shop is empty',
+              line: 'List something you made from recovered material. Buyers send you requests; you arrange payment with them.',
+              actionLabel: 'New listing',
+              primaryAction: true,
+              onAction: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => const ListingWizardScreen())),
             );
-          }),
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // BASIC INFO
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildBasicInfo() {
-    final makerLabel = _side == ListingSide.creative ? 'Creator Name' : 'Seller / Collector Name';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.edit_outlined,
-          label: 'Listing Details',
-          color: AppTheme.primary,
-        ),
-        const SizedBox(height: 10),
-        _StyledField(
-          controller: _titleController,
-          label: 'Listing Title',
-          hint: _side == ListingSide.regenerative
-              ? 'e.g. Sorted PET Bottle Bale — 50kg'
-              : 'e.g. Reclaimed Copper Wire Pendant',
-          icon: Icons.title_rounded,
-          accentColor: AppTheme.primary,
-          validator: (v) =>
-              (v == null || v.trim().isEmpty) ? 'Title is required' : null,
-        ),
-        const SizedBox(height: 12),
-        _StyledTextArea(
-          controller: _descController,
-          label: 'Description',
-          hint: _side == ListingSide.regenerative
-              ? 'Describe the material, grade, condition, and any processing done…'
-              : 'Describe your piece — techniques, dimensions, and what makes it unique…',
-          accentColor: AppTheme.primary,
-        ),
-        const SizedBox(height: 12),
-        _StyledField(
-          controller: _makerController,
-          label: makerLabel,
-          hint: 'Your name or business name',
-          icon: Icons.person_outline_rounded,
-          accentColor: AppTheme.accent,
-          validator: (v) =>
-              (v == null || v.trim().isEmpty) ? '$makerLabel is required' : null,
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // MATERIAL SPEC (Regenerative only)
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildMaterialSpec() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.science_outlined,
-          label: 'Material Specification',
-          color: AppTheme.secondary,
-        ),
-        const SizedBox(height: 10),
-        // Qty + unit row
-        Row(children: [
-          Expanded(
-            child: _StyledField(
-              controller: _qtyController,
-              label: 'Quantity',
-              hint: '50',
-              icon: Icons.inventory_2_outlined,
-              accentColor: AppTheme.secondary,
-              keyboardType: TextInputType.number,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _StyledDropdown<String>(
-              value: _pricingUnit == PricingUnit.perKg
-                  ? 'kg'
-                  : _pricingUnit == PricingUnit.perTonne
-                      ? 'tonnes'
-                      : _pricingUnit == PricingUnit.perBale
-                          ? 'bales'
-                          : _pricingUnit == PricingUnit.perLitre
-                              ? 'litres'
-                              : 'units',
-              items: const ['kg', 'tonnes', 'bales', 'litres', 'units'],
-              label: 'Unit',
-              icon: Icons.scale_outlined,
-              accentColor: AppTheme.secondary,
-              onChanged: (_) {},
-            ),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        // Condition chips
-        Text(
-          'Condition / Grade',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.darkGreen.withOpacity(0.55),
-            letterSpacing: 0.2,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: MaterialCondition.values.map((c) {
-            final selected = _condition == c;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _condition = c),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  margin: EdgeInsets.only(
-                    right: c != MaterialCondition.processed ? 8 : 0,
+          }
+          List<CanopyListing> of(ListingStatus s) => all.where((l) => l.status == s).toList();
+          Widget group(String title, List<CanopyListing> list) => list.isEmpty
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(bottom: CanopySpace.section),
+                  child: CanopyCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(CanopySpace.s16, CanopySpace.s12, CanopySpace.s16, 0),
+                        child: Text('${title.toUpperCase()} · ${list.length}', style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+                      ),
+                      for (var i = 0; i < list.length; i++) ...[
+                        if (i > 0) Divider(height: 1, color: p.outline),
+                        InventoryRow(
+                          listing: list[i],
+                          onTap: () => _actions(context, list[i]),
+                          trailing: CanopyIconButton(icon: Icons.more_horiz, tooltip: 'Manage ${list[i].title}', onPressed: () => _actions(context, list[i])),
+                        ),
+                      ],
+                    ]),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? AppTheme.secondary.withOpacity(0.08)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: selected
-                          ? AppTheme.secondary
-                          : AppTheme.lightGreen.withOpacity(0.3),
-                      width: selected ? 1.8 : 1.2,
-                    ),
-                  ),
-                  child: Column(children: [
-                    Text(
-                      c.label,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? AppTheme.secondary : AppTheme.darkGreen,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      c.sublabel,
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: AppTheme.darkGreen.withOpacity(0.4),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ]),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 12),
-        _StyledField(
-          controller: _venueController,
-          label: 'Pickup Location',
-          hint: 'e.g. Kibera, Nairobi',
-          icon: Icons.place_outlined,
-          accentColor: AppTheme.accent,
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // STORY FIELD (Regenerative only)
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildStoryField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.auto_stories_outlined,
-          label: 'Story',
-          color: AppTheme.accent,
-        ),
-        const SizedBox(height: 10),
-        _StoryCard(
-          controller: _storyController,
-          headerLabel: 'Where was this collected?',
-          hint:
-              'Tell buyers where and how you collected this material. Your story builds trust and often earns better prices…',
-          accentColor: AppTheme.accent,
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // CREATOR DETAILS (Creative only)
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildCreatorDetails() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.auto_awesome_outlined,
-          label: 'Creator Details',
-          color: AppTheme.tertiary,
-        ),
-        const SizedBox(height: 10),
-        // Circular Craft Badge toggle
-        GestureDetector(
-          onTap: () => setState(() => _circularCraftBadge = !_circularCraftBadge),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: _circularCraftBadge
-                  ? AppTheme.tertiary.withOpacity(0.07)
-                  : Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: _circularCraftBadge
-                    ? AppTheme.tertiary
-                    : AppTheme.lightGreen.withOpacity(0.3),
-                width: _circularCraftBadge ? 1.8 : 1.2,
-              ),
-            ),
-            child: Row(children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppTheme.tertiary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Center(
-                  child: Icon(Icons.workspace_premium_outlined,
-                      size: 20, color: AppTheme.tertiary),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Apply for Circular Craft Badge',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Materials sourced from Canopy supply chain',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.darkGreen.withOpacity(0.5),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _ToggleSwitch(active: _circularCraftBadge, activeColor: AppTheme.tertiary),
-            ]),
-          ),
-        ),
-        const SizedBox(height: 14),
-        // Material DNA
-        _SectionLabel(
-          icon: Icons.link_rounded,
-          label: 'Material DNA',
-          color: AppTheme.accent,
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppTheme.accent.withOpacity(0.04),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.accent.withOpacity(0.2)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+                );
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s12, CanopySpace.gutter, CanopySpace.s32),
             children: [
-              Row(children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppTheme.accent,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'Provenance Chain',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.accent,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  'Optional — strengthens listing',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: AppTheme.darkGreen.withOpacity(0.4),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 8),
-              Text(
-                'Link to the supply-side source this piece was made from — showing buyers the complete chain from collection to creation.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.darkGreen.withOpacity(0.55),
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.accent.withOpacity(0.2)),
-                ),
-                child: Row(children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _dnaController,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppTheme.darkGreen,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Search collector or supply listing ID…',
-                        hintStyle: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.darkGreen.withOpacity(0.35),
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 12),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.accent.withOpacity(0.08),
-                      borderRadius: const BorderRadius.horizontal(
-                          right: Radius.circular(9)),
-                      border: Border(
-                        left: BorderSide(
-                            color: AppTheme.accent.withOpacity(0.15)),
-                      ),
-                    ),
-                    child: const Text(
-                      'Browse',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.accent,
-                      ),
-                    ),
-                  ),
-                ]),
-              ),
+              group('Live', of(ListingStatus.active)),
+              group('Paused', of(ListingStatus.paused)),
+              group('Sold out', of(ListingStatus.fulfilled)),
             ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        // Process journal
-        _SectionLabel(
-          icon: Icons.auto_stories_outlined,
-          label: 'Process Journal',
-          color: AppTheme.accent,
-        ),
-        const SizedBox(height: 10),
-        _StoryCard(
-          controller: _storyController,
-          headerLabel: 'How did you make this?',
-          hint:
-              'Describe your process, the materials you gathered, the techniques used, and what inspired this piece…',
-          accentColor: AppTheme.accent,
-        ),
-        const SizedBox(height: 14),
-        _StyledField(
-          controller: _venueController,
-          label: 'Location / Studio',
-          hint: 'e.g. Kibera, Nairobi',
-          icon: Icons.place_outlined,
-          accentColor: AppTheme.accent,
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PHOTOS
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildPhotos() {
-    final filledCount = _images.where((i) => i != null).length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.photo_library_outlined,
-          label: 'Photos ($filledCount/4)',
-          color: AppTheme.darkGreen,
-        ),
-        const SizedBox(height: 10),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 1.55,
-          children: List.generate(4, (i) => _ImageSlot(
-            index: i,
-            file: _images[i],
-            onPick: () => _pickImage(i),
-            onRemove: () => _removeImage(i),
-          )),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'First photo is the listing cover. Add background context images.',
-          style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.38)),
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // IMPACT SCORE
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildImpactScore() {
-    final score = _selectedCategory.impactScore;
-    final pct = score / 100.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.bolt_outlined,
-          label: 'Impact Score',
-          color: AppTheme.primary,
-        ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.lightGreen.withOpacity(0.22)),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primary.withOpacity(0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Center(
-                child: Icon(Icons.eco_outlined, size: 18, color: AppTheme.primary),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Environmental impact if unrecycled',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.darkGreen.withOpacity(0.5),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _selectedCategory.impactLabel,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 72,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: pct,
-                      minHeight: 6,
-                      backgroundColor: AppTheme.primary.withOpacity(0.1),
-                      valueColor:
-                          const AlwaysStoppedAnimation<Color>(AppTheme.primary),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$score',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ]),
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PRICE
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildPriceSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SectionLabel(
-          icon: Icons.payments_outlined,
-          label: 'Price (KES)',
-          color: AppTheme.tertiary,
-        ),
-        const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.tertiary, width: 2),
-            color: AppTheme.tertiary.withOpacity(0.03),
-          ),
-          child: Row(children: [
-            // KES label
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: AppTheme.tertiary.withOpacity(0.1),
-                borderRadius:
-                    const BorderRadius.horizontal(left: Radius.circular(12)),
-                border: Border(
-                  right: BorderSide(color: AppTheme.tertiary.withOpacity(0.2)),
-                ),
-              ),
-              child: const Center(
-                child: Text(
-                  'KES',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.tertiary,
-                  ),
-                ),
-              ),
-            ),
-            // Amount input
-            Expanded(
-              child: TextFormField(
-                controller: _priceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.darkGreen,
-                ),
-                decoration: InputDecoration(
-                  hintText: '0.00',
-                  hintStyle: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w400,
-                    color: AppTheme.darkGreen.withOpacity(0.25),
-                  ),
-                  border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Price is required' : null,
-              ),
-            ),
-            // Per unit dropdown
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.tertiary.withOpacity(0.06),
-                borderRadius:
-                    const BorderRadius.horizontal(right: Radius.circular(12)),
-                border: Border(
-                  left: BorderSide(color: AppTheme.tertiary.withOpacity(0.2)),
-                ),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<PricingUnit>(
-                  value: _pricingUnit,
-                  dropdownColor: Colors.white,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.tertiary,
-                    fontFamily: 'Roboto',
-                  ),
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                      size: 16, color: AppTheme.tertiary),
-                  items: PricingUnit.values
-                      .map((u) => DropdownMenuItem(
-                            value: u,
-                            child: Text(u.label),
-                          ))
-                      .toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _pricingUnit = val);
-                  },
-                ),
-              ),
-            ),
-          ]),
-        ),
-        const SizedBox(height: 6),
-        Row(children: [
-          Icon(Icons.info_outline,
-              size: 12, color: AppTheme.lightGreen.withOpacity(0.8)),
-          const SizedBox(width: 5),
-          Text(
-            'Payment via M-Pesa · Direct to buyer — no middlemen',
-            style: TextStyle(
-              fontSize: 11,
-              color: AppTheme.darkGreen.withOpacity(0.38),
-            ),
-          ),
-        ]),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // BOTTOM BAR
-  // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
-          )
-        ],
+          );
+        },
       ),
-      child: Row(children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _saving ? null : () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppTheme.darkGreen,
-              side: BorderSide(color: AppTheme.lightGreen.withOpacity(0.5)),
-              minimumSize: const Size(0, 50),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            child: const Text('Cancel',
-                style: TextStyle(fontWeight: FontWeight.w600)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: Container(
-            height: 50,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: _canSubmit
-                    ? [AppTheme.darkGreen, AppTheme.primary, AppTheme.secondary]
-                    : [Colors.grey.shade400, Colors.grey.shade400],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: _canSubmit
-                  ? [
-                      BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.28),
-                        blurRadius: 14,
-                        offset: const Offset(0, 5),
-                      )
-                    ]
-                  : [],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                onTap: (_saving || !_canSubmit) ? null : _submit,
-                borderRadius: BorderRadius.circular(14),
-                child: Center(
-                  child: _saving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.publish_rounded,
-                                color: Colors.white, size: 18),
-                            SizedBox(width: 8),
-                            Text(
-                              'Publish Listing',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-            ),
-          ),
+      sticky: StickyActionBar(children: [
+        CanopyButton(
+          label: 'New listing',
+          expand: true,
+          onPressed: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => const ListingWizardScreen())),
         ),
       ]),
     );
@@ -1179,654 +146,439 @@ class _SellerShopPageState extends State<SellerShopPage>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROGRESS BAR
+// LISTING WIZARD
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ProgressBar extends StatelessWidget {
-  final int score; // 0–4
-  const _ProgressBar({required this.score});
+class ListingWizardScreen extends StatefulWidget {
+  final CanopyListing? existing;
+  const ListingWizardScreen({super.key, this.existing});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 10),
-          Row(
-            children: List.generate(4, (i) {
-              final filled = i < score;
-              return Expanded(
-                child: Container(
-                  height: 3,
-                  margin: EdgeInsets.only(right: i < 3 ? 5 : 0),
-                  decoration: BoxDecoration(
-                    color: filled
-                        ? AppTheme.primary
-                        : AppTheme.lightGreen.withOpacity(0.22),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
+  State<ListingWizardScreen> createState() => _ListingWizardScreenState();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SIDE CARD
-// ─────────────────────────────────────────────────────────────────────────────
+class _ListingWizardScreenState extends State<ListingWizardScreen> {
+  static const _steps = ['Category', 'Materials', 'Details', 'Studio', 'Photos', 'Review'];
 
-class _SideCard extends StatelessWidget {
-  final bool selected;
-  final IconData icon;
-  final String name;
-  final String desc;
-  final Color accentColor;
-  final Color lightColor;
-  final VoidCallback onTap;
+  int _step = 0;
+  ListingCategory? _category;
+  final Set<MaterialType> _materials = {};
+  final _source = TextEditingController();
+  final _kg = TextEditingController();
+  final _title = TextEditingController();
+  final _story = TextEditingController();
+  final _price = TextEditingController();
+  bool _negotiable = false;
+  bool _madeToOrder = false;
+  int _stock = 1;
+  CanopyLocation _place = CanopyLocation.empty;
+  bool _delivers = false, _collect = true;
+  final List<String> _existingImages = [];
+  final List<File> _newImages = [];
+  bool _saving = false, _showErrors = false;
+  Map<String, dynamic> _seller = const {};
 
-  const _SideCard({
-    required this.selected,
-    required this.icon,
-    required this.name,
-    required this.desc,
-    required this.accentColor,
-    required this.lightColor,
-    required this.onTap,
-  });
+  bool get _editing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    if (e != null) {
+      _category = e.category;
+      _materials.addAll(e.materials);
+      _title.text = e.title;
+      _story.text = e.story;
+      if (e.pricing.amountKes > 0) _price.text = e.pricing.amountKes.round().toString();
+      _negotiable = e.pricing.negotiable;
+      _madeToOrder = e.quantity.isMadeToOrder;
+      _stock = e.quantity.stockCount < 1 ? 1 : e.quantity.stockCount;
+      _place = e.location;
+      _delivers = e.fulfilment.acceptsDelivery;
+      _collect = e.fulfilment.willCollect;
+      _existingImages.addAll(e.images);
+      if (e.materialDna.isNotEmpty) _source.text = e.materialDna.first.collectionSite ?? '';
+      if (e.impact.kgDiverted > 0) _kg.text = e.impact.kgDiverted.toString();
+    }
+    _loadSeller();
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_source, _kg, _title, _story, _price]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadSeller() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final d = (await FirebaseFirestore.instance.collection('marketplace_sellers').doc(uid).get()).data() ?? {};
+      await GeoRegistry.instance.ensureLoaded();
+      if (!mounted) return;
+      setState(() {
+        _seller = d;
+        if (!_editing && _place == CanopyLocation.empty) _place = GeoRegistry.instance.resolveFromDocument(d);
+      });
+    } catch (_) {}
+  }
+
+  int get _photoCount => _existingImages.length + _newImages.length;
+
+  String? _errorFor(int s) => switch (s) {
+        0 => _category == null ? 'Choose a category.' : null,
+        1 => _materials.isEmpty ? 'Choose at least one material it is made from.' : null,
+        2 => _title.text.trim().isEmpty
+            ? 'Give it a name.'
+            : _story.text.trim().length < 40
+                ? 'Tell buyers its story — at least a couple of sentences.'
+                : (!_negotiable && (int.tryParse(_price.text.trim()) ?? 0) <= 0)
+                    ? 'Set a price, or mark it negotiable.'
+                    : null,
+        3 => _place.label.isEmpty || _place == CanopyLocation.empty ? 'Choose where your studio is.' : (!_delivers && !_collect ? 'Choose how buyers get it.' : null),
+        4 => _photoCount == 0 ? 'Add at least one photo.' : null,
+        _ => null,
+      };
+
+  void _next() {
+    if (_errorFor(_step) != null) {
+      setState(() => _showErrors = true);
+      return;
+    }
+    setState(() {
+      _showErrors = false;
+      _step++;
+    });
+  }
+
+  void _back() {
+    if (_step == 0) {
+      Navigator.pop(context);
+    } else {
+      setState(() {
+        _showErrors = false;
+        _step--;
+      });
+    }
+  }
+
+  Future<void> _pickPlace() async {
+    await GeoRegistry.instance.ensureLoaded();
+    if (!mounted) return;
+    final picked = await showCanopySheet<CanopyLocation>(context, tall: true, builder: (_) => const _StudioPlaceSheet());
+    if (picked != null) setState(() => _place = picked);
+  }
+
+  Future<void> _addPhotos() async {
+    final xs = await ImagePicker().pickMultiImage(imageQuality: 85);
+    setState(() {
+      for (final x in xs) {
+        if (_photoCount < 6) _newImages.add(File(x.path));
+      }
+    });
+  }
+
+  Future<void> _publish() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    setState(() => _saving = true);
+    try {
+      final urls = [..._existingImages];
+      for (var i = 0; i < _newImages.length; i++) {
+        final ref = FirebaseStorage.instance.ref('listings/$uid/${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
+        await ref.putFile(_newImages[i]);
+        urls.add(await ref.getDownloadURL());
+      }
+      final kg = double.tryParse(_kg.text.trim()) ?? 0;
+      final source = _source.text.trim();
+      final listing = CanopyListing(
+        id: widget.existing?.id ?? '',
+        side: ListingSide.creative,
+        intent: ListingIntent.offering,
+        status: widget.existing?.status ?? ListingStatus.active,
+        title: _title.text.trim(),
+        story: _story.text.trim(),
+        tagline: makerCategoryLabel(_category!),
+        category: _category!,
+        materials: _materials.toList(),
+        images: urls,
+        seller: SellerSnapshot(
+          sellerId: uid,
+          shopName: (_seller['shop_name'] ?? _seller['name'] ?? '') as String,
+          shopLogoUrl: _seller['shop_logo_url'] as String?,
+          city: _place.countyName ?? (_seller['city'] as String? ?? ''),
+          country: _place.countryName ?? 'Kenya',
+        ),
+        postedByUid: uid,
+        pricing: ListingPricing(
+          amountKes: (int.tryParse(_price.text.trim()) ?? 0).toDouble(),
+          unit: PriceUnit.perItem,
+          negotiable: _negotiable,
+        ),
+        quantity: ListingQuantity(stockCount: _madeToOrder ? 0 : _stock),
+        fulfilment: ListingFulfilment(acceptsDelivery: _delivers, willCollect: _collect),
+        materialDna: source.isEmpty && kg <= 0
+            ? const []
+            : [MaterialDnaLink(collectionSite: source.isEmpty ? null : source, weightKg: kg > 0 ? kg : null, material: _materials.first)],
+        impact: ListingImpact(kgDiverted: kg > 0 ? kg : 0),
+        location: _place,
+        createdAt: widget.existing?.createdAt ?? DateTime.now(),
+      );
+      if (_editing) {
+        final data = listing.toFirestore()
+          ..remove('createdAt')
+          ..remove('viewCount')
+          ..remove('wishlistCount')
+          ..remove('responseCount')
+          ..remove('averageRating')
+          ..remove('reviewCount');
+        await ListingService.instance.update(listing.id, data);
+      } else {
+        await ListingService.instance.create(listing);
+      }
+      if (!mounted) return;
+      showCanopySnack(context, _editing ? 'Listing updated.' : 'Listed — buyers can find it now.');
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't publish. Your listing is still here — try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: selected ? accentColor.withOpacity(0.04) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? accentColor : AppTheme.lightGreen.withOpacity(0.28),
-            width: selected ? 1.8 : 1.2,
-          ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: accentColor.withOpacity(0.1),
-                    blurRadius: 12,
-                    offset: const Offset(0, 3),
-                  )
-                ]
-              : [],
+    final p = context.canopy;
+    final last = _step == _steps.length - 1;
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      child: CanopyScaffold(
+        appBar: canopyAppBar(
+          context,
+          title: _editing ? 'Edit listing' : 'New listing',
+          leading: IconButton(icon: Icon(_step == 0 ? Icons.close : Icons.arrow_back), tooltip: _step == 0 ? 'Close' : 'Back', onPressed: _back),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
           children: [
-            Row(children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: lightColor,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 18, color: accentColor),
+            CanopyStepper(step: _step + 1, total: _steps.length, label: _steps[_step], stepLabels: _steps),
+            const SizedBox(height: CanopySpace.section),
+            ..._body(p),
+            if (_showErrors && _errorFor(_step) != null)
+              Padding(
+                padding: const EdgeInsets.only(top: CanopySpace.s16),
+                child: Text(_errorFor(_step)!, style: CanopyType.body.copyWith(color: p.danger)),
               ),
-              const Spacer(),
-              if (selected)
-                Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: accentColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.check, size: 11, color: Colors.white),
-                ),
-            ]),
-            const SizedBox(height: 10),
-            Text(
-              name,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: selected ? accentColor : AppTheme.darkGreen,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              desc,
-              style: TextStyle(
-                fontSize: 10,
-                color: AppTheme.darkGreen.withOpacity(0.5),
-                height: 1.4,
-              ),
-            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SECTION LABEL
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _SectionLabel({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      Container(
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, size: 14, color: color),
-      ),
-      const SizedBox(width: 8),
-      Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: color,
-          letterSpacing: 0.2,
-        ),
-      ),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Container(height: 1, color: color.withOpacity(0.12)),
-      ),
-    ]);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STYLED FIELD
-// ─────────────────────────────────────────────────────────────────────────────
-
-OutlineInputBorder _fieldBorder(Color c, {double width = 1.2}) =>
-    OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: c, width: width),
-    );
-
-class _StyledField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final IconData icon;
-  final Color accentColor;
-  final TextInputType? keyboardType;
-  final String? Function(String?)? validator;
-
-  const _StyledField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    required this.accentColor,
-    this.keyboardType,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      style: const TextStyle(
-        color: AppTheme.darkGreen,
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-      ),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        hintStyle: TextStyle(
-          fontSize: 12,
-          color: AppTheme.darkGreen.withOpacity(0.3),
-        ),
-        labelStyle: TextStyle(
-          color: accentColor.withOpacity(0.75),
-          fontSize: 13,
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, size: 14, color: accentColor),
+        sticky: StickyActionBar(children: [
+          CanopyButton(
+            label: last ? (_editing ? 'Save changes' : 'Publish listing') : 'Continue',
+            expand: true,
+            loading: _saving,
+            onPressed: last ? _publish : _next,
           ),
-        ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 50, minHeight: 50),
-        border: _fieldBorder(accentColor.withOpacity(0.2)),
-        enabledBorder: _fieldBorder(accentColor.withOpacity(0.22)),
-        focusedBorder: _fieldBorder(accentColor, width: 2),
-        errorBorder: _fieldBorder(Colors.red.shade300),
-        focusedErrorBorder: _fieldBorder(Colors.red.shade400, width: 2),
+        ]),
       ),
-      validator: validator,
     );
   }
-}
 
-class _StyledTextArea extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final Color accentColor;
-
-  const _StyledTextArea({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      maxLines: 4,
-      style: const TextStyle(color: AppTheme.darkGreen, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        hintStyle: TextStyle(
-          fontSize: 12,
-          color: AppTheme.darkGreen.withOpacity(0.3),
-        ),
-        alignLabelWithHint: true,
-        labelStyle: TextStyle(
-          color: accentColor.withOpacity(0.75),
-          fontSize: 13,
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.all(14),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 68),
-          child: Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(9),
+  List<Widget> _body(CanopyPalette p) {
+    const gap = SizedBox(height: CanopySpace.s16);
+    switch (_step) {
+      case 0:
+        return [
+          Text('What kind of thing is it?', style: CanopyType.title.copyWith(color: p.ink)),
+          gap,
+          for (final c in kMakerCategories) ...[
+            CanopyOptionCard(
+              selected: _category == c,
+              icon: makerCategoryIcon(c),
+              title: makerCategoryLabel(c),
+              onTap: () => setState(() => _category = c),
             ),
-            child: Icon(Icons.notes_rounded, size: 14, color: accentColor),
+            const SizedBox(height: CanopySpace.s8),
+          ],
+        ];
+      case 1:
+        return [
+          Text('What is it made from?', style: CanopyType.title.copyWith(color: p.ink)),
+          gap,
+          Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s8, children: [
+            for (final m in MaterialType.values)
+              CanopyFilterChip(
+                label: m.label,
+                selected: _materials.contains(m),
+                onTap: () => setState(() => _materials.contains(m) ? _materials.remove(m) : _materials.add(m)),
+              ),
+          ]),
+          const SizedBox(height: CanopySpace.section),
+          Text('Where the material came from (optional)', style: CanopyType.label.copyWith(color: p.ink)),
+          const SizedBox(height: CanopySpace.s4),
+          Text('Only shown to buyers if you fill it in.', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+          const SizedBox(height: CanopySpace.s8),
+          CanopyTextField(label: 'Source', hint: 'e.g. Bottles collected along the Nairobi River', controller: _source),
+          gap,
+          CanopyTextField(
+            label: 'Material used (kg)',
+            hint: 'e.g. 1.5',
+            controller: _kg,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
-        ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 50, minHeight: 50),
-        border: _fieldBorder(accentColor.withOpacity(0.2)),
-        enabledBorder: _fieldBorder(accentColor.withOpacity(0.22)),
-        focusedBorder: _fieldBorder(accentColor, width: 2),
-        errorBorder: _fieldBorder(Colors.red.shade300),
-      ),
-      validator: (v) =>
-          (v == null || v.trim().isEmpty) ? 'Description is required' : null,
-    );
-  }
-}
-
-class _StyledDropdown<T> extends StatelessWidget {
-  final T value;
-  final List<T> items;
-  final String label;
-  final IconData icon;
-  final Color accentColor;
-  final ValueChanged<T?> onChanged;
-
-  const _StyledDropdown({
-    required this.value,
-    required this.items,
-    required this.label,
-    required this.icon,
-    required this.accentColor,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      value: value,
-      dropdownColor: Colors.white,
-      menuMaxHeight: 260,
-      style: const TextStyle(
-        color: AppTheme.darkGreen,
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-      ),
-      icon: Icon(Icons.keyboard_arrow_down_rounded,
-          color: accentColor.withOpacity(0.6), size: 20),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(
-          color: accentColor.withOpacity(0.75),
-          fontSize: 13,
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, size: 14, color: accentColor),
+        ];
+      case 2:
+        return [
+          CanopyTextField(label: 'Name', hint: 'e.g. Copper wire bangle', controller: _title, maxLength: 80, onChanged: (_) => setState(() {})),
+          gap,
+          CanopyTextField(
+            label: 'Its story',
+            hint: 'How you made it, what it was before, who it\'s for',
+            controller: _story,
+            minLines: 4,
+            maxLines: 10,
+            maxLength: 1500,
+            onChanged: (_) => setState(() {}),
           ),
-        ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 50, minHeight: 50),
-        border: _fieldBorder(accentColor.withOpacity(0.2)),
-        enabledBorder: _fieldBorder(accentColor.withOpacity(0.22)),
-        focusedBorder: _fieldBorder(accentColor, width: 2),
-        errorBorder: _fieldBorder(Colors.red.shade300),
-      ),
-      items: items
-          .map((i) =>
-              DropdownMenuItem<T>(value: i, child: Text(i.toString())))
-          .toList(),
-      onChanged: onChanged,
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STORY CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StoryCard extends StatelessWidget {
-  final TextEditingController controller;
-  final String headerLabel;
-  final String hint;
-  final Color accentColor;
-
-  const _StoryCard({
-    required this.controller,
-    required this.headerLabel,
-    required this.hint,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: accentColor.withOpacity(0.22)),
-        color: Colors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.05),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(13)),
-              border: Border(
-                bottom: BorderSide(color: accentColor.withOpacity(0.12)),
-              ),
-            ),
-            child: Row(children: [
-              Icon(Icons.auto_stories_outlined, size: 14, color: accentColor),
-              const SizedBox(width: 7),
-              Text(
-                headerLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: accentColor,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Shown on listing',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: AppTheme.darkGreen.withOpacity(0.38),
-                ),
-              ),
+          gap,
+          CanopyTextField.money(label: 'Price', controller: _price, enabled: !_negotiable),
+          CanopySwitchRow(title: 'Price is negotiable', value: _negotiable, onChanged: (v) => setState(() => _negotiable = v)),
+          CanopySwitchRow(title: 'Made to order', caption: 'You make each one when asked', value: _madeToOrder, onChanged: (v) => setState(() => _madeToOrder = v)),
+          if (!_madeToOrder)
+            Row(children: [
+              Expanded(child: Text('In stock', style: CanopyType.bodyStrong.copyWith(color: p.ink))),
+              CanopyIconButton(icon: Icons.remove, tooltip: 'Fewer', onPressed: _stock > 1 ? () => setState(() => _stock--) : null),
+              SizedBox(width: 40, child: Text('$_stock', textAlign: TextAlign.center, style: CanopyType.title.copyWith(color: p.ink))),
+              CanopyIconButton(icon: Icons.add, tooltip: 'More', onPressed: () => setState(() => _stock++)),
             ]),
+        ];
+      case 3:
+        return [
+          Text('Where is your studio?', style: CanopyType.title.copyWith(color: p.ink)),
+          gap,
+          CanopyPickerField(
+            label: 'Studio location',
+            value: _place == CanopyLocation.empty || _place.label.isEmpty ? null : _place.label,
+            placeholder: 'County or area',
+            icon: Icons.place_outlined,
+            onTap: _pickPlace,
           ),
-          TextField(
-            controller: controller,
-            maxLines: 4,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppTheme.darkGreen,
-              height: 1.6,
-            ),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: TextStyle(
-                fontSize: 12,
-                color: AppTheme.darkGreen.withOpacity(0.3),
-              ),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.all(14),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// IMAGE SLOT
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ImageSlot extends StatelessWidget {
-  final int index;
-  final XFile? file;
-  final VoidCallback onPick;
-  final VoidCallback onRemove;
-
-  const _ImageSlot({
-    required this.index,
-    required this.file,
-    required this.onPick,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isCover = index == 0;
-    return GestureDetector(
-      onTap: file == null ? onPick : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        decoration: BoxDecoration(
-          color: file != null
-              ? Colors.transparent
-              : AppTheme.lightGreen.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: file != null
-                ? AppTheme.primary.withOpacity(0.3)
-                : isCover
-                    ? AppTheme.primary.withOpacity(0.35)
-                    : AppTheme.lightGreen.withOpacity(0.3),
-            width: (isCover && file == null) ? 2 : 1.2,
-            style: (file == null && !isCover)
-                ? BorderStyle.solid
-                : BorderStyle.solid,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(11),
-          child: file == null
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.add_photo_alternate_outlined,
-                      size: 24,
-                      color: isCover
-                          ? AppTheme.primary.withOpacity(0.5)
-                          : AppTheme.lightGreen.withOpacity(0.6),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      isCover ? 'Cover Photo' : 'Photo ${index + 1}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isCover
-                            ? AppTheme.primary.withOpacity(0.6)
-                            : AppTheme.darkGreen.withOpacity(0.38),
-                      ),
-                    ),
-                    if (isCover) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        'Required',
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: AppTheme.primary.withOpacity(0.45),
-                        ),
-                      ),
-                    ],
-                  ],
-                )
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Container(
-                      color: AppTheme.lightGreen.withOpacity(0.15),
-                      child: const Center(
-                        child: Icon(Icons.image_outlined,
-                            size: 28, color: AppTheme.primary),
-                      ),
-                    ),
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: GestureDetector(
-                        onTap: onRemove,
-                        child: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black.withOpacity(0.12),
-                                  blurRadius: 4)
-                            ],
-                          ),
-                          child: const Icon(Icons.close,
-                              size: 12, color: Colors.red),
-                        ),
-                      ),
-                    ),
-                    if (isCover)
-                      Positioned(
-                        bottom: 4,
-                        left: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'Cover',
-                            style: TextStyle(
-                                fontSize: 9,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ),
-                  ],
+          const SizedBox(height: CanopySpace.section),
+          Text('HOW BUYERS GET IT', style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+          const SizedBox(height: CanopySpace.s8),
+          CanopyCheckRow(label: 'Collect from the studio', value: _collect, onChanged: (v) => setState(() => _collect = v)),
+          CanopyCheckRow(label: 'I can deliver', value: _delivers, onChanged: (v) => setState(() => _delivers = v)),
+        ];
+      case 4:
+        return [
+          Text('$_photoCount of 6 photos', style: CanopyType.title.copyWith(color: p.ink)),
+          Text('The first is the cover. Daylight, plain background, and one close-up of the material.',
+              style: CanopyType.body.copyWith(color: p.inkMuted)),
+          gap,
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: CanopySpace.s8,
+            crossAxisSpacing: CanopySpace.s8,
+            children: [
+              for (var i = 0; i < _existingImages.length; i++)
+                _thumb(CanopyImage(url: _existingImages[i]), () => setState(() => _existingImages.removeAt(i))),
+              for (var i = 0; i < _newImages.length; i++)
+                _thumb(Image.file(_newImages[i], fit: BoxFit.cover), () => setState(() => _newImages.removeAt(i))),
+              if (_photoCount < 6)
+                Material(
+                  color: p.surfaceMuted,
+                  borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                    onTap: _addPhotos,
+                    child: Center(child: Icon(Icons.add_photo_alternate_outlined, color: p.inkMuted)),
+                  ),
                 ),
-        ),
-      ),
-    );
+            ],
+          ),
+        ];
+      default:
+        final kg = double.tryParse(_kg.text.trim()) ?? 0;
+        return [
+          CanopyListGroup(children: [
+            CanopyFactRow(label: 'Category', value: makerCategoryLabel(_category!)),
+            CanopyFactRow(label: 'Name', value: _title.text.trim()),
+            CanopyFactRow(
+              label: 'Price',
+              value: _negotiable ? 'Negotiable' : 'KSh ${_price.text.trim().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')}',
+            ),
+            CanopyFactRow(label: 'Stock', value: _madeToOrder ? 'Made to order' : '$_stock'),
+            CanopyFactRow(label: 'Made from', value: _materials.map((m) => m.label).join(', ')),
+            if (_source.text.trim().isNotEmpty) CanopyFactRow(label: 'Source', value: _source.text.trim()),
+            if (kg > 0) CanopyFactRow(label: 'Material used', value: '$kg kg'),
+            CanopyFactRow(label: 'Studio', value: _place.label),
+            CanopyFactRow(label: 'Photos', value: '$_photoCount'),
+          ]),
+          const SizedBox(height: CanopySpace.s16),
+          const CanopyCallout(
+            text: 'Buyers send you a request from the listing. You agree payment and handover with them — Canopy doesn\'t take payment for made goods yet.',
+          ),
+        ];
+    }
   }
+
+  Widget _thumb(Widget image, VoidCallback onRemove) => Stack(fit: StackFit.expand, children: [
+        ClipRRect(borderRadius: BorderRadius.circular(CanopyRadius.sm), child: image),
+        Positioned(top: 2, right: 2, child: CanopyIconButton(icon: Icons.close, tooltip: 'Remove photo', onImage: true, onPressed: onRemove)),
+      ]);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TOGGLE SWITCH
-// ─────────────────────────────────────────────────────────────────────────────
+/// County → area → CanopyLocation.
+class _StudioPlaceSheet extends StatefulWidget {
+  const _StudioPlaceSheet();
 
-class _ToggleSwitch extends StatelessWidget {
-  final bool active;
-  final Color activeColor;
+  @override
+  State<_StudioPlaceSheet> createState() => _StudioPlaceSheetState();
+}
 
-  const _ToggleSwitch({required this.active, required this.activeColor});
+class _StudioPlaceSheetState extends State<_StudioPlaceSheet> {
+  String _q = '';
+  GeoCounty? _county;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      width: 44,
-      height: 26,
-      decoration: BoxDecoration(
-        color: active ? activeColor : AppTheme.lightGreen.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(13),
+    final geo = GeoRegistry.instance;
+    final county = _county;
+    return CanopySheetBody(title: county?.name ?? 'Choose a county', children: [
+      CanopyTextField.search(
+        key: ValueKey(county?.id ?? 'counties'),
+        hint: county == null ? 'Search counties' : 'Search areas',
+        onChanged: (v) => setState(() => _q = v),
       ),
-      child: Stack(
-        children: [
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            top: 3,
-            left: active ? 19 : 3,
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 4,
-                  )
-                ],
-              ),
-            ),
+      const SizedBox(height: CanopySpace.s12),
+      CanopyListGroup(children: [
+        if (county == null)
+          for (final c in geo.searchCounties(_q).take(60))
+            CanopyListRow(
+              title: c.name,
+              subtitle: c.regionName,
+              onTap: () => setState(() {
+                _county = c;
+                _q = '';
+              }),
+            )
+        else ...[
+          CanopyListRow(
+            icon: Icons.select_all,
+            title: 'Anywhere in ${county.name}',
+            chevron: false,
+            onTap: () => Navigator.pop(context, geo.locationForCounty(county.id)),
           ),
+          for (final a in geo.searchAreas(_q, countyId: county.id).take(80))
+            CanopyListRow(title: a.name, chevron: false, onTap: () => Navigator.pop(context, geo.locationForArea(a.id))),
         ],
-      ),
-    );
+      ]),
+    ]);
   }
 }

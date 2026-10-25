@@ -1,3 +1,18 @@
+// lib/EnvironmentalOps/Trees/env_trees.dart
+//
+// Operations › Trees (ENVOPS_HANDOFF §3.4). List/Map switch over the
+// organisation's planting posts (count, place, planted date, pin or zone,
+// Pending verification / Verified), the monthly count report, and a sticky
+// "Record a planting".
+//
+// New planting: Record (count, stage, species, date) → Photos → Location
+// (pin or zone; GPS acquiring state with a manual pin fallback) → Review →
+// "Save planting" (becomes Pending verification). Survival is counted, not
+// carbon — nothing here promises credits.
+
+import 'dart:async';
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -6,15 +21,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'dart:io';
 
-import '../../Shared/theme/app_theme.dart';
+import '../../Models/environmental/enums/tree_species.dart';
 import '../../Services/Environmental/environment_ops_service.dart';
+import '../../theme/canopy_components.dart';
+import '../../theme/canopy_map_style.dart';
 import '../Shared/zone_drawing_controller.dart';
+import '../envops_ui.dart';
 import 'tree_count_report_screen.dart';
-
-// ─── Enums & models ───────────────────────────────────────────────────────────
-enum TreeStatus { current, overdue, critical, unconfirmed }
 
 enum VerificationStage { pending, stage1, full }
 
@@ -26,9 +40,8 @@ class PlantingPost {
   final double lat, lng;
   final List<String> photoUrls;
   final VerificationStage stage;
-  final DateTime? followUp30;
-  final DateTime? followUp90;
-  final String createdBy;
+  final bool hasZone;
+  final String? growthStage;
 
   const PlantingPost({
     required this.id,
@@ -39,34 +52,30 @@ class PlantingPost {
     required this.lng,
     required this.photoUrls,
     required this.stage,
-    this.followUp30,
-    this.followUp90,
-    required this.createdBy,
+    this.hasZone = false,
+    this.growthStage,
   });
 
-  factory PlantingPost.fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
+  factory PlantingPost.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data() ?? const {};
     return PlantingPost(
       id: doc.id,
-      species: d['species'] as String? ?? '',
+      species: d['species'] as String? ?? 'Tree',
       quantity: (d['quantity'] as num?)?.toInt() ?? 0,
-      plantedDate:
-          (d['planted_date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      plantedDate: (d['planted_date'] as Timestamp?)?.toDate() ?? DateTime.now(),
       lat: (d['lat'] as num?)?.toDouble() ?? 0,
       lng: (d['lng'] as num?)?.toDouble() ?? 0,
-      photoUrls: List<String>.from(d['photo_urls'] as List? ?? []),
-      stage: VerificationStage.values.firstWhere(
-        (s) => s.name == (d['stage'] as String? ?? 'pending'),
-        orElse: () => VerificationStage.pending,
-      ),
-      followUp30: (d['follow_up_30'] as Timestamp?)?.toDate(),
-      followUp90: (d['follow_up_90'] as Timestamp?)?.toDate(),
-      createdBy: d['created_by'] as String? ?? '',
+      photoUrls: List<String>.from(d['photo_urls'] as List? ?? const []),
+      stage: VerificationStage.values.firstWhere((s) => s.name == (d['stage'] as String? ?? 'pending'),
+          orElse: () => VerificationStage.pending),
+      hasZone: (d['zone_vertices'] as List?)?.isNotEmpty ?? false,
+      growthStage: d['growth_stage'] as String?,
     );
   }
+
+  bool get hasPoint => !(lat == 0 && lng == 0);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 class EnvTreesScreen extends StatefulWidget {
   const EnvTreesScreen({super.key});
 
@@ -75,540 +84,196 @@ class EnvTreesScreen extends StatefulWidget {
 }
 
 class _EnvTreesScreenState extends State<EnvTreesScreen> {
-  bool _showMap = false;
-  List<PlantingPost> _posts = [];
-  bool _loading = true;
-
-  static const String _mapStyle = '''
-  [
-    {"featureType":"poi","stylers":[{"visibility":"off"}]},
-    {"featureType":"road","stylers":[{"saturation":-30}]},
-    {"featureType":"landscape","stylers":[{"color":"#F5F1EB"}]},
-    {"featureType":"water","stylers":[{"color":"#A8C5C0"}]},
-    {"featureType":"poi.park","stylers":[{"color":"#C8DCCA"}]}
-  ]
-  ''';
+  bool _map = false;
+  List<PlantingPost> _posts = const [];
+  bool _loading = true, _failed = false;
+  EnvironmentOpsContext? _ctx;
 
   @override
   void initState() {
     super.initState();
-    _loadPosts();
+    _load();
   }
 
-  Future<void> _loadPosts() async {
-    setState(() => _loading = true);
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     try {
+      _ctx ??= await EnvironmentOpsService.instance.resolveContext();
+      final col = FirebaseFirestore.instance.collection('planting_posts');
+      final byId = <String, PlantingPost>{};
+      // Index-free single-equality reads: the org's posts, plus older posts
+      // written before org_id was stored (matched by author).
+      if (_ctx != null) {
+        for (final d in (await col.where('org_id', isEqualTo: _ctx!.orgId).limit(200).get()).docs) {
+          byId[d.id] = PlantingPost.fromFirestore(d);
+        }
+      }
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      // Index-free: single equality filter, sorted client-side.
-      Query q = FirebaseFirestore.instance.collection('planting_posts');
-      if (uid != null) q = q.where('created_by', isEqualTo: uid);
-      final snap = await q.limit(50).get();
+      if (uid != null) {
+        for (final d in (await col.where('created_by', isEqualTo: uid).limit(200).get()).docs) {
+          byId.putIfAbsent(d.id, () => PlantingPost.fromFirestore(d));
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _posts = byId.values.toList()..sort((a, b) => b.plantedDate.compareTo(a.plantedDate));
+        _loading = false;
+      });
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _posts = snap.docs.map(PlantingPost.fromFirestore).toList()
-            ..sort((a, b) => b.plantedDate.compareTo(a.plantedDate));
-          _posts = _posts.take(20).toList();
           _loading = false;
+          _failed = true;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _record() async {
+    final saved = await Navigator.of(context).push<bool>(MaterialPageRoute(fullscreenDialog: true, builder: (_) => const _PlantingWizard()));
+    if (saved == true) _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F5F0),
-      body: SafeArea(
-        child: Column(
+    final p = context.canopy;
+    final planted = _posts.fold(0, (s, x) => s + x.quantity);
+    final pending = _posts.where((x) => x.stage != VerificationStage.full).fold(0, (s, x) => s + x.quantity);
+    final verified = planted - pending;
+    return CanopyScaffold(
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s12, CanopySpace.gutter, CanopySpace.s32),
           children: [
-            const SizedBox(height: 16),
-            _buildStatStrip(),
-            const SizedBox(height: 8),
-            _buildMonthlyReportLink(),
-            const SizedBox(height: 12),
-            _buildMapListToggle(),
-            const SizedBox(height: 12),
-            _buildCreditProgress(),
-            const SizedBox(height: 12),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _showMap
-                      ? _buildMapView()
-                      : _buildListView(),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _openPostWizard(),
-          backgroundColor: AppTheme.primary,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text('New Planting',
-              style: TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w700)),
-        ),
-    );
-  }
-
-  Widget _buildStatStrip() {
-    final planted = _posts.fold(0, (s, p) => s + p.quantity);
-    final verified = _posts.where(
-            (p) => p.stage == VerificationStage.full).length;
-    final pending = _posts.where(
-            (p) => p.stage == VerificationStage.pending).length;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(child: _buildStatCard('Trees Planted', '$planted')),
-          const SizedBox(width: 10),
-          Expanded(
-              child: _buildStatCard('Fully Verified',
-                  '$verified', isGood: verified > 0)),
-          const SizedBox(width: 10),
-          Expanded(
-              child: _buildStatCard('Pending Review', '$pending',
-                  isOverdue: pending > 10)),
-        ],
-      ),
-    );
-  }
-
-  // Phase 7.1 — "count survival, not carbon." Opens the monthly tree-count
-  // report (trees planted this month + survival-checkpoint counts, no
-  // carbon-equivalent figure anywhere in it).
-  Widget _buildMonthlyReportLink() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: TextButton.icon(
-          onPressed: _openMonthlyReport,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            visualDensity: VisualDensity.compact,
-          ),
-          icon: const Icon(Icons.summarize_outlined,
-              size: 16, color: AppTheme.primary),
-          label: const Text(
-            'Monthly tree-count report',
-            style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.primary),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openMonthlyReport() async {
-    final ctx = await EnvironmentOpsService.instance.resolveContext();
-    if (!mounted) return;
-    if (ctx == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('No organisation linked to this account.')),
-      );
-      return;
-    }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TreeCountReportScreen(orgId: ctx.orgId),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, String value,
-      {bool isOverdue = false, bool isGood = false}) {
-    Color valueColor = AppTheme.darkGreen;
-    if (isOverdue) valueColor = Colors.amber;
-    if (isGood) valueColor = AppTheme.primary;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(value,
-              style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
-                  color: valueColor)),
-          const SizedBox(height: 4),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.darkGreen.withOpacity(0.5))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMapListToggle() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        height: 36,
-        decoration: BoxDecoration(
-          color: AppTheme.darkGreen.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          children: [
-            _ToggleOption(
-                label: 'List',
-                active: !_showMap,
-                onTap: () => setState(() => _showMap = false)),
-            _ToggleOption(
-                label: 'Map',
-                active: _showMap,
-                onTap: () => setState(() => _showMap = true)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCreditProgress() {
-    final total = _posts.fold(0, (s, p) => s + p.quantity);
-    final confirmed = _posts
-        .where((p) => p.stage == VerificationStage.full)
-        .fold(0, (s, p) => s + p.quantity);
-    final progress = total > 0 ? confirmed / total : 0.0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Text('Urban Greening Credit',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: AppTheme.primary)),
-                const Spacer(),
-                Text('$confirmed of $total trees confirmed',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.darkGreen.withOpacity(0.7))),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress.clamp(0.0, 1.0),
-                backgroundColor: const Color(0xFFF0F0F0),
-                valueColor:
-                    const AlwaysStoppedAnimation(AppTheme.accent),
-                minHeight: 6,
+            SignalGrid(signals: [
+              SignalCard(value: '$planted', caption: 'Trees planted'),
+              SignalCard(value: '$verified', caption: 'Verified alive'),
+            ]),
+            const SizedBox(height: CanopySpace.s12),
+            CanopyListGroup(children: [
+              CanopyListRow(
+                icon: Icons.summarize_outlined,
+                title: 'Monthly count report',
+                subtitle: 'Planted this month and survival at each check',
+                onTap: _ctx == null
+                    ? null
+                    : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TreeCountReportScreen(orgId: _ctx!.orgId))),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              total == 0
-                  ? 'Create your first planting post to start earning credits'
-                  : 'Confirm ${total - confirmed} more trees at 90 days to unlock your next credit',
-              style: TextStyle(
-                  fontSize: 10,
-                  color: AppTheme.darkGreen.withOpacity(0.5)),
-            ),
+            ]),
+            const SizedBox(height: CanopySpace.s16),
+            CanopySegmented<bool>(options: const [(false, 'List'), (true, 'Map')], value: _map, onChanged: (v) => setState(() => _map = v)),
+            const SizedBox(height: CanopySpace.s12),
+            if (_failed)
+              CanopyErrorState(inline: true, title: "Couldn't load plantings.", onRetry: _load)
+            else if (_loading)
+              const CanopyListSkeleton(rows: 3)
+            else if (_posts.isEmpty)
+              CanopyEmptyState(
+                boxed: true,
+                icon: Icons.park_outlined,
+                title: 'No plantings recorded',
+                line: 'Record what you plant — count, species and place. Survival is checked at 30, 60 and 90 days.',
+                actionLabel: 'Record a planting',
+                onAction: _record,
+              )
+            else if (_map)
+              _mapView(p)
+            else
+              for (final post in _posts) ...[_card(post, p), const SizedBox(height: CanopySpace.s12)],
           ],
         ),
       ),
+      sticky: StickyActionBar(children: [FieldButton(label: 'Record a planting', icon: Icons.park_outlined, onPressed: _record)]),
     );
   }
 
-  Widget _buildListView() {
-    if (_posts.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.park_outlined,
-                size: 48, color: AppTheme.primary.withOpacity(0.4)),
-            const SizedBox(height: 12),
-            Text('No planting posts yet',
-                style: TextStyle(
-                    fontSize: 16,
-                    color: AppTheme.darkGreen.withOpacity(0.5))),
-            const SizedBox(height: 6),
-            Text('Tap "New Planting" to record your first post',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: AppTheme.darkGreen.withOpacity(0.35))),
-          ],
-        ),
-      );
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 140),
-      itemCount: _posts.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, i) => _PlantingPostCard(post: _posts[i]),
-    );
-  }
-
-  Widget _buildMapView() {
-    final markers = _posts.map((p) {
-      final hue = p.stage == VerificationStage.full
-          ? BitmapDescriptor.hueGreen
-          : p.stage == VerificationStage.stage1
-              ? BitmapDescriptor.hueCyan
-              : BitmapDescriptor.hueOrange;
-      return Marker(
-        markerId: MarkerId(p.id),
-        position: LatLng(p.lat, p.lng),
-        icon: BitmapDescriptor.defaultMarkerWithHue(hue),
-        infoWindow: InfoWindow(
-          title: p.species,
-          snippet: '${p.quantity} trees · ${p.stage.name}',
-        ),
-      );
-    }).toSet();
-
-    return GoogleMap(
-      initialCameraPosition: const CameraPosition(
-        target: LatLng(-1.3133, 36.7862),
-        zoom: 14,
-      ),
-      onMapCreated: (c) => c.setMapStyle(_mapStyle),
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
-      mapToolbarEnabled: false,
-      markers: markers,
-    );
-  }
-
-  void _openPostWizard() async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (_) => const _PlantingWizard()),
-    );
-    if (result == true) _loadPosts();
-  }
-}
-
-// ─── Toggle option ────────────────────────────────────────────────────────────
-class _ToggleOption extends StatelessWidget {
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _ToggleOption(
-      {required this.label, required this.active, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 32,
-          margin: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: active ? AppTheme.darkGreen : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: active
-                  ? Colors.white
-                  : AppTheme.darkGreen.withOpacity(0.6),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Post card ────────────────────────────────────────────────────────────────
-class _PlantingPostCard extends StatelessWidget {
-  final PlantingPost post;
-
-  const _PlantingPostCard({required this.post});
-
-  @override
-  Widget build(BuildContext context) {
-    final (statusColor, statusText) = switch (post.stage) {
-      VerificationStage.pending => (Colors.orange, 'Pending Review'),
-      VerificationStage.stage1 => (AppTheme.accent, 'Stage 1 Verified'),
-      VerificationStage.full => (AppTheme.primary, 'Fully Verified'),
+  Widget _card(PlantingPost post, CanopyPalette p) {
+    final (label, color) = switch (post.stage) {
+      VerificationStage.full => ('Verified', p.success),
+      VerificationStage.stage1 => ('First check done', p.info),
+      VerificationStage.pending => ('Pending verification', p.warning),
     };
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 90,
-            decoration: BoxDecoration(
-              color: statusColor,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(14),
-                bottomLeft: Radius.circular(14),
-              ),
-            ),
+    final ageDays = DateTime.now().difference(post.plantedDate).inDays;
+    final nextCheck = [30, 60, 90].firstWhere((d) => d > ageDays, orElse: () => 0);
+    return CanopyCard(
+      padding: EdgeInsets.zero,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ClipRRect(
+          borderRadius: const BorderRadius.horizontal(left: Radius.circular(CanopyRadius.md - 1)),
+          child: SizedBox(
+            width: 88,
+            height: 108,
+            child: CanopyImage(url: post.photoUrls.isEmpty ? null : post.photoUrls.first, fallbackIcon: Icons.park_outlined),
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          post.species,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              color: AppTheme.darkGreen),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (post.stage == VerificationStage.full)
-                              const Icon(Icons.verified,
-                                  size: 12, color: AppTheme.primary),
-                            const SizedBox(width: 3),
-                            Text(statusText,
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: statusColor)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(Icons.park_outlined,
-                          size: 12,
-                          color: AppTheme.darkGreen.withOpacity(0.5)),
-                      const SizedBox(width: 4),
-                      Text('${post.quantity} trees',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: AppTheme.darkGreen.withOpacity(0.6))),
-                      const SizedBox(width: 12),
-                      Icon(Icons.calendar_today_outlined,
-                          size: 12,
-                          color: AppTheme.darkGreen.withOpacity(0.5)),
-                      const SizedBox(width: 4),
-                      Text(
-                          DateFormat('d MMM yyyy').format(post.plantedDate),
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: AppTheme.darkGreen.withOpacity(0.6))),
-                    ],
-                  ),
-                  if (post.followUp30 != null || post.followUp90 != null) ...[
-                    const SizedBox(height: 6),
-                    _FollowUpChips(post: post),
-                  ],
-                ],
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(CanopySpace.s12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              StatusLabel(label, color: color),
+              const SizedBox(height: CanopySpace.s2),
+              Text('${post.quantity} ${post.species}', style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+              Text(
+                [
+                  'Planted ${DateFormat('d MMM yyyy').format(post.plantedDate)}',
+                  if (post.growthStage != null) 'as ${post.growthStage}',
+                  post.hasZone ? 'Zone' : (post.hasPoint ? 'Pin' : 'No location'),
+                ].join(' · '),
+                style: CanopyType.caption.copyWith(color: p.inkMuted),
               ),
-            ),
+              if (post.stage != VerificationStage.full && nextCheck > 0)
+                Text('Next survival check at $nextCheck days', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+            ]),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
-}
 
-class _FollowUpChips extends StatelessWidget {
-  final PlantingPost post;
-
-  const _FollowUpChips({required this.post});
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final chips = <Widget>[];
-
-    if (post.followUp30 != null) {
-      final overdue = now.isAfter(post.followUp30!);
-      chips.add(_chip('30d check-in', overdue ? Colors.red : Colors.orange,
-          overdue ? Icons.warning_amber_rounded : Icons.schedule));
+  Widget _mapView(CanopyPalette p) {
+    final pts = _posts.where((x) => x.hasPoint).toList();
+    if (pts.isEmpty) {
+      return Text('None of these plantings have a location yet.', style: CanopyType.body.copyWith(color: p.inkMuted));
     }
-    if (post.followUp90 != null) {
-      final overdue = now.isAfter(post.followUp90!);
-      chips.add(_chip('90d check-in', overdue ? Colors.red : AppTheme.accent,
-          overdue ? Icons.warning_amber_rounded : Icons.schedule));
-    }
-
-    return Row(children: chips.map((c) => Padding(
-        padding: const EdgeInsets.only(right: 6), child: c)).toList());
-  }
-
-  Widget _chip(String label, Color color, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(20),
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(CanopyRadius.md),
+        child: SizedBox(
+          height: 360,
+          child: GoogleMap(
+            initialCameraPosition: CameraPosition(target: LatLng(pts.first.lat, pts.first.lng), zoom: 14),
+            style: canopyMapStyle(context),
+            circles: {
+              for (final x in pts)
+                Circle(
+                  circleId: CircleId(x.id),
+                  center: LatLng(x.lat, x.lng),
+                  radius: 6 + x.quantity.clamp(0, 20).toDouble() / 2,
+                  fillColor: p.primaryDim,
+                  strokeColor: p.surface,
+                  strokeWidth: 2,
+                ),
+            },
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
+          ),
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 3),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 9, fontWeight: FontWeight.w600, color: color)),
-        ],
-      ),
-    );
+      const SizedBox(height: CanopySpace.s8),
+      MapLegend(items: [(p.primaryDim, '${pts.length} planting site${pts.length == 1 ? '' : 's'}')]),
+    ]);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLANTING POST WIZARD — 4-step stepper
+// NEW PLANTING
 // ─────────────────────────────────────────────────────────────────────────────
+
 class _PlantingWizard extends StatefulWidget {
   const _PlantingWizard();
 
@@ -617,966 +282,387 @@ class _PlantingWizard extends StatefulWidget {
 }
 
 class _PlantingWizardState extends State<_PlantingWizard> {
+  static const _steps = ['Record', 'Photos', 'Location', 'Review'];
+  static const _stages = ['Seedling', 'Sapling', 'Young tree'];
+  static const _minPhotos = 3;
+
   int _step = 0;
-  bool _saving = false;
-
-  // Step 1 — Record
-  final _speciesCtrl = TextEditingController();
-  final _quantityCtrl = TextEditingController(text: '1');
-  DateTime _plantedDate = DateTime.now();
-  Position? _gpsPosition;
-  bool _gpsLoading = false;
-
-  // Step 2 — Photos
+  String _count = '';
+  String? _stage;
+  TreeSpecies? _species;
+  final _otherSpecies = TextEditingController();
+  DateTime _planted = DateTime.now();
   final List<File> _photos = [];
-
-  // Step 3 — Map pin
-  LatLng? _pinLocation;
   bool _useZone = false;
-  ZoneDrawingResult? _zoneResult;
-
-  static const _steps = ['Record', 'Photos', 'Map Pin', 'Review'];
+  LatLng? _pin;
+  bool _pinFromGps = false;
+  ZoneDrawingResult? _zone;
+  Position? _gps;
+  bool _gpsTimedOut = false;
+  StreamSubscription<Position>? _gpsSub;
+  Timer? _gpsTimer;
+  bool _saving = false, _showErrors = false;
+  GoogleMapController? _map;
 
   @override
   void initState() {
     super.initState();
-    _captureGps();
+    _startGps();
   }
 
   @override
   void dispose() {
-    _speciesCtrl.dispose();
-    _quantityCtrl.dispose();
+    _otherSpecies.dispose();
+    _gpsSub?.cancel();
+    _gpsTimer?.cancel();
+    _map?.dispose();
     super.dispose();
   }
 
-  Future<void> _captureGps() async {
-    setState(() => _gpsLoading = true);
+  Future<void> _startGps() async {
+    _gpsTimer = Timer(CanopyField.gpsTimeout, () {
+      if (mounted && _gps == null) setState(() => _gpsTimedOut = true);
+    });
     try {
-      final perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        await Geolocator.requestPermission();
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        if (mounted) setState(() => _gpsTimedOut = true);
+        return;
       }
-      final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      if (mounted) {
+      _gpsSub = Geolocator.getPositionStream(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high)).listen((pos) {
+        if (!mounted) return;
         setState(() {
-          _gpsPosition = pos;
-          _pinLocation = LatLng(pos.latitude, pos.longitude);
-          _gpsLoading = false;
+          _gps = pos;
+          _gpsTimedOut = false;
+          // Follow GPS until the person places the pin themselves.
+          if ((_pin == null || _pinFromGps) && pos.accuracy <= CanopyField.gpsWeakMax) {
+            _pin = LatLng(pos.latitude, pos.longitude);
+            _pinFromGps = true;
+          }
         });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _gpsLoading = false);
+      }, onError: (_) {});
+    } catch (_) {}
+  }
+
+  int get _countN => int.tryParse(_count) ?? 0;
+  String get _speciesName => _species == TreeSpecies.other ? _otherSpecies.text.trim() : (_species?.displayLabel ?? '');
+
+  String? _errorFor(int s) => switch (s) {
+        0 => _countN <= 0
+            ? 'Enter how many trees.'
+            : _species == null || _speciesName.isEmpty
+                ? 'Choose the species.'
+                : null,
+        1 => _photos.length < _minPhotos ? 'Add at least $_minPhotos photos — they are how the planting gets verified.' : null,
+        2 => _useZone ? (_zone == null ? 'Draw the planting area.' : null) : (_pin == null ? 'Place the pin.' : null),
+        _ => null,
+      };
+
+  void _next() {
+    if (_errorFor(_step) != null) {
+      setState(() => _showErrors = true);
+      return;
+    }
+    setState(() {
+      _showErrors = false;
+      _step++;
+    });
+  }
+
+  void _back() {
+    if (_step == 0) {
+      Navigator.pop(context);
+    } else {
+      setState(() {
+        _showErrors = false;
+        _step--;
+      });
     }
   }
 
-  Future<void> _pickPhotos() async {
+  Future<void> _addPhotos(ImageSource source) async {
     final picker = ImagePicker();
-    final picked = await picker.pickMultiImage(imageQuality: 85);
-    if (picked.isNotEmpty) {
+    if (source == ImageSource.camera) {
+      final x = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+      if (x != null) setState(() => _photos.add(File(x.path)));
+    } else {
+      final xs = await picker.pickMultiImage(imageQuality: 85);
       setState(() {
-        for (final x in picked) {
+        for (final x in xs) {
           if (_photos.length < 10) _photos.add(File(x.path));
         }
       });
     }
   }
 
-  bool get _step0Complete =>
-      _speciesCtrl.text.trim().isNotEmpty &&
-      int.tryParse(_quantityCtrl.text) != null &&
-      int.parse(_quantityCtrl.text) > 0 &&
-      _gpsPosition != null;
-
-  bool get _step1Complete => _photos.length >= 3;
-
-  bool get _step2Complete => _pinLocation != null || _zoneResult != null;
-
-  void _next() {
-    if (_step < 3) setState(() => _step++);
-  }
-
-  void _back() {
-    if (_step > 0) setState(() => _step--);
+  Future<void> _drawZone() async {
+    final start = _pin ?? (_gps == null ? const LatLng(-1.2921, 36.8219) : LatLng(_gps!.latitude, _gps!.longitude));
+    final r = await Navigator.of(context).push<ZoneDrawingResult>(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (ctx) => ZoneDrawingController(
+        config: ZoneDrawingConfig.plantingDefault,
+        initialPosition: CameraPosition(target: start, zoom: 17),
+        initialPoints: _zone?.vertices ?? const [],
+        onCancel: () => Navigator.pop(ctx),
+        onZoneClosed: (res) => Navigator.pop(ctx, res),
+      ),
+    ));
+    if (r != null) setState(() => _zone = r);
   }
 
   Future<void> _submit() async {
-    if (_saving) return;
     setState(() => _saving = true);
-
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
-      final photoUrls = <String>[];
-
-      // Upload photos to Firebase Storage
-      for (int i = 0; i < _photos.length; i++) {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('planting_photos/$uid/${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
-        await ref.putFile(_photos[i]);
-        final url = await ref.getDownloadURL();
-        photoUrls.add(url);
-      }
-
-      final now = DateTime.now();
-      final vertices = _zoneResult?.vertices ?? [];
-      final lat = _pinLocation?.latitude ?? _gpsPosition?.latitude ?? 0;
-      final lng = _pinLocation?.longitude ?? _gpsPosition?.longitude ?? 0;
-
       final service = EnvironmentOpsService.instance;
-      final envContext = await service.resolveContext();
-      final orgId = envContext?.orgId;
-      if (orgId == null || orgId.isEmpty) {
-        throw Exception('No organisation is linked to this account yet.');
+      final ctx = await service.resolveContext();
+      if (ctx == null) throw StateError('not linked');
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? ctx.uid;
+      final urls = <String>[];
+      for (var i = 0; i < _photos.length; i++) {
+        final ref = FirebaseStorage.instance.ref('planting_photos/$uid/${DateTime.now().millisecondsSinceEpoch}_$i.jpg');
+        await ref.putFile(_photos[i]);
+        urls.add(await ref.getDownloadURL());
       }
-
+      final centre = _useZone && _zone != null ? _centroid(_zone!.vertices) : _pin!;
       await service.createTreePlanting(
-        orgId: orgId,
+        orgId: ctx.orgId,
         uid: uid,
-        speciesName: _speciesCtrl.text.trim(),
-        quantity: int.parse(_quantityCtrl.text),
-        plantedDate: _plantedDate,
-        lat: lat,
-        lng: lng,
-        photoUrls: photoUrls,
-        area: envContext?.area ?? 'Unspecified area',
-        zoneVertices: vertices,
+        speciesName: _speciesName,
+        quantity: _countN,
+        plantedDate: _planted,
+        lat: centre.latitude,
+        lng: centre.longitude,
+        photoUrls: urls,
+        area: ctx.area,
+        zoneVertices: _useZone ? _zone?.vertices : null,
+        growthStage: _stage?.toLowerCase(),
+        locationIsGps: !_useZone && _pinFromGps,
       );
-
-      if (mounted) Navigator.pop(context, true);
+      if (!mounted) return;
+      showCanopySnack(context, 'Planting saved — pending verification.');
+      Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit: $e')),
-        );
+        showCanopySnack(
+            context,
+            e is StateError
+                ? 'Link an organisation before saving plantings.'
+                : "Couldn't save. Nothing is lost — try again when you have signal.",
+            error: true);
       }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
+  static LatLng _centroid(List<LatLng> v) =>
+      LatLng(v.fold(0.0, (s, p) => s + p.latitude) / v.length, v.fold(0.0, (s, p) => s + p.longitude) / v.length);
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F5F0),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF7F5F0),
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        title: const Text('New Planting Post',
-            style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: AppTheme.darkGreen,
-                fontSize: 16)),
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: AppTheme.darkGreen),
-          onPressed: () => Navigator.pop(context),
+    final p = context.canopy;
+    final last = _step == _steps.length - 1;
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      child: CanopyScaffold(
+        appBar: canopyAppBar(
+          context,
+          title: 'Record a planting',
+          leading: IconButton(icon: Icon(_step == 0 ? Icons.close : Icons.arrow_back), tooltip: _step == 0 ? 'Close' : 'Back', onPressed: _back),
         ),
-      ),
-      body: Column(
-        children: [
-          // ── Step indicator ──
-          _StepIndicator(currentStep: _step, steps: _steps),
-
-          // ── Content ──
-          Expanded(
-            child: IndexedStack(
-              index: _step,
-              children: [
-                _StepRecord(
-                  speciesCtrl: _speciesCtrl,
-                  quantityCtrl: _quantityCtrl,
-                  plantedDate: _plantedDate,
-                  gpsPosition: _gpsPosition,
-                  gpsLoading: _gpsLoading,
-                  onDateChanged: (d) => setState(() => _plantedDate = d),
-                  onRefreshGps: _captureGps,
-                ),
-                _StepPhotos(
-                  photos: _photos,
-                  onPickPhotos: _pickPhotos,
-                  onRemove: (i) => setState(() => _photos.removeAt(i)),
-                ),
-                _StepMapPin(
-                  initialPosition: _pinLocation ??
-                      const LatLng(-1.3133, 36.7862),
-                  useZone: _useZone,
-                  zoneResult: _zoneResult,
-                  onPinChanged: (pos) =>
-                      setState(() => _pinLocation = pos),
-                  onToggleMode: () =>
-                      setState(() => _useZone = !_useZone),
-                  onZoneClosed: (r) =>
-                      setState(() => _zoneResult = r),
-                ),
-                _StepReview(
-                  species: _speciesCtrl.text,
-                  quantity: int.tryParse(_quantityCtrl.text) ?? 0,
-                  plantedDate: _plantedDate,
-                  photoCount: _photos.length,
-                  pinLocation: _pinLocation,
-                  zoneResult: _zoneResult,
-                ),
-              ],
-            ),
-          ),
-
-          // ── Navigation buttons ──
-          _WizardNav(
-            step: _step,
-            totalSteps: _steps.length,
-            canProceed: [_step0Complete, _step1Complete, _step2Complete, true][_step],
-            saving: _saving,
-            onBack: _back,
-            onNext: _next,
-            onSubmit: _submit,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Step indicator ────────────────────────────────────────────────────────────
-class _StepIndicator extends StatelessWidget {
-  final int currentStep;
-  final List<String> steps;
-
-  const _StepIndicator({required this.currentStep, required this.steps});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
-        children: List.generate(steps.length, (i) {
-          final done = i < currentStep;
-          final active = i == currentStep;
-          return Expanded(
-            child: Row(
-              children: [
-                Column(
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: done
-                            ? AppTheme.primary
-                            : active
-                                ? AppTheme.primary
-                                : Colors.grey.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: done
-                            ? const Icon(Icons.check,
-                                size: 14, color: Colors.white)
-                            : Text('${i + 1}',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: active
-                                        ? Colors.white
-                                        : Colors.grey)),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(steps[i],
-                        style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: active
-                                ? FontWeight.w700
-                                : FontWeight.w400,
-                            color: active
-                                ? AppTheme.primary
-                                : Colors.grey)),
-                  ],
-                ),
-                if (i < steps.length - 1)
-                  Expanded(
-                    child: Container(
-                      height: 2,
-                      margin: const EdgeInsets.only(bottom: 18),
-                      color: done
-                          ? AppTheme.primary
-                          : Colors.grey.withOpacity(0.2),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
-// ─── Wizard nav buttons ────────────────────────────────────────────────────────
-class _WizardNav extends StatelessWidget {
-  final int step;
-  final int totalSteps;
-  final bool canProceed;
-  final bool saving;
-  final VoidCallback onBack;
-  final VoidCallback onNext;
-  final VoidCallback onSubmit;
-
-  const _WizardNav({
-    required this.step,
-    required this.totalSteps,
-    required this.canProceed,
-    required this.saving,
-    required this.onBack,
-    required this.onNext,
-    required this.onSubmit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          20, 12, 20, 12 + MediaQuery.of(context).padding.bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0x1A000000))),
-      ),
-      child: Row(
-        children: [
-          if (step > 0)
-            OutlinedButton(
-              onPressed: onBack,
-              style: OutlinedButton.styleFrom(
-                // The theme sets minimumSize: Size.fromHeight(48), i.e. an
-                // infinite min width. That is fine in a Column but invalid as
-                // a bare Row child (unbounded main axis) and aborts layout.
-                // Keep the height, drop the width so it hugs its label.
-                minimumSize: const Size(0, 48),
-                side: const BorderSide(color: AppTheme.primary),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+          children: [
+            CanopyStepper(step: _step + 1, total: _steps.length, label: _steps[_step], stepLabels: _steps),
+            const SizedBox(height: CanopySpace.section),
+            ..._body(p),
+            if (_showErrors && _errorFor(_step) != null)
+              Padding(
+                padding: const EdgeInsets.only(top: CanopySpace.s16),
+                child: Text(_errorFor(_step)!, style: CanopyType.body.copyWith(color: p.danger)),
               ),
-              child: const Text('Back',
-                  style: TextStyle(color: AppTheme.primary)),
-            ),
-          if (step > 0) const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: canProceed && !saving
-                  ? (step == totalSteps - 1 ? onSubmit : onNext)
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                disabledBackgroundColor: Colors.grey.withOpacity(0.2),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-              child: saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(
-                      step == totalSteps - 1 ? 'Submit Post' : 'Continue',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15)),
-            ),
-          ),
-        ],
+          ],
+        ),
+        sticky: StickyActionBar(children: [
+          FieldButton(label: last ? 'Save planting' : 'Continue', loading: _saving, onPressed: last ? _submit : _next),
+        ]),
       ),
     );
   }
-}
 
-// ─── Step 1: Record ────────────────────────────────────────────────────────────
-class _StepRecord extends StatelessWidget {
-  final TextEditingController speciesCtrl;
-  final TextEditingController quantityCtrl;
-  final DateTime plantedDate;
-  final Position? gpsPosition;
-  final bool gpsLoading;
-  final void Function(DateTime) onDateChanged;
-  final VoidCallback onRefreshGps;
-
-  const _StepRecord({
-    required this.speciesCtrl,
-    required this.quantityCtrl,
-    required this.plantedDate,
-    required this.gpsPosition,
-    required this.gpsLoading,
-    required this.onDateChanged,
-    required this.onRefreshGps,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _FieldLabel('Species name *'),
-          TextField(
-            controller: speciesCtrl,
-            decoration: _inputDecoration('e.g. Grevillea robusta'),
+  List<Widget> _body(CanopyPalette p) {
+    switch (_step) {
+      case 0:
+        return [
+          BigNumberInput(value: _count, unit: _countN == 1 ? 'tree' : 'trees'),
+          const SizedBox(height: CanopySpace.s12),
+          FieldKeypad(value: _count, decimal: false, maxLength: 4, onChanged: (v) => setState(() => _count = v)),
+          const FieldEyebrow('Species'),
+          Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s8, children: [
+            for (final s in TreeSpecies.values)
+              CanopyFilterChip(label: s.displayLabel, selected: _species == s, onTap: () => setState(() => _species = s)),
+          ]),
+          if (_species == TreeSpecies.other) ...[
+            const SizedBox(height: CanopySpace.s12),
+            CanopyTextField(label: 'Species name', controller: _otherSpecies, onChanged: (_) => setState(() {})),
+          ],
+          const FieldEyebrow('Planted as (optional)'),
+          CanopySegmented<String?>(
+            options: [for (final s in _stages) (s, s)],
+            value: _stage,
+            onChanged: (v) => setState(() => _stage = _stage == v ? null : v),
           ),
-          const SizedBox(height: 16),
-          const _FieldLabel('Quantity planted *'),
-          TextField(
-            controller: quantityCtrl,
-            keyboardType: TextInputType.number,
-            decoration: _inputDecoration('Number of trees'),
-          ),
-          const SizedBox(height: 16),
-          const _FieldLabel('Planting date *'),
-          GestureDetector(
+          const FieldEyebrow('Date planted'),
+          CanopyPickerField(
+            label: 'Date',
+            value: DateFormat('EEE d MMM yyyy').format(_planted),
+            placeholder: 'Pick',
+            icon: Icons.calendar_today_outlined,
             onTap: () async {
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: plantedDate,
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now(),
-              );
-              if (picked != null) onDateChanged(picked);
+              final d = await showDatePicker(
+                  context: context, initialDate: _planted, firstDate: DateTime(2015), lastDate: DateTime.now());
+              if (d != null) setState(() => _planted = d);
             },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.withOpacity(0.4)),
-                borderRadius: BorderRadius.circular(10),
-                color: Colors.white,
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today_outlined,
-                      size: 16, color: AppTheme.accent),
-                  const SizedBox(width: 10),
-                  Text(DateFormat('d MMM yyyy').format(plantedDate),
-                      style: const TextStyle(
-                          color: AppTheme.darkGreen, fontSize: 14)),
-                ],
-              ),
-            ),
           ),
-          const SizedBox(height: 16),
-          const _FieldLabel('GPS coordinates (auto-captured)'),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: gpsPosition != null
-                  ? AppTheme.primary.withOpacity(0.06)
-                  : Colors.orange.withOpacity(0.06),
-              border: Border.all(
-                  color: gpsPosition != null
-                      ? AppTheme.primary.withOpacity(0.3)
-                      : Colors.orange.withOpacity(0.4)),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  gpsLoading
-                      ? Icons.gps_not_fixed
-                      : gpsPosition != null
-                          ? Icons.gps_fixed
-                          : Icons.gps_off,
-                  size: 16,
-                  color: gpsPosition != null ? AppTheme.primary : Colors.orange,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: gpsLoading
-                      ? const Text('Acquiring location...',
-                          style: TextStyle(
-                              color: Colors.orange, fontSize: 13))
-                      : gpsPosition != null
-                          ? Text(
-                              '${gpsPosition!.latitude.toStringAsFixed(6)}, '
-                              '${gpsPosition!.longitude.toStringAsFixed(6)}',
-                              style: const TextStyle(
-                                  color: AppTheme.darkGreen, fontSize: 13))
-                          : const Text('Location unavailable',
-                              style: TextStyle(
-                                  color: Colors.orange, fontSize: 13)),
-                ),
-                if (!gpsLoading)
-                  IconButton(
-                    icon: const Icon(Icons.refresh,
-                        size: 16, color: AppTheme.accent),
-                    onPressed: onRefreshGps,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.4)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.withOpacity(0.4)),
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      );
-}
-
-// ─── Step 2: Photos ────────────────────────────────────────────────────────────
-class _StepPhotos extends StatelessWidget {
-  final List<File> photos;
-  final VoidCallback onPickPhotos;
-  final void Function(int index) onRemove;
-
-  const _StepPhotos({
-    required this.photos,
-    required this.onPickPhotos,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _FieldLabel('Site photos'),
-              const Spacer(),
-              Text('${photos.length}/3 minimum',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: photos.length >= 3
-                          ? AppTheme.primary
-                          : Colors.orange,
-                      fontWeight: FontWeight.w600)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Photos are automatically tagged with GPS coordinates and timestamp. '
-            'Minimum 3 required for verification.',
-            style: TextStyle(
-                fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.5)),
-          ),
-          const SizedBox(height: 16),
+        ];
+      case 1:
+        return [
+          Text('${_photos.length} of $_minPhotos photos', style: CanopyField.signalValue.copyWith(color: p.ink)),
+          Text('Show the trees in the ground and the place around them. Photos are how the planting is verified.',
+              style: CanopyType.body.copyWith(color: p.inkMuted)),
+          const SizedBox(height: CanopySpace.s16),
+          Row(children: [
+            Expanded(child: FieldButton(label: 'Take photo', icon: Icons.photo_camera_outlined, onPressed: () => _addPhotos(ImageSource.camera))),
+            const SizedBox(width: CanopySpace.s12),
+            Expanded(child: FieldButton.secondary(label: 'From gallery', onPressed: () => _addPhotos(ImageSource.gallery))),
+          ]),
+          const SizedBox(height: CanopySpace.s16),
           GridView.count(
             crossAxisCount: 3,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
+            mainAxisSpacing: CanopySpace.s8,
+            crossAxisSpacing: CanopySpace.s8,
             children: [
-              ...List.generate(photos.length, (i) => _PhotoThumb(
-                    file: photos[i],
-                    onRemove: () => onRemove(i),
-                  )),
-              if (photos.length < 10)
-                GestureDetector(
-                  onTap: onPickPhotos,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: AppTheme.primary.withOpacity(0.4),
-                          style: BorderStyle.solid),
-                      borderRadius: BorderRadius.circular(10),
-                      color: AppTheme.primary.withOpacity(0.05),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_a_photo_outlined,
-                            size: 24,
-                            color: AppTheme.primary.withOpacity(0.6)),
-                        const SizedBox(height: 4),
-                        Text('Add',
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: AppTheme.primary.withOpacity(0.6))),
-                      ],
-                    ),
+              for (var i = 0; i < _photos.length; i++)
+                Stack(fit: StackFit.expand, children: [
+                  ClipRRect(borderRadius: BorderRadius.circular(CanopyRadius.sm), child: Image.file(_photos[i], fit: BoxFit.cover)),
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: CanopyIconButton(
+                        icon: Icons.close, tooltip: 'Remove photo', onImage: true, onPressed: () => setState(() => _photos.removeAt(i))),
                   ),
-                ),
+                ]),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PhotoThumb extends StatelessWidget {
-  final File file;
-  final VoidCallback onRemove;
-
-  const _PhotoThumb({required this.file, required this.onRemove});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.file(file, fit: BoxFit.cover),
-        ),
-        Positioned(
-          top: 4,
-          right: 4,
-          child: GestureDetector(
-            onTap: onRemove,
-            child: Container(
-              width: 20,
-              height: 20,
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
+        ];
+      case 2:
+        return [
+          CanopySegmented<bool>(
+            options: const [(false, 'A pin'), (true, 'An area')],
+            value: _useZone,
+            onChanged: (v) => setState(() => _useZone = v),
+          ),
+          const SizedBox(height: CanopySpace.s12),
+          if (_useZone) ...[
+            if (_zone == null)
+              Text('Draw the outline of where the trees are.', style: CanopyType.body.copyWith(color: p.ink))
+            else
+              Text('Area drawn · ${formatArea(_zone!.areaKm2)} · ${_zone!.vertices.length} points',
+                  style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+            const SizedBox(height: CanopySpace.s12),
+            FieldButton(label: _zone == null ? 'Draw the planting area' : 'Redraw', onPressed: _drawZone),
+          ] else ...[
+            Row(children: [
+              GpsChip(accuracyM: _gps?.accuracy, timedOut: _gpsTimedOut),
+              const Spacer(),
+              if (_pin != null && !_pinFromGps) Text('Placed by hand', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+            ]),
+            const SizedBox(height: CanopySpace.s8),
+            if (_gps == null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: CanopySpace.s8),
+                child: CanopyCallout(
+                  kind: _gpsTimedOut ? CalloutKind.warning : CalloutKind.info,
+                  text: _gpsTimedOut
+                      ? 'No GPS fix. Tap the map where the trees are to place the pin by hand.'
+                      : 'Finding your location… or tap the map to place the pin yourself.',
+                ),
               ),
-              child: const Icon(Icons.close, size: 12, color: Colors.white),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(CanopyRadius.md),
+              child: SizedBox(
+                height: 300,
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(target: _pin ?? const LatLng(-1.2921, 36.8219), zoom: _pin == null ? 12 : 17),
+                  style: canopyMapStyle(context),
+                  onMapCreated: (c) => _map = c,
+                  onTap: (pos) => setState(() {
+                    _pin = pos;
+                    _pinFromGps = false;
+                  }),
+                  markers: {
+                    if (_pin != null)
+                      Marker(
+                        markerId: const MarkerId('pin'),
+                        position: _pin!,
+                        draggable: true,
+                        onDragEnd: (pos) => setState(() {
+                          _pin = pos;
+                          _pinFromGps = false;
+                        }),
+                      ),
+                  },
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: false,
+                  zoomControlsEnabled: false,
+                  mapToolbarEnabled: false,
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Step 3: Map Pin ───────────────────────────────────────────────────────────
-class _StepMapPin extends StatefulWidget {
-  final LatLng initialPosition;
-  final bool useZone;
-  final ZoneDrawingResult? zoneResult;
-  final void Function(LatLng) onPinChanged;
-  final VoidCallback onToggleMode;
-  final void Function(ZoneDrawingResult) onZoneClosed;
-
-  const _StepMapPin({
-    required this.initialPosition,
-    required this.useZone,
-    required this.zoneResult,
-    required this.onPinChanged,
-    required this.onToggleMode,
-    required this.onZoneClosed,
-  });
-
-  @override
-  State<_StepMapPin> createState() => _StepMapPinState();
-}
-
-class _StepMapPinState extends State<_StepMapPin> {
-  LatLng? _pinPos;
-
-  @override
-  void initState() {
-    super.initState();
-    _pinPos = widget.initialPosition;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // Mode toggle
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: _ModeButton(
-                  label: 'Drop a pin',
-                  icon: Icons.location_on_outlined,
-                  active: !widget.useZone,
-                  onTap: () {
-                    if (widget.useZone) widget.onToggleMode();
+            const SizedBox(height: CanopySpace.s8),
+            if (_gps != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: CanopyButton.quiet(
+                  label: 'Use my location',
+                  size: CanopyButtonSize.compact,
+                  onPressed: () {
+                    final here = LatLng(_gps!.latitude, _gps!.longitude);
+                    setState(() {
+                      _pin = here;
+                      _pinFromGps = true;
+                    });
+                    _map?.animateCamera(CameraUpdate.newLatLngZoom(here, 17));
                   },
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ModeButton(
-                  label: 'Draw zone',
-                  icon: Icons.draw_outlined,
-                  active: widget.useZone,
-                  onTap: () {
-                    if (!widget.useZone) widget.onToggleMode();
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: widget.useZone
-              ? ZoneDrawingController(
-                  config: ZoneDrawingConfig.plantingDefault,
-                  onZoneClosed: widget.onZoneClosed,
-                  initialPosition: CameraPosition(
-                    target: widget.initialPosition,
-                    zoom: 15,
-                  ),
-                )
-              : Stack(
-                  children: [
-                    GoogleMap(
-                      initialCameraPosition: CameraPosition(
-                        target: widget.initialPosition,
-                        zoom: 15,
-                      ),
-                      myLocationButtonEnabled: false,
-                      zoomControlsEnabled: false,
-                      mapToolbarEnabled: false,
-                      onTap: (pos) {
-                        setState(() => _pinPos = pos);
-                        widget.onPinChanged(pos);
-                      },
-                      markers: _pinPos == null
-                          ? {}
-                          : {
-                              Marker(
-                                markerId: const MarkerId('planting_pin'),
-                                position: _pinPos!,
-                                draggable: true,
-                                onDrag: (p) {
-                                  setState(() => _pinPos = p);
-                                  widget.onPinChanged(p);
-                                },
-                                icon: BitmapDescriptor.defaultMarkerWithHue(
-                                    BitmapDescriptor.hueCyan),
-                              ),
-                            },
-                    ),
-                    if (_pinPos == null)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Text('Tap the map to drop a pin at the planting site',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.black54)),
-                        ),
-                      ),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ModeButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool active;
-  final VoidCallback onTap;
-
-  const _ModeButton({
-    required this.label,
-    required this.icon,
-    required this.active,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? AppTheme.primary : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: active
-                  ? AppTheme.primary
-                  : Colors.grey.withOpacity(0.3)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon,
-                size: 16,
-                color: active ? Colors.white : AppTheme.darkGreen),
-            const SizedBox(width: 6),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: active ? Colors.white : AppTheme.darkGreen)),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Step 4: Review ────────────────────────────────────────────────────────────
-class _StepReview extends StatelessWidget {
-  final String species;
-  final int quantity;
-  final DateTime plantedDate;
-  final int photoCount;
-  final LatLng? pinLocation;
-  final ZoneDrawingResult? zoneResult;
-
-  const _StepReview({
-    required this.species,
-    required this.quantity,
-    required this.plantedDate,
-    required this.photoCount,
-    required this.pinLocation,
-    required this.zoneResult,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.07),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: AppTheme.primary.withOpacity(0.25)),
+        ];
+      default:
+        return [
+          CanopyListGroup(children: [
+            CanopyFactRow(label: 'Trees', value: '$_countN $_speciesName'),
+            if (_stage != null) CanopyFactRow(label: 'Planted as', value: _stage!),
+            CanopyFactRow(label: 'Date', value: DateFormat('d MMM yyyy').format(_planted)),
+            CanopyFactRow(label: 'Photos', value: '${_photos.length}'),
+            CanopyFactRow(
+              label: 'Location',
+              value: _useZone
+                  ? 'Area · ${formatArea(_zone?.areaKm2 ?? 0)}'
+                  : (_pinFromGps ? 'Pin from GPS ±${_gps?.accuracy.round() ?? '?'} m' : 'Pin placed by hand'),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text('Pending Verification',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.orange)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(species,
-                    style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen)),
-                const SizedBox(height: 8),
-                _ReviewRow(Icons.park_outlined, '$quantity trees planted'),
-                _ReviewRow(Icons.calendar_today_outlined,
-                    DateFormat('d MMM yyyy').format(plantedDate)),
-                _ReviewRow(Icons.photo_library_outlined,
-                    '$photoCount photo${photoCount == 1 ? '' : 's'} attached'),
-                if (pinLocation != null)
-                  _ReviewRow(
-                      Icons.location_on_outlined,
-                      '${pinLocation!.latitude.toStringAsFixed(5)}, '
-                          '${pinLocation!.longitude.toStringAsFixed(5)}'),
-                if (zoneResult != null)
-                  _ReviewRow(Icons.draw_outlined,
-                      'Planting zone: ${zoneResult!.vertices.length} vertices'),
-              ],
-            ),
+          ]),
+          const SizedBox(height: CanopySpace.s16),
+          const CanopyCallout(
+            text: 'Saved as Pending verification. Survival is checked at about 30, 60 and 90 days. This is a count of living trees, not a carbon estimate.',
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.07),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.blue.withOpacity(0.2)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.schedule, size: 16, color: Colors.blue),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Follow-up check-ins will be scheduled at 30 days and 90 days. '
-                    'Geotagged photos are required at the same GPS coordinates '
-                    '(within 50m) to unlock Full Verification.',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                        height: 1.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _ReviewRow(this.icon, this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: AppTheme.accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(text,
-                style: const TextStyle(
-                    fontSize: 13, color: AppTheme.darkGreen)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Field label ──────────────────────────────────────────────────────────────
-class _FieldLabel extends StatelessWidget {
-  final String text;
-
-  const _FieldLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(text,
-          style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.darkGreen)),
-    );
+        ];
+    }
   }
 }

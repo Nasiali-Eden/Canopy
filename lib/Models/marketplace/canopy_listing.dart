@@ -316,6 +316,10 @@ class CanopyListing {
   final String? orgName;
   final String postedByUid;
 
+  /// How people reach the poster. Payment and handover are arranged directly
+  /// between the two parties, so this is what a listing is for.
+  final String contactPhone;
+
   // ── Commercial ──
   final ListingPricing pricing;
   final ListingQuantity quantity;
@@ -363,6 +367,7 @@ class CanopyListing {
     this.orgId,
     this.orgName,
     this.postedByUid = '',
+    this.contactPhone = '',
     this.pricing = const ListingPricing(),
     this.quantity = const ListingQuantity(),
     this.fulfilment = const ListingFulfilment(),
@@ -443,6 +448,7 @@ class CanopyListing {
       orgId: d['orgId'] as String?,
       orgName: d['orgName'] as String?,
       postedByUid: d['postedByUid'] as String? ?? '',
+      contactPhone: d['contactPhone'] as String? ?? '',
       pricing:
           ListingPricing.fromMap(d['pricing'] as Map<String, dynamic>? ?? {}),
       quantity:
@@ -486,6 +492,7 @@ class CanopyListing {
         'orgId': orgId,
         'orgName': orgName,
         'postedByUid': postedByUid,
+        'contactPhone': contactPhone,
         'pricing': pricing.toMap(),
         'quantity': quantity.toMap(),
         'fulfilment': fulfilment.toMap(),
@@ -540,6 +547,7 @@ class CanopyListing {
       orgId: orgId,
       orgName: orgName,
       postedByUid: postedByUid,
+      contactPhone: contactPhone,
       pricing: pricing ?? this.pricing,
       quantity: quantity ?? this.quantity,
       fulfilment: fulfilment,

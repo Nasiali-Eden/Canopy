@@ -1,27 +1,20 @@
+// lib/MarketPlace/market_home.dart
+//
+// Marketplace seller shell (MARKETPLACE_SELLER_DESIGN_BRIEF §4). Tabs
+// Feed · Shop · Learn · Profile on the shared v2 bottom bar. The Shop tab
+// owns "New listing" — there's no dead-end create button here.
+
 import 'package:flutter/material.dart';
-import '../Shared/theme/app_theme.dart';
+
 import '../Shared/widgets/canopy_bottom_bar.dart';
+import '../theme/canopy_components.dart';
 import 'Feed/seller_feed.dart';
-import 'Shop/seller_shop.dart';
 import 'Learn/learn.dart';
 import 'Profile/seller_profile.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  SellerHomeScreen
-//
-//  Root shell for the Canopy Marketplace seller.
-//  Mirrors OrganizationHome structure exactly.
-//
-//  Tabs:
-//    0 · Feed        — community feed + seller impact strip
-//    1 · Shop        — listings, orders, browse  [FAB: New Listing]
-//    2 · Learn       — blockchain articles for organizations and artisans
-//    3 · Profile     — seller storefront + verified history
-// ─────────────────────────────────────────────────────────────────────────────
+import 'Shop/seller_shop.dart';
 
 class SellerHomeScreen extends StatefulWidget {
-  /// Builders for context switching. Passed through to SellerProfilePage.
-  /// Defined here (not in SellerProfilePage) to avoid circular imports.
+  /// Builders for workspace switching, passed through to the Profile tab.
   final WidgetBuilder? orgContextBuilder;
   final WidgetBuilder? memberContextBuilder;
   final WidgetBuilder? envOpsContextBuilder;
@@ -46,78 +39,35 @@ class SellerHomeScreen extends StatefulWidget {
 class _SellerHomeScreenState extends State<SellerHomeScreen> {
   int _index = 0;
 
-  void _onCreateListing() {
-    // TODO: navigate to the Create Listing flow inside SellerShopPage
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(children: [
-          Icon(Icons.add_circle_outline, color: Colors.white, size: 16),
-          SizedBox(width: 8),
-          Text('Create Listing — coming soon',
-              style: TextStyle(fontWeight: FontWeight.w600)),
-        ]),
-        backgroundColor: AppTheme.tertiary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      const SellerFeedPage(),
-      const SellerShopPage(),
-      const LearnPage(),
-      SellerProfilePage(
-        orgContextBuilder: widget.orgContextBuilder,
-        memberContextBuilder: widget.memberContextBuilder,
-        envOpsContextBuilder: widget.envOpsContextBuilder,
-        culturalContextBuilder: widget.culturalContextBuilder,
-        hasEnvOps: widget.hasEnvOps,
-        hasCultural: widget.hasCultural,
-      ),
-    ];
-
-    return WillPopScope(
-      onWillPop: () async => false,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: IndexedStack(
-          index: _index,
-          children: pages,
-        ),
-        
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _index != 0) setState(() => _index = 0);
+      },
+      child: CanopyScaffold(
+        body: IndexedStack(index: _index, children: [
+          const SellerFeedPage(),
+          const SellerShopPage(),
+          const LearnPage(),
+          SellerProfilePage(
+            orgContextBuilder: widget.orgContextBuilder,
+            memberContextBuilder: widget.memberContextBuilder,
+            envOpsContextBuilder: widget.envOpsContextBuilder,
+            culturalContextBuilder: widget.culturalContextBuilder,
+            hasEnvOps: widget.hasEnvOps,
+            hasCultural: widget.hasCultural,
+          ),
+        ]),
         bottomNavigationBar: CanopyBottomBar(
           currentIndex: _index,
           onTap: (i) => setState(() => _index = i),
-          // Shop is the centre of gravity for a seller — gold when it is the
-          // active tab, brand green elsewhere. Same rule the old bar used, now
-          // expressed once instead of across three theme callbacks.
-          selectedColor: _index == 1 ? AppTheme.tertiary : AppTheme.primary,
           destinations: const [
-            CanopyNavDestination(
-              icon: Icons.home_outlined,
-              activeIcon: Icons.home_rounded,
-              label: 'Feed',
-            ),
-            CanopyNavDestination(
-              icon: Icons.storefront_outlined,
-              activeIcon: Icons.storefront_rounded,
-              label: 'Shop',
-            ),
-            CanopyNavDestination(
-              icon: Icons.school_outlined,
-              activeIcon: Icons.school_rounded,
-              label: 'Learn',
-            ),
-            CanopyNavDestination(
-              icon: Icons.person_outline_rounded,
-              activeIcon: Icons.person_rounded,
-              label: 'Profile',
-            ),
+            CanopyNavDestination(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Feed'),
+            CanopyNavDestination(icon: Icons.storefront_outlined, activeIcon: Icons.storefront, label: 'Shop'),
+            CanopyNavDestination(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book, label: 'Learn'),
+            CanopyNavDestination(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
           ],
         ),
       ),

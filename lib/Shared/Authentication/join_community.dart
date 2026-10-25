@@ -1,8 +1,13 @@
+// lib/Shared/Authentication/join_community.dart
+//
+// Create account (v2): choose how you'll join — member or organisation —
+// then continue into that registration. Makers, field teams and archives
+// are organisation capabilities, applied for after registering.
+
 import 'package:flutter/material.dart';
 
-import '../../Shared/theme/app_theme.dart';
+import '../../theme/canopy_components.dart';
 import '../Pages/login.dart';
-import 'components/role_card.dart';
 import 'member/member_register_screen.dart';
 import 'organization/org_register_wizard.dart';
 
@@ -14,138 +19,56 @@ class JoinCommunityScreen extends StatefulWidget {
 }
 
 class _JoinCommunityScreenState extends State<JoinCommunityScreen> {
-  String _role = 'Member';
-
-  void _continue() {
-    if (_role == 'Member') {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const MemberRegisterScreen()));
-    } else if (_role == 'Org Rep') {
-      Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const OrgRegisterWizard()));
-    }
-  }
+  bool _org = false;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        title: Text(
-          'Create Account',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: AppTheme.darkGreen, fontWeight: FontWeight.w700),
-        ),
+    final p = context.canopy;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Create account'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          Text('How will you join?', style: CanopyType.display.copyWith(color: p.ink)),
+          const SizedBox(height: CanopySpace.s8),
+          Text('You can always join an organisation later from your profile.', style: CanopyType.body.copyWith(color: p.inkMuted)),
+          const SizedBox(height: CanopySpace.section),
+          CanopyOptionCard(
+            selected: !_org,
+            onTap: () => setState(() => _org = false),
+            icon: Icons.person_outline,
+            title: 'As a member',
+            caption: 'Join activities, log your contributions, report issues and follow organisations.',
+          ),
+          const SizedBox(height: CanopySpace.s12),
+          CanopyOptionCard(
+            selected: _org,
+            onTap: () => setState(() => _org = true),
+            icon: Icons.apartment_outlined,
+            title: 'For an organisation',
+            caption: 'Register an NGO, recycler, school, collective or archive. Run events and verify contributions.',
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          Text('Selling made goods, running field operations or keeping a cultural archive are added to an organisation after it registers.',
+              style: CanopyType.caption.copyWith(color: p.inkMuted)),
+        ],
       ),
-      body: SafeArea(child: _buildRoleSelection()),
-    );
-  }
-
-  Widget _buildRoleSelection() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const SizedBox(height: 8),
-        Text(
-          'How will you join?',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: AppTheme.darkGreen, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Choose the path that matches how you\'ll participate in Canopy.',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: AppTheme.darkGreen.withOpacity(0.65)),
-        ),
-        const SizedBox(height: 28),
-
-        // ── Community Member ───────────────────────────────────────────────
-        RoleCard(
-          title: 'Community Member',
-          subtitle:
-              'Report issues, attend cleanups, follow organisations, and engage with your community.',
-          icon: Icons.people_outline,
-          accent: AppTheme.primary,
-          selected: _role == 'Member',
-          onTap: () => setState(() => _role = 'Member'),
-        ),
-        const SizedBox(height: 14),
-
-        // ── Organisation ───────────────────────────────────────────────────
-        RoleCard(
-          title: 'Organisation Representative',
-          subtitle:
-              'Register an NGO, recycler, waste-art collective, clinic, school, or any community org.',
-          icon: Icons.business_outlined,
-          accent: const Color(0xFF0097A7),
-          selected: _role == 'Org Rep',
-          onTap: () => setState(() => _role = 'Org Rep'),
-        ),
-
-        const SizedBox(height: 10),
-
-        // ── Volunteer hint ─────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-          ),
-          child: Row(children: [
-            Icon(Icons.volunteer_activism_outlined,
-                color: AppTheme.primary, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Want to volunteer? You can register as a volunteer directly inside the app after joining as a member.',
-                style: TextStyle(
-                    fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.75)),
-              ),
-            ),
-          ]),
-        ),
-
-        const SizedBox(height: 32),
-
-        // ── Continue button ────────────────────────────────────────────────
-        FilledButton(
-          onPressed: _continue,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppTheme.primary,
-            foregroundColor: Colors.white,
-            minimumSize: const Size.fromHeight(56),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Text('Continue',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-              SizedBox(width: 8),
-              Icon(Icons.arrow_forward, size: 20),
-            ],
+      sticky: StickyActionBar(children: [
+        CanopyButton(
+          label: 'Continue',
+          expand: true,
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => _org ? const OrgRegisterWizard() : const MemberRegisterScreen()),
           ),
         ),
-
-        const SizedBox(height: 24),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text('Already have an account? ',
-              style: TextStyle(color: AppTheme.darkGreen.withOpacity(0.6))),
-          GestureDetector(
-            onTap: () => Navigator.pushReplacement(
-                context, MaterialPageRoute(builder: (_) => const LoginPage())),
-            child: Text('Sign In',
-                style: TextStyle(
-                    color: AppTheme.primary, fontWeight: FontWeight.w700)),
-          ),
-        ]),
+        const SizedBox(height: CanopySpace.s8),
+        CanopyButton(
+          label: 'I already have an account',
+          variant: CanopyButtonVariant.quiet,
+          expand: true,
+          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage())),
+        ),
       ]),
     );
   }

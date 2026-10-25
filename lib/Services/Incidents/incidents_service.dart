@@ -39,6 +39,9 @@ class IncidentReport {
   final String userId;
   final IncidentStatus status;
   final DateTime? timestamp;
+  final String place;
+  final double? latitude;
+  final double? longitude;
 
   const IncidentReport({
     required this.id,
@@ -50,7 +53,16 @@ class IncidentReport {
     required this.userId,
     required this.status,
     required this.timestamp,
+    this.place = '',
+    this.latitude,
+    this.longitude,
   });
+
+  /// What to show for where: the place description when given, else
+  /// "Location pinned" (raw coordinates mean nothing to a reader).
+  String get whereLabel => place.trim().isNotEmpty ? place.trim() : (hasPosition ? 'Location pinned' : 'No location');
+
+  bool get hasPosition => latitude != null && longitude != null;
 
   /// Which of the 4 pipeline steps are "done" (filled) — used to draw the
   /// progress strip. pending=1, verifying=2, confirmed=3, resolved=4.
@@ -95,7 +107,17 @@ class IncidentReport {
       userId: data['userId'] as String? ?? '',
       status: _statusFromString(data['status'] as String?),
       timestamp: ts is Timestamp ? ts.toDate() : null,
+      place: data['place'] as String? ?? '',
+      latitude: (data['latitude'] as num?)?.toDouble() ?? _legacyCoord(data['location'], 0),
+      longitude: (data['longitude'] as num?)?.toDouble() ?? _legacyCoord(data['location'], 1),
     );
+  }
+
+  static double? _legacyCoord(dynamic raw, int i) {
+    if (raw is! String) return null;
+    final parts = raw.split(',');
+    if (parts.length != 2) return null;
+    return double.tryParse(parts[i].trim());
   }
 }
 
@@ -114,13 +136,12 @@ class IncidentsService {
         .map((snap) => snap.docs.map(IncidentReport.fromDoc).toList());
   }
 
-  Stream<List<IncidentReport>> watchMine(String userId, {int limit = 50}) {
-    return _db
-        .collection('Incidents')
-        .where('userId', isEqualTo: userId)
-        .orderBy('timestamp', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snap) => snap.docs.map(IncidentReport.fromDoc).toList());
+  /// My reports, newest first. Single equality, sorted on the client.
+  Stream<List<IncidentReport>> watchMine(String userId) {
+    return _db.collection('Incidents').where('userId', isEqualTo: userId).snapshots().map((snap) {
+      final list = snap.docs.map(IncidentReport.fromDoc).toList()
+        ..sort((a, b) => (b.timestamp ?? DateTime(9999)).compareTo(a.timestamp ?? DateTime(9999)));
+      return list;
+    });
   }
 }

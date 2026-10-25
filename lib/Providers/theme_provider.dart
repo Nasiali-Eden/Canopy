@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  ThemeMode _mode = ThemeMode.system;
+  // The app always opens in light mode, whatever the phone is set to. Dark is
+  // still available from Settings for the current session.
+  ThemeMode _mode = ThemeMode.light;
 
   ThemeMode get mode => _mode;
 
@@ -16,8 +18,7 @@ class ThemeProvider extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    // TODO: Load saved theme preference from shared preferences
-    _mode = ThemeMode.system;
+    _mode = ThemeMode.light;
     notifyListeners();
   }
 }

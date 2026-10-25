@@ -10,7 +10,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../Services/Authentication/username_service.dart';
-import '../../theme/app_theme.dart';
+import '../../../theme/canopy_components.dart';
 
 enum _UsernameCheckState { idle, checking, available, taken, invalid }
 
@@ -78,60 +78,25 @@ class _UsernameFieldState extends State<UsernameField> {
 
   @override
   Widget build(BuildContext context) {
-    final (icon, color, label) = switch (_state) {
-      _UsernameCheckState.idle => (null, null, null),
-      _UsernameCheckState.checking => (null, null, null),
-      _UsernameCheckState.available => (
-          Icons.check_circle,
-          Colors.green.shade600,
-          'Available'
+    final p = context.canopy;
+    final (String? helper, String? error, Widget? suffix) = switch (_state) {
+      _UsernameCheckState.idle => ("Your unique handle. It can't be changed later.", null, null),
+      _UsernameCheckState.checking => (
+          'Checking…',
+          null,
+          const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
         ),
-      _UsernameCheckState.taken => (
-          Icons.cancel,
-          Colors.red.shade600,
-          'Already taken'
-        ),
-      _UsernameCheckState.invalid => (
-          Icons.info_outline,
-          Colors.orange.shade700,
-          '3-20 characters: letters, numbers, underscore only'
-        ),
+      _UsernameCheckState.available => ('Available', null, Icon(Icons.check_circle, color: p.success)),
+      _UsernameCheckState.taken => (null, 'Already taken. Try another.', null),
+      _UsernameCheckState.invalid => (null, '3–20 characters: letters, numbers and underscore only.', null),
     };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: widget.controller,
-          autocorrect: false,
-          decoration: InputDecoration(
-            labelText: 'Username',
-            prefixText: '@',
-            suffixIcon: _state == _UsernameCheckState.checking
-                ? const Padding(
-                    padding: EdgeInsets.all(14),
-                    child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2)),
-                  )
-                : (icon != null ? Icon(icon, color: color) : null),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        ),
-        if (label != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, left: 4),
-            child: Text(label,
-                style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
-          )
-        else
-          const Padding(
-            padding: EdgeInsets.only(top: 4, left: 4),
-            child: Text('Pick a unique handle — this can\'t be changed later yet.',
-                style: TextStyle(fontSize: 11.5, color: AppTheme.darkGreen)),
-          ),
-      ],
+    return CanopyTextField(
+      label: 'Username',
+      controller: widget.controller,
+      prefixText: '@',
+      helper: helper,
+      error: error,
+      suffix: suffix,
     );
   }
 }

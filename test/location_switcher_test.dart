@@ -26,9 +26,9 @@ void main() {
     );
 
     expect(find.text('Everywhere'), findsOneWidget);
-    expect(find.byIcon(Icons.expand_more_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.public_rounded), findsNothing);
-    expect(find.byIcon(Icons.place_rounded), findsNothing);
+    expect(find.byIcon(Icons.expand_more), findsOneWidget);
+    expect(find.byIcon(Icons.public), findsNothing);
+    expect(find.byIcon(Icons.place_outlined), findsNothing);
     expect(find.text('All'), findsNothing);
   });
 }

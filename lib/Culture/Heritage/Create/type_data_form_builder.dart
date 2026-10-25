@@ -1,7 +1,15 @@
+// lib/Culture/Heritage/Create/type_data_form_builder.dart
+//
+// DynamicFields (ARCHIVE_HANDOFF 2): per-type fields from _schemas, drawn with
+// v2 components. Original / Kiswahili / English variants share a segmented
+// control with word counts; yes/no facts are Yes / No / Unsure (unsure is
+// stored as null); restriction notes use the warning field. Consent for
+// knowledge holders is asked once by the creator, not here.
+
 import 'package:flutter/material.dart';
 
-import '../../../Shared/theme/app_theme.dart';
-import '../heritage_theme.dart';
+import '../../../theme/canopy_components.dart';
+import '../../archive_ui.dart' show RestrictionNoteField;
 
 enum _FieldKind { textSingle, textMulti, dropdown, toggle, chipMulti, tagInput }
 
@@ -147,17 +155,31 @@ const _schemas = <String, List<_Field>>{
   ],
 };
 
+/// Fields the creator renders itself (consent).
+const _handledElsewhere = {'consent_on_file'};
+
+String _humanise(String o) {
+  final d = o.replaceAll('_', ' ');
+  return d.isEmpty ? d : '${d[0].toUpperCase()}${d.substring(1)}';
+}
+
+String _cleanLabel(String l) => l.replaceAll(' *', '').replaceAll('*', '').trim();
+
 class TypeDataFormBuilder extends StatefulWidget {
   final String contentType;
   final Map<String, dynamic> typeData;
   final void Function(String key, dynamic value) onChanged;
 
-  const TypeDataFormBuilder({
-    required this.contentType,
-    required this.typeData,
-    required this.onChanged,
-    super.key,
-  });
+  const TypeDataFormBuilder({required this.contentType, required this.typeData, required this.onChanged, super.key});
+
+  /// Required fields still empty — the creator lists these before Continue.
+  static List<String> missingRequired(String contentType, Map<String, dynamic> data) => [
+        for (final f in _schemas[contentType] ?? const <_Field>[])
+          if (f.required && !_handledElsewhere.contains(f.key) && f.kind != _FieldKind.toggle && _isEmpty(data[f.key]))
+            _cleanLabel(f.label),
+      ];
+
+  static bool _isEmpty(dynamic v) => v == null || (v is String && v.trim().isEmpty) || (v is List && v.isEmpty);
 
   @override
   State<TypeDataFormBuilder> createState() => _TypeDataFormBuilderState();
@@ -165,246 +187,201 @@ class TypeDataFormBuilder extends StatefulWidget {
 
 class _TypeDataFormBuilderState extends State<TypeDataFormBuilder> {
   final Map<String, TextEditingController> _controllers = {};
-  final Map<String, TextEditingController> _tagInputControllers = {};
+  final Map<String, TextEditingController> _tagInputs = {};
+  final Map<String, int> _langTab = {};
 
-  List<_Field> get _fields => _schemas[widget.contentType] ?? const [];
+  List<_Field> get _fields =>
+      (_schemas[widget.contentType] ?? const <_Field>[]).where((f) => !_handledElsewhere.contains(f.key)).toList();
+
+  bool _hasVariants(String key) => _fields.any((g) => g.key == '${key}_swahili' || g.key == '${key}_english');
+
+  Set<String> get _variantKeys => {
+        for (final f in _fields)
+          if (_hasVariants(f.key)) ...['${f.key}_swahili', '${f.key}_english'],
+      };
 
   @override
   void initState() {
     super.initState();
-    for (final field in _fields) {
-      if (field.kind == _FieldKind.textSingle || field.kind == _FieldKind.textMulti) {
-        final initial = widget.typeData[field.key];
-        _controllers[field.key] = TextEditingController(
-          text: initial is String ? initial : '',
-        );
+    for (final f in _schemas[widget.contentType] ?? const <_Field>[]) {
+      if (f.kind == _FieldKind.textSingle || f.kind == _FieldKind.textMulti) {
+        final v = widget.typeData[f.key];
+        _controllers[f.key] = TextEditingController(text: v is String ? v : '');
       }
-      if (field.kind == _FieldKind.tagInput) {
-        _tagInputControllers[field.key] = TextEditingController();
-      }
+      if (f.kind == _FieldKind.tagInput) _tagInputs[f.key] = TextEditingController();
     }
   }
 
   @override
   void dispose() {
-    for (final c in _controllers.values) c.dispose();
-    for (final c in _tagInputControllers.values) c.dispose();
+    for (final c in [..._controllers.values, ..._tagInputs.values]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final fields = _fields;
+    final variants = _variantKeys;
+    final fields = _fields.where((f) => !variants.contains(f.key)).toList();
     if (fields.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final field in fields) ...[
-          _buildField(field),
-          const SizedBox(height: 16),
-        ],
-      ],
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      for (final f in fields) ...[_field(f), const SizedBox(height: CanopySpace.s16)],
+    ]);
   }
 
-  Widget _buildField(_Field field) {
-    switch (field.kind) {
-      case _FieldKind.textSingle:
-        return _buildTextSingle(field);
-      case _FieldKind.textMulti:
-        return _buildTextMulti(field);
-      case _FieldKind.dropdown:
-        return _buildDropdown(field);
-      case _FieldKind.toggle:
-        return _buildToggle(field);
-      case _FieldKind.chipMulti:
-        return _buildChipMulti(field);
-      case _FieldKind.tagInput:
-        return _buildTagInput(field);
+  Widget _field(_Field f) {
+    if (f.key == 'restriction_note') {
+      return RestrictionNoteField(
+        controller: _controllers[f.key]!,
+        onChanged: (v) => widget.onChanged(f.key, v.trim().isEmpty ? null : v),
+      );
     }
-  }
-
-  Widget _buildTextSingle(_Field field) {
-    return TextField(
-      controller: _controllers[field.key],
-      decoration: InputDecoration(
-        labelText: field.label,
-        hintText: field.hint,
-        border: const OutlineInputBorder(),
-      ),
-      onChanged: (v) => widget.onChanged(field.key, v.isEmpty ? null : v),
-    );
-  }
-
-  Widget _buildTextMulti(_Field field) {
-    return TextField(
-      controller: _controllers[field.key],
-      decoration: InputDecoration(
-        labelText: field.label,
-        hintText: field.hint,
-        border: const OutlineInputBorder(),
-        alignLabelWithHint: true,
-      ),
-      maxLines: 5,
-      minLines: 3,
-      onChanged: (v) => widget.onChanged(field.key, v.isEmpty ? null : v),
-    );
-  }
-
-  Widget _buildDropdown(_Field field) {
-    final value = widget.typeData[field.key] as String?;
-    final options = field.options ?? const [];
-    return DropdownButtonFormField<String>(
-      value: options.contains(value) ? value : null,
-      decoration: InputDecoration(
-        labelText: field.label,
-        border: const OutlineInputBorder(),
-      ),
-      items: options.map((o) {
-        final display = o.replaceAll('_', ' ');
-        return DropdownMenuItem(
-          value: o,
-          child: Text(
-            '${display[0].toUpperCase()}${display.substring(1)}',
-            style: const TextStyle(fontSize: 14),
-          ),
-        );
-      }).toList(),
-      onChanged: (v) => widget.onChanged(field.key, v),
-    );
-  }
-
-  Widget _buildToggle(_Field field) {
-    final value = (widget.typeData[field.key] as bool?) ?? false;
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: SwitchListTile(
-        title: Text(field.label),
-        subtitle: field.hint != null ? Text(field.hint!, style: const TextStyle(fontSize: 12)) : null,
-        value: value,
-        activeColor: AppTheme.tertiary,
-        onChanged: (v) => widget.onChanged(field.key, v),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-      ),
-    );
-  }
-
-  Widget _buildChipMulti(_Field field) {
-    final selected = ((widget.typeData[field.key] as List?) ?? const []).cast<String>().toSet();
-    final options = field.options ?? const [];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          field.label,
-          style: TextStyle(
-            color: Colors.grey[700],
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
+    if (_hasVariants(f.key)) return _bilingual(f);
+    return switch (f.kind) {
+      _FieldKind.textSingle => CanopyTextField(
+          label: _cleanLabel(f.label),
+          hint: f.hint,
+          controller: _controllers[f.key],
+          onChanged: (v) => widget.onChanged(f.key, v.trim().isEmpty ? null : v),
         ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          children: options.map((o) {
-            final active = selected.contains(o);
-            return FilterChip(
-              label: Text(
-                '${o[0].toUpperCase()}${o.substring(1)}',
-                style: TextStyle(fontSize: 13, color: active ? Colors.white : AppTheme.darkGreen),
-              ),
-              selected: active,
-              selectedColor: AppTheme.tertiary,
-              checkmarkColor: Colors.white,
-              backgroundColor: HeritageTheme.heritageBackground,
-              side: BorderSide(color: active ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.22)),
-              onSelected: (v) {
-                final next = Set<String>.from(selected);
-                if (v) next.add(o); else next.remove(o);
-                widget.onChanged(field.key, next.toList());
-              },
-            );
-          }).toList(),
+      _FieldKind.textMulti => CanopyTextField(
+          label: _cleanLabel(f.label),
+          hint: f.hint,
+          controller: _controllers[f.key],
+          minLines: 3,
+          maxLines: 8,
+          onChanged: (v) => widget.onChanged(f.key, v.trim().isEmpty ? null : v),
         ),
-      ],
-    );
+      _FieldKind.dropdown => _dropdown(f),
+      _FieldKind.toggle => _yesNo(f),
+      _FieldKind.chipMulti => _chips(f),
+      _FieldKind.tagInput => _tags(f),
+    };
   }
 
-  Widget _buildTagInput(_Field field) {
-    final tags = ((widget.typeData[field.key] as List?) ?? const []).cast<String>();
-    final controller = _tagInputControllers[field.key]!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          field.label,
-          style: TextStyle(color: Colors.grey[700], fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        if (field.hint != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 2, bottom: 6),
-            child: Text(field.hint!, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-          )
-        else
-          const SizedBox(height: 8),
-        if (tags.isNotEmpty)
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: tags.map((t) => Chip(
-              label: Text(t, style: const TextStyle(fontSize: 13)),
-              backgroundColor: HeritageTheme.heritageCardBackground,
-              side: BorderSide(color: AppTheme.tertiary.withOpacity(0.4)),
-              deleteIcon: const Icon(Icons.close, size: 14),
-              onDeleted: () {
-                final next = List<String>.from(tags)..remove(t);
-                widget.onChanged(field.key, next);
-              },
-            )).toList(),
-          ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  hintText: 'Add item, press Enter',
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: AppTheme.tertiary.withOpacity(0.22)),
-                  ),
+  Widget _bilingual(_Field f) {
+    final p = context.canopy;
+    final keys = [f.key, '${f.key}_swahili', '${f.key}_english'].where(_controllers.containsKey).toList();
+    const names = ['Original', 'Kiswahili', 'English'];
+    final tab = (_langTab[f.key] ?? 0).clamp(0, keys.length - 1);
+    final key = keys[tab];
+    int words(String k) {
+      final t = _controllers[k]!.text.trim();
+      return t.isEmpty ? 0 : t.split(RegExp(r'\s+')).length;
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(_cleanLabel(f.label).replaceAll(RegExp(r'\s*\(.*\)'), ''), style: CanopyType.label.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s8),
+      CanopySegmented<int>(
+        options: [for (var i = 0; i < keys.length; i++) (i, '${names[i]} · ${words(keys[i])}')],
+        value: tab,
+        onChanged: (i) => setState(() => _langTab[f.key] = i),
+      ),
+      const SizedBox(height: CanopySpace.s8),
+      CanopyTextField(
+        key: ValueKey(key),
+        hint: tab == 0 ? (f.hint ?? 'As told, in the original language') : 'Translation (optional)',
+        controller: _controllers[key],
+        minLines: 5,
+        maxLines: 14,
+        onChanged: (v) {
+          widget.onChanged(key, v.trim().isEmpty ? null : v);
+          setState(() {});
+        },
+      ),
+    ]);
+  }
+
+  Widget _dropdown(_Field f) {
+    final value = widget.typeData[f.key] as String?;
+    final options = f.options ?? const <String>[];
+    return CanopyPickerField(
+      label: _cleanLabel(f.label),
+      value: value == null ? null : _humanise(value),
+      placeholder: 'Choose',
+      onTap: () async {
+        final picked = await showCanopySheet<String>(context, builder: (ctx) {
+          return CanopySheetBody(title: _cleanLabel(f.label), children: [
+            CanopyListGroup(children: [
+              for (final o in options)
+                CanopyListRow(
+                  title: _humanise(o),
+                  chevron: false,
+                  trailing: o == value ? Icon(Icons.check, color: ctx.canopy.ink) : null,
+                  onTap: () => Navigator.pop(ctx, o),
                 ),
-                onSubmitted: (v) {
-                  final trimmed = v.trim();
-                  if (trimmed.isNotEmpty && !tags.contains(trimmed)) {
-                    widget.onChanged(field.key, [...tags, trimmed]);
-                  }
-                  controller.clear();
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(Icons.add_circle_outline, color: AppTheme.tertiary),
-              onPressed: () {
-                final trimmed = controller.text.trim();
-                if (trimmed.isNotEmpty && !tags.contains(trimmed)) {
-                  widget.onChanged(field.key, [...tags, trimmed]);
-                }
-                controller.clear();
-              },
-            ),
-          ],
-        ),
-      ],
+            ]),
+          ]);
+        });
+        if (picked != null) widget.onChanged(f.key, picked);
+      },
     );
+  }
+
+  Widget _yesNo(_Field f) {
+    final p = context.canopy;
+    final v = widget.typeData[f.key];
+    final current = v == true ? 1 : (v == false ? 0 : 2);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text(_cleanLabel(f.label), style: CanopyType.label.copyWith(color: p.ink)),
+      if (f.hint != null) Text(f.hint!, style: CanopyType.caption.copyWith(color: p.inkMuted)),
+      const SizedBox(height: CanopySpace.s8),
+      CanopySegmented<int>(
+        options: const [(1, 'Yes'), (0, 'No'), (2, 'Unsure')],
+        value: current,
+        onChanged: (i) => widget.onChanged(f.key, i == 2 ? null : i == 1),
+      ),
+    ]);
+  }
+
+  Widget _chips(_Field f) {
+    final p = context.canopy;
+    final selected = ((widget.typeData[f.key] as List?) ?? const []).cast<String>().toSet();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(_cleanLabel(f.label), style: CanopyType.label.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s8),
+      Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s8, children: [
+        for (final o in f.options ?? const <String>[])
+          CanopyFilterChip(
+            label: _humanise(o),
+            selected: selected.contains(o),
+            onTap: () {
+              final next = {...selected};
+              if (!next.remove(o)) next.add(o);
+              widget.onChanged(f.key, next.toList());
+            },
+          ),
+      ]),
+    ]);
+  }
+
+  Widget _tags(_Field f) {
+    final p = context.canopy;
+    final tags = ((widget.typeData[f.key] as List?) ?? const []).cast<String>();
+    final c = _tagInputs[f.key]!;
+    void add() {
+      final t = c.text.trim();
+      if (t.isNotEmpty && !tags.contains(t)) widget.onChanged(f.key, [...tags, t]);
+      c.clear();
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(_cleanLabel(f.label), style: CanopyType.label.copyWith(color: p.ink)),
+      if (f.hint != null) Text(f.hint!, style: CanopyType.caption.copyWith(color: p.inkMuted)),
+      if (tags.isNotEmpty) ...[
+        const SizedBox(height: CanopySpace.s8),
+        Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s8, children: [
+          for (final t in tags) CanopyRemovableChip(label: t, onRemove: () => widget.onChanged(f.key, [...tags]..remove(t))),
+        ]),
+      ],
+      const SizedBox(height: CanopySpace.s8),
+      Row(children: [
+        Expanded(child: CanopyTextField(hint: 'Add one, then Enter', controller: c, onSubmitted: (_) => add())),
+        const SizedBox(width: CanopySpace.s8),
+        CanopyIconButton(icon: Icons.add, tooltip: 'Add', onPressed: add),
+      ]),
+    ]);
   }
 }

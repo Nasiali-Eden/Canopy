@@ -53,11 +53,13 @@ class ProfileService {
     required String name,
     required String location,
     String? phone,
+    String? photoUrl,
   }) {
     return _db.collection('Users').doc(userId).set({
       'name': name,
       'location': location,
       if (phone != null) 'phone': phone,
+      if (photoUrl != null) 'photoUrl': photoUrl,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }

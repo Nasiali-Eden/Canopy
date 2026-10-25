@@ -15,8 +15,14 @@
 
 import 'package:flutter/material.dart';
 
-/// Card silhouettes used on the Country category hub (Phase 2.3).
-enum HeritageCardShape { poster, tile, banner, row }
+import '../../../theme/tokens/heritage_tokens.dart';
+
+// Card silhouettes and category colours come from the design tokens
+// (lib/theme/tokens/heritage_tokens.dart) — Ceremonies madder rose, Knowledge
+// Holders bone (not recognition gold). Re-exported so existing imports work.
+export '../../../theme/tokens/heritage_tokens.dart'
+    show HeritageCardShape, HeritageCategory, HeritagePalette, HeritageCardSize,
+        HeritageMotion, HeritageRestriction, HeritageGlass;
 
 @immutable
 class HeritageContentType {
@@ -24,17 +30,19 @@ class HeritageContentType {
   final String label; // human display
   final String plural; // used in empty states ("No Food entries yet")
   final IconData icon;
-  final Color accent;
-  final HeritageCardShape shape;
+  final HeritageCategory category;
 
   const HeritageContentType({
     required this.key,
     required this.label,
     required this.plural,
     required this.icon,
-    required this.accent,
-    required this.shape,
+    required this.category,
   });
+
+  /// Fill colour (marker dots, fallback gradient start).
+  Color get accent => category.fill;
+  HeritageCardShape get shape => category.shape;
 }
 
 class HeritageContentTypes {
@@ -47,96 +55,84 @@ class HeritageContentTypes {
       label: 'Stories',
       plural: 'Stories',
       icon: Icons.auto_stories_outlined,
-      accent: Color(0xFFB87333), // copper-amber
-      shape: HeritageCardShape.poster,
+      category: HeritageCategory.stories,
     ),
     HeritageContentType(
       key: 'food_tradition',
       label: 'Food',
       plural: 'Food',
       icon: Icons.restaurant_outlined,
-      accent: Color(0xFFD4873A), // warm orange
-      shape: HeritageCardShape.tile,
+      category: HeritageCategory.food,
     ),
     HeritageContentType(
       key: 'ingredient',
       label: 'Ingredients',
       plural: 'Ingredients',
       icon: Icons.eco_outlined,
-      accent: Color(0xFF6B8C3A), // olive
-      shape: HeritageCardShape.tile,
+      category: HeritageCategory.ingredients,
     ),
     HeritageContentType(
       key: 'music_tradition',
       label: 'Music',
       plural: 'Music',
       icon: Icons.music_note_outlined,
-      accent: Color(0xFF3B8A7A), // teal
-      shape: HeritageCardShape.tile,
+      category: HeritageCategory.music,
     ),
     HeritageContentType(
       key: 'instrument',
       label: 'Instruments',
       plural: 'Instruments',
       icon: Icons.piano_outlined,
-      accent: Color(0xFF2E7D74), // deep teal
-      shape: HeritageCardShape.tile,
+      category: HeritageCategory.instruments,
     ),
     HeritageContentType(
       key: 'ceremony',
       label: 'Ceremonies',
       plural: 'Ceremonies',
       icon: Icons.celebration_outlined,
-      accent: Color(0xFFC0573A), // terracotta
-      shape: HeritageCardShape.banner,
+      category: HeritageCategory.ceremonies,
     ),
     HeritageContentType(
       key: 'craft_technique',
       label: 'Crafts',
       plural: 'Crafts',
       icon: Icons.handyman_outlined,
-      accent: Color(0xFF2D7A4F), // green
-      shape: HeritageCardShape.tile,
+      category: HeritageCategory.crafts,
     ),
     HeritageContentType(
       key: 'clothing_tradition',
       label: 'Dress',
       plural: 'Dress',
       icon: Icons.checkroom_outlined,
-      accent: Color(0xFF8E5BA6), // plum
-      shape: HeritageCardShape.tile,
+      category: HeritageCategory.dress,
     ),
     HeritageContentType(
       key: 'language_entry',
       label: 'Language',
       plural: 'Language',
       icon: Icons.translate_outlined,
-      accent: Color(0xFF3F7CAC), // blue
-      shape: HeritageCardShape.row,
+      category: HeritageCategory.language,
     ),
     HeritageContentType(
       key: 'place_knowledge',
       label: 'Places',
       plural: 'Places',
       icon: Icons.place_outlined,
-      accent: Color(0xFF7A9E6B), // sage
-      shape: HeritageCardShape.banner,
+      category: HeritageCategory.places,
     ),
     HeritageContentType(
       key: 'medicine_knowledge',
       label: 'Medicine',
       plural: 'Medicine',
       icon: Icons.healing_outlined,
-      accent: Color(0xFF1F6F5C), // deep green
-      shape: HeritageCardShape.tile,
+      category: HeritageCategory.medicine,
     ),
     HeritageContentType(
       key: 'person',
       label: 'Knowledge Holders',
       plural: 'Knowledge Holders',
-      icon: Icons.person_pin_outlined,
-      accent: Color(0xFFC4A961), // gold
-      shape: HeritageCardShape.tile,
+      icon: Icons.person_outline,
+      category: HeritageCategory.knowledgeHolders,
     ),
   ];
 
@@ -149,5 +145,5 @@ class HeritageContentTypes {
   static String labelFor(String key) => _byKey[key]?.label ?? key;
 
   /// Accent colour used for the dedicated "Communities" card / surfaces.
-  static const Color communitiesAccent = Color(0xFF5C6BC0);
+  static const Color communitiesAccent = Color(0xFF6E7F76); // HeritageCategory.communities.fill
 }

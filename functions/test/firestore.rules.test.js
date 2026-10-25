@@ -94,11 +94,10 @@ test("an org member can create a handoff for their own org, but not mark it veri
   await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
     await adminCtx.firestore().collection("Users").doc("bob").set({ orgId: "org-a" });
   });
-  const bob = testEnv.authenticatedContext("bob");
+  const bobDb = testEnv.authenticatedContext("bob").firestore();
 
   await assertSucceeds(
-    bob
-      .firestore()
+    bobDb
       .collection("organisations")
       .doc("org-a")
       .collection("collectionHandoffs")
@@ -107,8 +106,7 @@ test("an org member can create a handoff for their own org, but not mark it veri
   );
 
   await assertFails(
-    bob
-      .firestore()
+    bobDb
       .collection("organisations")
       .doc("org-a")
       .collection("collectionHandoffs")
@@ -135,12 +133,12 @@ test("a signed-out client cannot reserve a username", async () => {
 });
 
 test("a signed-in user can only reserve a username for themselves, not someone else", async () => {
-  const alice = testEnv.authenticatedContext("alice");
+  const aliceDb = testEnv.authenticatedContext("alice").firestore();
   await assertFails(
-    alice.firestore().collection("usernames").doc("newname").set({ uid: "mallory" })
+    aliceDb.collection("usernames").doc("newname").set({ uid: "mallory" })
   );
   await assertSucceeds(
-    alice.firestore().collection("usernames").doc("newname").set({ uid: "alice" })
+    aliceDb.collection("usernames").doc("newname").set({ uid: "alice" })
   );
 });
 

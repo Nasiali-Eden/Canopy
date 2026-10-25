@@ -1,14 +1,28 @@
 import 'package:flutter/material.dart';
 
-import 'canopy_ui.dart';
+import 'canopy_tokens.dart';
+import '../../theme/canopy_tokens.dart' show CanopyPalette;
 
+// Re-exported so every file that already imports app_theme.dart gets the
+// design tokens (CanopyColor / CanopyRadius / CanopySpace / CanopyIcon /
+// CanopyShadow / CanopyType / CanopyTouch) with no new import. See
+// canopy_tokens.dart for the rules on using them.
+export 'canopy_tokens.dart';
+
+/// Brand colours and the assembled [ThemeData] for both brightnesses.
+///
+/// The colour constants below are kept as the names 127 files already import,
+/// but they are now aliases of [CanopyColor] rather than independent
+/// definitions — there is exactly one place a brand colour is declared.
+/// Prefer the semantic [CanopyColor] names in new code: `CanopyColor.ink` says
+/// what it's for, `AppTheme.darkGreen` only says what it looks like.
 class AppTheme {
   // Extracted from Canopy logo
-  static const Color primary = Color(0xFF2D7A4F); // Forest green
-  static const Color secondary = Color(0xFF4A9B6E); // Medium green
-  static const Color accent = Color(0xFF3B8A7A); // Teal
-  static const Color tertiary = Color(0xFFC4A961); // Gold
-  static const Color lightGreen = Color(0xFF86BC9E); // Light green
+  static const Color primary = CanopyColor.primary; // Forest green
+  static const Color secondary = CanopyColor.primaryDim; // Medium green
+  static const Color accent = CanopyColor.accent; // Teal
+  static const Color tertiary = CanopyColor.gold; // Gold
+  static const Color lightGreen = CanopyColor.primarySoft; // Light green
   static const Color darkGreen = Color(0xFF1F5539); // Dark forest green
 
   static ThemeData light() {
@@ -27,6 +41,7 @@ class AppTheme {
       scaffoldBackgroundColor: Colors.white,
       canvasColor: Colors.white,
       fontFamily: 'Roboto',
+      extensions: const [CanopyPalette.light],
       textTheme: _textTheme(Brightness.light),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.white,
@@ -154,10 +169,99 @@ class AppTheme {
         elevation: 8,
       ),
     );
-    return CanopyUi.theme(base);
+    return _applyStructure(base, Brightness.light);
+  }
+
+  /// The structural half of the theme — surfaces, radii, borders — applied to
+  /// BOTH brightnesses from the same tokens.
+  ///
+  /// This used to be `CanopyUi.theme(base)`, called only at the end of
+  /// [light]. That meant light mode silently got CanopyUi's surfaces, radii
+  /// and outlined cards (overriding what [light] had just set two lines
+  /// earlier, including `scaffoldBackgroundColor`), while [dark] never passed
+  /// through it at all — so the two brightnesses disagreed about what a card
+  /// even is. Both now run through here.
+  static ThemeData _applyStructure(ThemeData base, Brightness brightness) {
+    final canvas = CanopyColor.canvasOf(brightness);
+    final surface = CanopyColor.surfaceOf(brightness);
+    final ink = CanopyColor.inkOf(brightness);
+    final outline = CanopyColor.outlineOf(brightness);
+
+    return base.copyWith(
+      scaffoldBackgroundColor: canvas,
+      canvasColor: canvas,
+      dividerColor: outline,
+      appBarTheme: base.appBarTheme.copyWith(
+        backgroundColor: canvas,
+        foregroundColor: ink,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
+      // Outlined, not shadowed. See CanopyShadow's doc comment.
+      cardTheme: CardThemeData(
+        color: surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: CanopyRadius.all(CanopyRadius.md),
+          side: BorderSide(color: outline),
+        ),
+      ),
+      inputDecorationTheme: base.inputDecorationTheme.copyWith(
+        filled: true,
+        fillColor: surface,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: CanopySpace.lg,
+          vertical: CanopySpace.md + 2,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: CanopyRadius.all(CanopyRadius.sm),
+          borderSide: BorderSide(color: outline),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: CanopyRadius.all(CanopyRadius.sm),
+          borderSide: BorderSide(color: outline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: CanopyRadius.all(CanopyRadius.sm),
+          borderSide: const BorderSide(color: CanopyColor.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: CanopyRadius.all(CanopyRadius.sm),
+          borderSide: const BorderSide(color: CanopyColor.danger),
+        ),
+      ),
+      chipTheme: base.chipTheme.copyWith(
+        shape: RoundedRectangleBorder(
+          borderRadius: CanopyRadius.all(CanopyRadius.xs),
+        ),
+      ),
+      dialogTheme: base.dialogTheme.copyWith(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: CanopyRadius.all(CanopyRadius.md),
+        ),
+      ),
+      bottomSheetTheme: base.bottomSheetTheme.copyWith(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: CanopyRadius.top(CanopyRadius.lg),
+        ),
+      ),
+      dividerTheme: DividerThemeData(
+        color: outline,
+        thickness: 1,
+        space: CanopySpace.lg,
+      ),
+    );
   }
 
   static ThemeData dark() {
+    // Ends with the same _applyStructure pass as light() — see its comment.
     final colorScheme = ColorScheme.fromSeed(
       seedColor: primary,
       brightness: Brightness.dark,
@@ -167,12 +271,13 @@ class AppTheme {
       surface: const Color(0xFF0A1F14),
     );
 
-    return ThemeData(
+    final base = ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: const Color(0xFF0A1F14), // Deep forest green
       canvasColor: const Color(0xFF0A1F14),
       fontFamily: 'Roboto',
+      extensions: const [CanopyPalette.dark],
       textTheme: _textTheme(Brightness.dark),
       appBarTheme: AppBarTheme(
         backgroundColor: Color(0xFF0F2A1A),
@@ -296,6 +401,7 @@ class AppTheme {
         elevation: 8,
       ),
     );
+    return _applyStructure(base, Brightness.dark);
   }
 
   static TextTheme _textTheme(Brightness brightness) {

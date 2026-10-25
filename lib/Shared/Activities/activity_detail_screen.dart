@@ -1,643 +1,445 @@
-import 'package:flutter/material.dart';
+// lib/Shared/Activities/activity_detail_screen.dart
+//
+// Activity detail (DESIGN_HANDOFF.md §3) — the ONE detail screen. Merges the
+// old activity_detail.dart (image gallery, participant progress, legacy join)
+// and activity_detail_screen.dart (registration flow) into a single screen on
+// the registrations model:
+//
+//   gallery (16:9, swipe, designed fallback) → labels (status · type · points)
+//   → title → organiser row (opens the org page) → facts group (when ·
+//   duration · where · capacity) → about → tags → sticky action:
+//     signed out  → Sign in to register
+//     registered  → "You're going" + Scan QR to check in (+ quiet cancel)
+//     ended/cancelled/full → status line, no primary
+//     otherwise   → Register
+//
+// [activity] is optional: the screen streams activities/{id} and uses the
+// passed map only until the first snapshot (e.g. straight after creating).
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../Community/Events/log_work_event_screen.dart' show QrScanScreen;
 import '../../Models/user.dart';
+import '../../Organization/Explorer/org_view_screen.dart';
 import '../../Services/Community/community_service.dart';
-import '../theme/app_theme.dart';
-import 'activity_card.dart'
-    show
-        ActivityCapacityBar,
-        ActivityTypeChip,
-        ActivityStatusChip,
-        formatActivityFullDate,
-        kTypeGradients,
-        kTypeIcons;
+import '../../theme/canopy_components.dart';
+import 'activity_card.dart';
 import 'activity_registration_sheet.dart';
 
-class ActivityDetailScreen extends StatelessWidget {
+class ActivityDetailScreen extends StatefulWidget {
   final String activityId;
-  final Map<String, dynamic> activity;
+  final Map<String, dynamic>? activity;
 
-  const ActivityDetailScreen({
-    super.key,
-    required this.activityId,
-    required this.activity,
-  });
+  const ActivityDetailScreen({super.key, required this.activityId, this.activity});
+
+  @override
+  State<ActivityDetailScreen> createState() => _ActivityDetailScreenState();
+}
+
+class _ActivityDetailScreenState extends State<ActivityDetailScreen> {
+  late Stream<DocumentSnapshot<Map<String, dynamic>>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  void _subscribe() => _stream = FirebaseFirestore.instance
+      .collection('activities')
+      .doc(widget.activityId)
+      .snapshots();
 
   @override
   Widget build(BuildContext context) {
-    final type = activity['type'] as String? ?? 'other';
-    final status = activity['status'] as String? ?? 'open';
-    final title = activity['title'] as String? ?? '';
-    final description = activity['description'] as String? ?? '';
-    final coverImageUrl = activity['coverImageUrl'] as String?;
-    final scheduledAt = activity['scheduledAt'] as Timestamp?;
-    final durationMinutes = activity['durationMinutes'] as int? ?? 0;
-    final locationName = activity['locationName'] as String? ??
-        _flatLocation(activity['location']);
-    final registeredCount = activity['registeredCount'] as int? ?? 0;
-    final maxParticipants = activity['maxParticipants'] as int? ?? 0;
-    final organizerName = activity['organizerName'] as String? ?? '';
-    final organizerEmail = activity['organizerEmail'] as String? ?? '';
-    final tags = (activity['tags'] as List<dynamic>?)?.cast<String>() ?? [];
-
-    final gradients = kTypeGradients[type] ?? kTypeGradients['other']!;
-    final icon = kTypeIcons[type] ?? Icons.event_outlined;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F3EE),
-      body: CustomScrollView(
-        slivers: [
-          // ── Cover / AppBar ──────────────────────────────────────────────
-          SliverAppBar(
-            expandedHeight: 220,
-            pinned: true,
-            backgroundColor: gradients.first,
-            foregroundColor: Colors.white,
-            flexibleSpace: FlexibleSpaceBar(
-              background: coverImageUrl != null
-                  ? Image.network(
-                      coverImageUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          _GradientCover(gradients: gradients, icon: icon),
-                      loadingBuilder: (_, child, prog) =>
-                          prog == null
-                              ? child
-                              : _GradientCover(
-                                  gradients: gradients, icon: icon),
-                    )
-                  : _GradientCover(gradients: gradients, icon: icon),
-              collapseMode: CollapseMode.parallax,
-            ),
-          ),
-
-          // ── Body ────────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Title card ───────────────────────────────────────────
-                _Card(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          ActivityTypeChip(type: type),
-                          const SizedBox(width: 8),
-                          ActivityStatusChip(status: status),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        title,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.darkGreen,
-                              height: 1.3,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ── Organiser ────────────────────────────────────────────
-                _Card(
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: AppTheme.primary.withOpacity(0.15),
-                        child: Text(
-                          organizerName.isNotEmpty
-                              ? organizerName[0].toUpperCase()
-                              : 'O',
-                          style: const TextStyle(
-                              fontSize: 16,
-                              color: AppTheme.primary,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              organizerName,
-                              style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.darkGreen),
-                            ),
-                            if (organizerEmail.isNotEmpty)
-                              Text(
-                                organizerEmail,
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppTheme.darkGreen.withOpacity(0.55)),
-                              ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.person_outline,
-                          color: AppTheme.accent.withOpacity(0.5), size: 18),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ── Details ──────────────────────────────────────────────
-                _Card(
-                  child: Column(
-                    children: [
-                      if (scheduledAt != null)
-                        _DetailRow(
-                          icon: Icons.calendar_today_outlined,
-                          label: 'Date & Time',
-                          value: formatActivityFullDate(scheduledAt),
-                        ),
-                      if (durationMinutes > 0) ...[
-                        const _Divider(),
-                        _DetailRow(
-                          icon: Icons.timer_outlined,
-                          label: 'Duration',
-                          value: '$durationMinutes minutes',
-                        ),
-                      ],
-                      if (locationName.isNotEmpty) ...[
-                        const _Divider(),
-                        _DetailRow(
-                          icon: Icons.location_on_outlined,
-                          label: 'Location',
-                          value: locationName,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ── Capacity ─────────────────────────────────────────────
-                _Card(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.group_outlined,
-                              size: 16, color: AppTheme.accent),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Participants',
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.darkGreen),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      ActivityCapacityBar(
-                        registeredCount: registeredCount,
-                        maxParticipants: maxParticipants,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // ── Description ──────────────────────────────────────────
-                if (description.isNotEmpty)
-                  _Card(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'About this activity',
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.darkGreen),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          description,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppTheme.darkGreen.withOpacity(0.8),
-                            height: 1.55,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // ── Tags ─────────────────────────────────────────────────
-                if (tags.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  _Card(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: tags
-                          .map((tag) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.lightGreen.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                      color: AppTheme.lightGreen.withOpacity(0.3)),
-                                ),
-                                child: Text(tag,
-                                    style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppTheme.darkGreen,
-                                        fontWeight: FontWeight.w500)),
-                              ))
-                          .toList(),
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 24),
-
-                // ── Register button ──────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-                  child: _DetailRegisterButton(
-                    activityId: activityId,
-                    activityData: activity,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DETAIL REGISTER BUTTON
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _DetailRegisterButton extends StatefulWidget {
-  final String activityId;
-  final Map<String, dynamic> activityData;
-
-  const _DetailRegisterButton({
-    required this.activityId,
-    required this.activityData,
-  });
-
-  @override
-  State<_DetailRegisterButton> createState() => _DetailRegisterButtonState();
-}
-
-class _DetailRegisterButtonState extends State<_DetailRegisterButton> {
-  bool _cancelling = false;
-
-  Future<void> _onRegister(String userId) async {
-    // Lazy-fetch user profile at tap time — F_User only provides uid
-    final profile =
-        await CommunityService().getUserProfile(userId: userId);
-    if (!mounted) return;
-    final userEmail = profile?['email'] as String? ?? '';
-    final userName = profile?['displayName'] as String? ?? '';
-    final userAvatarUrl = profile?['avatarUrl'] as String?;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => ActivityRegistrationSheet(
-        activityId: widget.activityId,
-        activity: widget.activityData,
-        userId: userId,
-        userEmail: userEmail,
-        userName: userName,
-        userAvatarUrl: userAvatarUrl,
-      ),
-    );
-  }
-
-  Future<void> _cancelRegistration(
-      String userId, String registrationId) async {
-    setState(() => _cancelling = true);
-    try {
-      final db = FirebaseFirestore.instance;
-      // Firestore: transaction — cancel registration + decrement registeredCount
-      await db.runTransaction((txn) async {
-        final actRef =
-            db.collection('activities').doc(widget.activityId);
-        final regRef =
-            db.collection('activity_registrations').doc(registrationId);
-        txn.update(regRef, {'status': 'cancelled'});
-        txn.update(actRef, {
-          'registeredCount': FieldValue.increment(-1),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registration cancelled.')),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to cancel. Try again.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _cancelling = false);
-    }
-  }
-
-  void _confirmCancel(
-      BuildContext context, String userId, String registrationId) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Cancel Registration?'),
-        content: Text(
-            'You will be removed from ${widget.activityData['title']}. The organiser may have noted your interest.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Keep')),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _cancelRegistration(userId, registrationId);
-            },
-            child: const Text('Cancel Registration',
-                style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = Provider.of<F_User?>(context);
-    if (user == null) return const SizedBox.shrink();
-
-    final activityStatus =
-        widget.activityData['status'] as String? ?? 'open';
-
-    return StreamBuilder<QuerySnapshot>(
-      // Firestore: activity_registrations — real-time registration status
-      stream: CommunityService().getUserRegistrationStream(
-        activityId: widget.activityId,
-        userId: user.uid,
-      ),
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _stream,
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-              height: 50,
-              child: Center(
-                  child: CircularProgressIndicator(
-                      color: AppTheme.primary, strokeWidth: 2)));
-        }
-
-        final docs = snap.data?.docs ?? [];
-        final isRegistered = docs.isNotEmpty &&
-            (docs.first.data() as Map)['status'] == 'registered';
-        final registrationId =
-            docs.isNotEmpty ? docs.first.id : null;
-
-        if (isRegistered) {
-          return Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.green.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle,
-                        color: Colors.green.shade600, size: 20),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        "You're registered for this activity!",
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
+        final data = snap.data?.data() ?? widget.activity;
+        if (data == null) {
+          if (snap.hasError) {
+            return CanopyScaffold(
+              appBar: canopyAppBar(context),
+              body: CanopyErrorState(
+                  title: "Couldn't load this activity",
+                  onRetry: () => setState(_subscribe)),
+            );
+          }
+          if (snap.hasData && !snap.data!.exists) {
+            return CanopyScaffold(
+              appBar: canopyAppBar(context),
+              body: const CanopyEmptyState(
+                icon: Icons.event_busy_outlined,
+                title: 'This activity was removed',
+                line: 'Its organiser took it down.',
               ),
-              const SizedBox(height: 10),
-              if (_cancelling)
-                const SizedBox(
-                    height: 44,
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: AppTheme.primary, strokeWidth: 2)))
-              else
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      if (registrationId != null) {
-                        _confirmCancel(
-                            context, user.uid, registrationId);
-                      }
-                    },
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 44),
-                      side: const BorderSide(color: AppTheme.primary),
-                    ),
-                    child: const Text('Cancel Registration',
-                        style: TextStyle(color: AppTheme.primary)),
-                  ),
-                ),
-            ],
-          );
-        }
-
-        if (activityStatus == 'full') {
-          return Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.orange.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline,
-                    color: Colors.orange.shade600, size: 20),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'This activity is full.',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                ),
+            );
+          }
+          return CanopyScaffold(
+            appBar: canopyAppBar(context),
+            body: ListView(
+              padding: const EdgeInsets.all(CanopySpace.gutter),
+              children: const [
+                CanopyCardSkeleton(),
+                SizedBox(height: CanopySpace.s16),
+                CanopyListSkeleton(rows: 3),
               ],
             ),
           );
         }
-
-        return SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: FilledButton.icon(
-            onPressed: () => _onRegister(user.uid),
-            icon: const Icon(Icons.how_to_reg_outlined,
-                color: Colors.white, size: 18),
-            label: const Text('Register for this Activity',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15)),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-          ),
-        );
+        return _Detail(activityId: widget.activityId, a: data);
       },
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-WIDGETS
-// ─────────────────────────────────────────────────────────────────────────────
+class _Detail extends StatelessWidget {
+  final String activityId;
+  final Map<String, dynamic> a;
+  const _Detail({required this.activityId, required this.a});
 
-class _GradientCover extends StatelessWidget {
-  final List<Color> gradients;
-  final IconData icon;
-
-  const _GradientCover({required this.gradients, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradients,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Center(
-        child: Icon(icon, size: 60, color: Colors.white.withOpacity(0.55)),
-      ),
-    );
+  List<String> get _images {
+    final raw = (a['images'] as List?)?.whereType<String>().where((s) => s.isNotEmpty).toList() ??
+        <String>[];
+    final cover = a['coverImageUrl'] as String?;
+    if (raw.isEmpty && cover != null && cover.isNotEmpty) return [cover];
+    return raw;
   }
-}
-
-class _Card extends StatelessWidget {
-  final Widget child;
-
-  const _Card({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: AppTheme.primary.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
+    final p = context.canopy;
+    final type = a['type'] as String? ?? 'other';
+    final title = (a['title'] as String?)?.trim() ?? '';
+    final description = (a['description'] as String?)?.trim() ?? '';
+    final at = a['scheduledAt'] as Timestamp?;
+    final minutes = a['durationMinutes'] as int? ?? 0;
+    final place = activityLocationName(a);
+    final org = (a['organizerName'] as String?)?.trim() ?? '';
+    final orgId = a['orgId'] as String?;
+    final points = (a['pointsPerCheckin'] as num?)?.toInt();
+    final tags = (a['tags'] as List?)?.whereType<String>().toList() ?? const [];
+    final (statusText, statusColor, live) = activityStatus(p, a);
+
+    return CanopyScaffold(
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: MediaQuery.sizeOf(context).width * 9 / 16,
+            backgroundColor: p.canvas,
+            surfaceTintColor: Colors.transparent,
+            automaticallyImplyLeading: false,
+            leading: Padding(
+              padding: const EdgeInsets.only(left: CanopySpace.s4),
+              child: CanopyIconButton(
+                icon: Icons.arrow_back,
+                tooltip: 'Back',
+                onImage: true,
+                onPressed: () => Navigator.maybePop(context),
+              ),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.pin,
+              background: _Gallery(images: _images),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(CanopySpace.gutter,
+                CanopySpace.s20, CanopySpace.gutter, CanopySpace.s32),
+            sliver: SliverList.list(
+              children: [
+                LabelRow(children: [
+                  StatusLabel(statusText, color: statusColor, live: live),
+                  StatusLabel(activityTypeLabel(type), color: p.inkMuted),
+                  if (points != null && points > 0) PointsLabel(points),
+                ]),
+                const SizedBox(height: CanopySpace.s8),
+                Semantics(
+                  header: true,
+                  child: Text(title,
+                      style: CanopyType.display.copyWith(color: p.ink)),
+                ),
+                const SizedBox(height: CanopySpace.s16),
+                if (org.isNotEmpty) ...[
+                  CanopyOrgChip(
+                    name: org,
+                    logoUrl: a['orgLogoUrl'] as String?,
+                    onTap: orgId == null ? null : () => _openOrg(context, orgId),
+                  ),
+                  const SizedBox(height: CanopySpace.s16),
+                ],
+                CanopyListGroup(children: [
+                  if (at != null)
+                    CanopyListRow(
+                      icon: Icons.calendar_today_outlined,
+                      title: formatActivityFullDate(at),
+                      subtitle: minutes > 0
+                          ? '${minutes >= 60 ? '${minutes ~/ 60} h ' : ''}${minutes % 60 > 0 ? '${minutes % 60} min' : ''}'.trim()
+                          : 'When',
+                    ),
+                  if (place.isNotEmpty)
+                    CanopyListRow(
+                      icon: Icons.location_on_outlined,
+                      title: place,
+                      subtitle: 'Meeting point',
+                    ),
+                  CanopyListRow(
+                    icon: Icons.group_outlined,
+                    title: activityGoingLabel(a),
+                    below: ActivityCapacityBar(
+                      registeredCount: a['registeredCount'] as int? ?? 0,
+                      maxParticipants: a['maxParticipants'] as int? ?? 0,
+                    ),
+                  ),
+                ]),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: CanopySpace.section),
+                  const CanopySectionHeader(
+                      title: 'About', padding: EdgeInsets.zero),
+                  Text(description,
+                      style: CanopyType.body.copyWith(color: p.ink, height: 22 / 14)),
+                ],
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(height: CanopySpace.s16),
+                  Text(tags.join(' · '),
+                      style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
-      child: child,
+      sticky: _ActionBar(activityId: activityId, a: a),
     );
+  }
+
+  Future<void> _openOrg(BuildContext context, String orgId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get();
+      if (!context.mounted || !doc.exists) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => OrgViewScreen(orgId: orgId, orgData: doc.data()!)),
+      );
+    } catch (_) {
+      if (context.mounted) {
+        showCanopySnack(context, "Couldn't open the organisation.", error: true);
+      }
+    }
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
+class _Gallery extends StatefulWidget {
+  final List<String> images;
+  const _Gallery({required this.images});
 
-  const _DetailRow(
-      {required this.icon, required this.label, required this.value});
+  @override
+  State<_Gallery> createState() => _GalleryState();
+}
+
+class _GalleryState extends State<_Gallery> {
+  int _index = 0;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final p = context.canopy;
+    if (widget.images.length <= 1) {
+      return Stack(fit: StackFit.expand, children: [
+        CanopyImage(
+            url: widget.images.isEmpty ? null : widget.images.first,
+            fallbackIcon: Icons.eco_outlined),
+        _topScrim(p),
+      ]);
+    }
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Icon(icon, size: 16, color: AppTheme.accent),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: AppTheme.darkGreen.withOpacity(0.5),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2)),
-              const SizedBox(height: 2),
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppTheme.darkGreen)),
-            ],
+        PageView.builder(
+          itemCount: widget.images.length,
+          onPageChanged: (i) => setState(() => _index = i),
+          itemBuilder: (_, i) => CanopyImage(url: widget.images[i]),
+        ),
+        _topScrim(p),
+        Positioned(
+          right: CanopySpace.s12,
+          bottom: CanopySpace.s12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: CanopySpace.s8, vertical: 2),
+            decoration: BoxDecoration(
+              color: p.scrim,
+              borderRadius: BorderRadius.circular(CanopyRadius.pill),
+            ),
+            child: Text('${_index + 1} / ${widget.images.length}',
+                style: CanopyType.micro.copyWith(color: CanopyPalette.onHero)),
           ),
         ),
       ],
     );
   }
+
+  Widget _topScrim(CanopyPalette p) => IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.center,
+              colors: [p.scrim, p.scrim.withAlpha(0)],
+            ),
+          ),
+        ),
+      );
 }
 
-class _Divider extends StatelessWidget {
-  const _Divider();
+class _ActionBar extends StatefulWidget {
+  final String activityId;
+  final Map<String, dynamic> a;
+  const _ActionBar({required this.activityId, required this.a});
+
+  @override
+  State<_ActionBar> createState() => _ActionBarState();
+}
+
+class _ActionBarState extends State<_ActionBar> {
+  bool _busy = false;
+
+  Future<void> _register(String userId) async {
+    setState(() => _busy = true);
+    final profile = await CommunityService().getUserProfile(userId: userId);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    await showCanopySheet(
+      context,
+      builder: (_) => ActivityRegistrationSheet(
+        activityId: widget.activityId,
+        activity: widget.a,
+        userId: userId,
+        userEmail: profile?['email'] as String? ?? '',
+        userName: (profile?['displayName'] ?? profile?['name']) as String? ?? '',
+        userAvatarUrl: profile?['avatarUrl'] as String?,
+      ),
+    );
+  }
+
+  Future<void> _cancel(String registrationId) async {
+    final ok = await showCanopyConfirm(
+      context,
+      title: 'Cancel your registration?',
+      message:
+          "You'll be removed from ${widget.a['title'] ?? 'this activity'} and your spot opens up for someone else.",
+      confirmLabel: 'Cancel registration',
+      cancelLabel: 'Keep my spot',
+      danger: true,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      await db.runTransaction((txn) async {
+        txn.update(db.collection('activity_registrations').doc(registrationId),
+            {'status': 'cancelled'});
+        txn.update(db.collection('activities').doc(widget.activityId), {
+          'registeredCount': FieldValue.increment(-1),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+      if (mounted) showCanopySnack(context, 'Registration cancelled.');
+    } catch (_) {
+      if (mounted) {
+        showCanopySnack(context, "Couldn't cancel. Try again.", error: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Divider(
-        height: 20,
-        color: AppTheme.lightGreen.withOpacity(0.2));
-  }
-}
+    final p = context.canopy;
+    final user = Provider.of<F_User?>(context);
+    if (user == null) {
+      return StickyActionBar(children: [
+        CanopyButton(
+          label: 'Sign in to register',
+          expand: true,
+          onPressed: () => Navigator.pushNamed(context, '/welcome'),
+        ),
+      ]);
+    }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+    return StreamBuilder<QuerySnapshot>(
+      stream: CommunityService().getUserRegistrationStream(
+          activityId: widget.activityId, userId: user.uid),
+      builder: (context, snap) {
+        final docs = snap.data?.docs ?? const [];
+        final registered = docs.isNotEmpty &&
+            (docs.first.data() as Map)['status'] == 'registered';
+        final ended = CommunityService.hasEnded(widget.a) ||
+            widget.a['status'] == 'completed';
+        final cancelled = widget.a['status'] == 'cancelled';
+        final full = widget.a['status'] == 'full';
 
-String _flatLocation(dynamic location) {
-  if (location is Map) {
-    final area = location['area'] as String? ?? '';
-    final city = location['city'] as String? ?? '';
-    if (area.isNotEmpty && city.isNotEmpty) return '$area, $city';
-    return area.isNotEmpty ? area : city;
+        if (!snap.hasData) {
+          return const StickyActionBar(children: [
+            CanopySkeleton(height: CanopySpace.minTouch),
+          ]);
+        }
+        if (registered && !ended && !cancelled) {
+          return StickyActionBar(children: [
+            Row(
+              children: [
+                Icon(Icons.check_circle_outline,
+                    size: CanopyIconSize.s18, color: p.success),
+                const SizedBox(width: CanopySpace.s8),
+                Expanded(
+                  child: Text("You're going",
+                      style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+                ),
+                CanopyButton.quietDanger(
+                  label: 'Cancel',
+                  size: CanopyButtonSize.compact,
+                  loading: _busy,
+                  onPressed: () => _cancel(docs.first.id),
+                ),
+              ],
+            ),
+            CanopyButton(
+              label: 'Scan QR to check in',
+              expand: true,
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const QrScanScreen())),
+            ),
+          ]);
+        }
+        final line = cancelled
+            ? 'This activity was cancelled by its organiser.'
+            : ended
+                ? 'This activity has ended.'
+                : full
+                    ? "This activity is full. Check back — spots open when people cancel."
+                    : null;
+        if (line != null) {
+          return StickyActionBar(children: [
+            Text(line,
+                textAlign: TextAlign.center,
+                style: CanopyType.body.copyWith(color: p.inkMuted)),
+          ]);
+        }
+        return StickyActionBar(children: [
+          CanopyButton(
+            label: 'Register',
+            expand: true,
+            loading: _busy,
+            onPressed: () => _register(user.uid),
+          ),
+        ]);
+      },
+    );
   }
-  return '';
 }

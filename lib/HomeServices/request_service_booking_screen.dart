@@ -1,10 +1,9 @@
 // lib/HomeServices/request_service_booking_screen.dart
 //
-// Opens a ServiceBooking against a listing. No price is set here — the
-// requester describes the job, the provider quotes it, and the requester
-// accepts (or doesn't) on ServiceBookingDetailScreen. See
-// lib/Models/services/service_booking.dart's header for the full flow and
-// the fee split that only gets computed once a quote is accepted.
+// Request a booking (SERVICES_HANDOFF §3.4): offerings chips · address note ·
+// phone (+254) · preferred date · Standing service switch with the
+// fee-waiver callout · message → sticky "Send request" + "Nothing is charged
+// now." Success: timeline of what happens next + View my bookings.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,348 +13,278 @@ import '../Models/geo/canopy_location.dart';
 import '../Models/services/service_booking.dart';
 import '../Models/services/service_listing.dart';
 import '../Services/HomeServices/service_marketplace_service.dart';
-import '../Shared/theme/app_theme.dart';
+import '../theme/canopy_components.dart';
+import '../theme/tokens/services_tokens.dart' show CanopyFees;
+import 'my_service_bookings_screen.dart';
 import 'service_booking_detail_screen.dart';
+import 'services_ui.dart';
 
 class RequestServiceBookingScreen extends StatefulWidget {
   final ServiceListing listing;
-
   const RequestServiceBookingScreen({required this.listing, super.key});
 
   @override
-  State<RequestServiceBookingScreen> createState() =>
-      _RequestServiceBookingScreenState();
+  State<RequestServiceBookingScreen> createState() => _RequestServiceBookingScreenState();
 }
 
-class _RequestServiceBookingScreenState
-    extends State<RequestServiceBookingScreen> {
-  final _messageCtrl = TextEditingController();
-  final _addressCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  DateTime? _preferredDate;
-  bool _isRecurring = false;
-  bool _submitting = false;
-  final _formKey = GlobalKey<FormState>();
-
-  @override
-  void initState() {
-    super.initState();
-    _isRecurring = widget.listing.category == ServiceCategory.trashCollection;
-  }
+class _RequestServiceBookingScreenState extends State<RequestServiceBookingScreen> {
+  final _message = TextEditingController();
+  final _address = TextEditingController();
+  final _phone = TextEditingController();
+  final Set<String> _offerings = {};
+  DateTime? _date;
+  late bool _standing = widget.listing.category == ServiceCategory.trashCollection;
+  bool _sending = false;
+  bool _failed = false;
+  bool _showErrors = false;
+  String? _sentId;
 
   @override
   void dispose() {
-    _messageCtrl.dispose();
-    _addressCtrl.dispose();
-    _phoneCtrl.dispose();
+    _message.dispose();
+    _address.dispose();
+    _phone.dispose();
     super.dispose();
+  }
+
+  String? get _messageError =>
+      _message.text.trim().length < 10 ? 'Describe the job in a sentence or two.' : null;
+  String? get _addressError =>
+      _address.text.trim().isEmpty ? 'Say where the job is.' : null;
+  String? get _phoneError {
+    final d = _phone.text.replaceAll(RegExp(r'\D'), '');
+    if (d.isEmpty) return null;
+    return d.length < 9 ? 'Enter a full phone number.' : null;
   }
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: now.add(const Duration(days: 2)),
+      initialDate: _date ?? now.add(const Duration(days: 2)),
       firstDate: now,
       lastDate: now.add(const Duration(days: 180)),
     );
-    if (picked != null) setState(() => _preferredDate = picked);
+    if (picked != null) setState(() => _date = picked);
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _submitting = true);
+    setState(() => _showErrors = true);
+    if (_messageError != null || _addressError != null || _phoneError != null) return;
+    setState(() {
+      _sending = true;
+      _failed = false;
+    });
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final uid = user?.uid ?? 'anon';
-      String requesterName = user?.displayName ?? '';
-      if (requesterName.isEmpty) {
-        final doc = await FirebaseFirestore.instance.collection('Users').doc(uid).get();
-        requesterName = (doc.data()?['name'] as String?) ?? 'Canopy member';
+      final user = FirebaseAuth.instance.currentUser!;
+      var name = user.displayName ?? '';
+      if (name.isEmpty) {
+        final doc = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
+        name = (doc.data()?['name'] as String?) ?? 'Canopy member';
       }
-
-      final listing = widget.listing;
-      final booking = ServiceBooking(
+      final digits = _phone.text.replaceAll(RegExp(r'\D'), '');
+      final phone = digits.isEmpty
+          ? null
+          : '254${digits.startsWith('254') ? digits.substring(3) : digits.startsWith('0') ? digits.substring(1) : digits}';
+      final l = widget.listing;
+      final id = await ServiceMarketplaceService.instance.requestBooking(ServiceBooking(
         id: '',
-        listingId: listing.id,
-        listingTitle: listing.title,
-        category: listing.category,
-        requesterUid: uid,
-        requesterName: requesterName,
-        requesterPhone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
-        providerUid: listing.postedByUid,
-        providerName: listing.provider.shopName,
-        providerOrgId: listing.orgId,
-        providerOrgName: listing.orgName,
+        listingId: l.id,
+        listingTitle: l.title,
+        category: l.category,
+        requesterUid: user.uid,
+        requesterName: name,
+        requesterPhone: phone,
+        providerUid: l.postedByUid,
+        providerName: l.orgName?.isNotEmpty == true ? l.orgName! : l.provider.shopName,
+        providerOrgId: l.orgId,
+        providerOrgName: l.orgName,
         serviceLocation: CanopyLocation(
-          countyName: listing.location.countyName,
-          venue: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
+          countyName: l.location.countyName,
+          venue: _address.text.trim(),
         ),
-        addressNote: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
-        preferredDate: _preferredDate,
-        isRecurring: _isRecurring,
-        requestMessage: _messageCtrl.text.trim(),
+        addressNote: _address.text.trim(),
+        preferredDate: _date,
+        isRecurring: _standing,
+        requestMessage: _message.text.trim(),
+        requestedOfferings: _offerings.toList(),
         createdAt: DateTime.now(),
-      );
-
-      final bookingId = await ServiceMarketplaceService.instance.requestBooking(booking);
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ServiceBookingDetailScreen(bookingId: bookingId),
-          ),
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Request sent — the provider will send you a quote'),
-            backgroundColor: AppTheme.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      ));
+      if (mounted) setState(() => _sentId = id);
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => _sending = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final listing = widget.listing;
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F2),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppTheme.darkGreen,
-        title: const Text('Request Service',
-            style: TextStyle(color: AppTheme.darkGreen, fontWeight: FontWeight.w800)),
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Text(listing.category.emoji, style: const TextStyle(fontSize: 24)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(listing.title,
-                            style: const TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.darkGreen)),
-                        Text(listing.pricing.display,
-                            style: const TextStyle(
-                                fontSize: 12.5, fontWeight: FontWeight.w700, color: AppTheme.primary)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            const _Label('Describe the job'),
-            const SizedBox(height: 8),
-            _FieldBox(
-              child: TextFormField(
-                controller: _messageCtrl,
-                maxLines: 4,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Tell the provider what you need' : null,
-                style: const TextStyle(fontSize: 13.5, color: AppTheme.darkGreen),
-                decoration: InputDecoration(
-                  hintText: listing.category == ServiceCategory.trashCollection
-                      ? 'e.g. 4-bedroom home, weekly pickup, gate access after 8am'
-                      : 'e.g. 200m² backyard, wants full redesign with irrigation',
-                  hintStyle: TextStyle(fontSize: 12.5, color: AppTheme.darkGreen.withOpacity(0.30)),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const _Label('Address / drop-off details'),
-            const SizedBox(height: 8),
-            _FieldBox(
-              child: TextFormField(
-                controller: _addressCtrl,
-                style: const TextStyle(fontSize: 13.5, color: AppTheme.darkGreen),
-                decoration: InputDecoration(
-                  hintText: 'Gate number, landmark, estate',
-                  hintStyle: TextStyle(fontSize: 12.5, color: AppTheme.darkGreen.withOpacity(0.30)),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const _Label('Your phone (optional)'),
-            const SizedBox(height: 8),
-            _FieldBox(
-              child: TextFormField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                style: const TextStyle(fontSize: 13.5, color: AppTheme.darkGreen),
-                decoration: InputDecoration(
-                  hintText: '07xx xxx xxx',
-                  hintStyle: TextStyle(fontSize: 12.5, color: AppTheme.darkGreen.withOpacity(0.30)),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const _Label('Preferred date'),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _pickDate,
-              child: _FieldBox(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
+    return _sentId != null ? _success() : _form();
+  }
+
+  Widget _form() {
+    final p = context.canopy;
+    final l = widget.listing;
+    final provider = l.orgName?.isNotEmpty == true ? l.orgName! : l.provider.shopName;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Request a booking'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            CanopySpace.gutter, CanopySpace.s4, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          CanopyCard(
+            padding: const EdgeInsets.all(CanopySpace.s12),
+            child: Row(
+              children: [
+                CategoryGlyph(l.category, size: 24),
+                const SizedBox(width: CanopySpace.s12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.calendar_today_outlined,
-                          size: 16, color: AppTheme.darkGreen.withOpacity(0.5)),
-                      const SizedBox(width: 8),
-                      Text(
-                        _preferredDate == null
-                            ? 'Any time / provider suggests'
-                            : '${_preferredDate!.day}/${_preferredDate!.month}/${_preferredDate!.year}',
-                        style: const TextStyle(fontSize: 13.5, color: AppTheme.darkGreen),
-                      ),
+                      Text(l.title, style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+                      Text(provider, style: CanopyType.caption.copyWith(color: p.inkMuted)),
                     ],
                   ),
                 ),
-              ),
+                PriceDisplay(l.pricing, fontSize: 13),
+              ],
             ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Standing / recurring service',
-                            style: TextStyle(
-                                fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.darkGreen)),
-                        Text(
-                          "Waives the requester booking fee — pick this for an ongoing "
-                          'arrangement, not a one-off job.',
-                          style: TextStyle(
-                              fontSize: 11.5, color: AppTheme.darkGreen.withOpacity(0.55), height: 1.3),
-                        ),
-                      ],
-                    ),
+          ),
+          if (l.offerings.isNotEmpty) ...[
+            const SizedBox(height: CanopySpace.section),
+            Text('What do you need?', style: CanopyType.label.copyWith(color: p.ink)),
+            const SizedBox(height: CanopySpace.s4),
+            Wrap(
+              spacing: CanopySpace.s8,
+              children: [
+                for (final o in l.offerings)
+                  CanopyFilterChip(
+                    label: ServiceCategory.offeringLabel(o),
+                    selected: _offerings.contains(o),
+                    onTap: () => setState(
+                        () => _offerings.contains(o) ? _offerings.remove(o) : _offerings.add(o)),
                   ),
-                  Switch(
-                    value: _isRecurring,
-                    activeColor: AppTheme.primary,
-                    onChanged: (v) => setState(() => _isRecurring = v),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.info_outline_rounded, size: 18, color: AppTheme.primary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'This just sends your request — nothing is charged yet. '
-                      "You'll see the provider's price and can accept or decline before anything is paid.",
-                      style: TextStyle(
-                          fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.75), height: 1.4),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ],
-        ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFF0F0F0))),
-        ),
-        padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
-        child: SizedBox(
-          height: 52,
-          child: ElevatedButton(
-            onPressed: _submitting ? null : _submit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
-            ),
-            child: _submitting
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                  )
-                : const Text('Send Request', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField(
+            label: 'Where is the job?',
+            hint: 'Estate, street, house or landmark',
+            controller: _address,
+            error: _showErrors ? _addressError : null,
+            onChanged: (_) => setState(() {}),
           ),
-        ),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField.phone(
+            label: 'Phone (optional)',
+            controller: _phone,
+            helper: 'Shared with the provider so they can reach you.',
+            error: _showErrors ? _phoneError : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyPickerField(
+            label: 'Preferred date',
+            value: _date == null ? null : serviceDate(_date!),
+            placeholder: 'Any time',
+            icon: Icons.calendar_today_outlined,
+            onTap: _pickDate,
+          ),
+          const SizedBox(height: CanopySpace.s8),
+          CanopySwitchRow(
+            title: 'Standing service',
+            caption: 'A regular arrangement, e.g. weekly collection',
+            value: _standing,
+            onChanged: (v) => setState(() => _standing = v),
+          ),
+          CanopyCallout(
+            kind: _standing ? CalloutKind.success : CalloutKind.info,
+            text: _standing
+                ? 'No booking fee on standing services — you pay only the agreed price.'
+                : 'A ${CanopyFees.ksh(CanopyFees.bookingFeeKsh)} booking fee is added when you pay. Standing services don\'t have one.',
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField(
+            label: 'Describe the job',
+            hint: 'What needs doing, how much, anything the provider should know',
+            controller: _message,
+            minLines: 4,
+            maxLines: 8,
+            maxLength: 800,
+            error: _showErrors ? _messageError : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          if (_failed) ...[
+            const SizedBox(height: CanopySpace.s8),
+            const CanopyCallout(
+                kind: CalloutKind.danger,
+                text: "Your request didn't send. Nothing was lost — try again."),
+          ],
+        ],
       ),
+      sticky: StickyActionBar(children: [
+        CanopyButton(
+            label: _failed ? 'Try again' : 'Send request',
+            expand: true,
+            loading: _sending,
+            onPressed: _submit),
+        Text('Nothing is charged now.',
+            textAlign: TextAlign.center, style: CanopyType.caption.copyWith(color: p.inkMuted)),
+      ]),
     );
   }
-}
 
-class _Label extends StatelessWidget {
-  final String text;
-  const _Label(this.text);
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.darkGreen),
-      );
-}
-
-class _FieldBox extends StatelessWidget {
-  final Widget child;
-  const _FieldBox({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F6F9),
-        borderRadius: BorderRadius.circular(12),
+  Widget _success() {
+    final p = context.canopy;
+    final l = widget.listing;
+    final provider = l.orgName?.isNotEmpty == true ? l.orgName! : l.provider.shopName;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, showBack: false, actions: [
+        CanopyIconButton(
+            icon: Icons.close, tooltip: 'Close', onPressed: () => Navigator.pop(context)),
+      ]),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            CanopySpace.gutter, 0, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          Icon(Icons.check_circle_outline, size: CanopyIconSize.empty, color: p.success),
+          const SizedBox(height: CanopySpace.s12),
+          Text('Request sent', style: CanopyType.display.copyWith(color: p.ink)),
+          const SizedBox(height: CanopySpace.s4),
+          Text('$provider will look at your job and send a quote.',
+              style: CanopyType.body.copyWith(color: p.inkMuted)),
+          const SizedBox(height: CanopySpace.section),
+          CanopyCard(
+            child: CanopyTimeline(steps: [
+              const TimelineStep('Request sent', state: TimelineState.done),
+              TimelineStep('$provider sends a quote',
+                  line: 'You\'ll get a notification', state: TimelineState.now),
+              const TimelineStep('You accept the quote',
+                  line: 'Then you contact each other to agree payment'),
+              const TimelineStep('The job is scheduled and done'),
+            ]),
+          ),
+        ],
       ),
-      child: child,
+      sticky: StickyActionBar(children: [
+        CanopyButton(
+          label: 'View my bookings',
+          expand: true,
+          onPressed: () => Navigator.pushReplacement(
+              context, MaterialPageRoute(builder: (_) => const MyServiceBookingsScreen())),
+        ),
+        CanopyButton.quiet(
+          label: 'Open this request',
+          expand: true,
+          onPressed: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ServiceBookingDetailScreen(bookingId: _sentId!))),
+        ),
+      ]),
     );
   }
 }

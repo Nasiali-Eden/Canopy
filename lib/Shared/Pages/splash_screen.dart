@@ -108,7 +108,7 @@ class _SplashScreenState extends State<SplashScreen>
     
     if (!completer.isCompleted) {
       debugPrint('[Splash] Auth state timeout, using current user');
-      sub?.cancel();
+      sub.cancel();
       completer.complete(auth.currentUser);
     }
     
@@ -182,24 +182,7 @@ class _SplashScreenState extends State<SplashScreen>
       try {
         debugPrint('[Splash] Firestore routing attempt $attempt/$maxRetries');
 
-        // 1 — Marketplace Seller
-        try {
-          final sellerDoc = await db
-              .collection('marketplace_sellers')
-              .doc(uid)
-              .get(const GetOptions(source: Source.serverAndCache))
-              .timeout(timeout);
-          if (sellerDoc.exists) {
-            debugPrint('[Splash] ✅ Found marketplace seller');
-            await UserPersistence.saveUserProfile(sellerDoc.data() ?? {});
-            _go(const SellerHomeScreen());
-            return true;
-          }
-        } catch (e) {
-          debugPrint('[Splash] Marketplace check error: $e');
-        }
-
-        // 2 — Org Rep
+        // 1 — Org rep first: a rep with a shop still belongs in their org
         try {
           final orgDoc = await db
               .collection('org_rep')
@@ -214,6 +197,23 @@ class _SplashScreenState extends State<SplashScreen>
           }
         } catch (e) {
           debugPrint('[Splash] Org rep check error: $e');
+        }
+
+        // 2 — Marketplace seller (standalone shop accounts)
+        try {
+          final sellerDoc = await db
+              .collection('marketplace_sellers')
+              .doc(uid)
+              .get(const GetOptions(source: Source.serverAndCache))
+              .timeout(timeout);
+          if (sellerDoc.exists) {
+            debugPrint('[Splash] ✅ Found marketplace seller');
+            await UserPersistence.saveUserProfile(sellerDoc.data() ?? {});
+            _go(const SellerHomeScreen());
+            return true;
+          }
+        } catch (e) {
+          debugPrint('[Splash] Marketplace check error: $e');
         }
 
         // 3 — Community Member

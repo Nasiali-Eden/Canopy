@@ -14,6 +14,10 @@
 
 import 'article_service.dart';
 
+/// Heading of the article that carries Canopy's aim. About links to it by
+/// this heading, so keep the two in step.
+const kAimArticleHeading = 'What Canopy is working toward';
+
 class SpecialArticleSeed {
   final String heading;
   final String body;
@@ -22,6 +26,28 @@ class SpecialArticleSeed {
 }
 
 const List<SpecialArticleSeed> kSpecialArticleSeeds = [
+  SpecialArticleSeed(
+    heading: kAimArticleHeading,
+    body: '''
+This is what Canopy is aiming for. Most of it isn't built yet. We'd rather show you the goal and hear what you think than present it as finished. Upvote what matters to you and tell us in the responses below.
+
+## The aim
+
+The circular economy, verified. A community-owned platform turning waste collection, environmental action, and cultural knowledge into proof — permanent, portable, and paid.
+
+## What works today
+
+You can join local activities and check in with a QR code, log what you did, and have an organisation verify it for points and a place on the leaderboard. Organisations run events, broadcasts, partnerships and programmes. Field teams map collection zones, record tree plantings and log handoffs. Makers list goods, and buyers send them a request. You can book home services and pay for them with M-Pesa. Heritage stories, food and music are shared by community archives.
+
+## What isn't built yet
+
+Proof that is permanent and checkable by anyone outside Canopy. Verification by someone independent of the organisation. Paying makers and collectors through the app. Recording audio for the archive.
+
+## Tell us
+
+Is this the right direction? What should come first? What worries you? Every response is read.
+''',
+  ),
   SpecialArticleSeed(
     heading: 'What Is Blockchain? A Plain-Language Guide for Canopy Users',
     body: '''

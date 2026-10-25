@@ -1,28 +1,34 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// lib/MarketPlace/Profile/seller_profile.dart
+//
+// Seller › Profile (MARKETPLACE_SELLER_DESIGN_BRIEF §4, F). Shop header,
+// stats (only real ones), buyer requests by listing, specialisations, the
+// honest state for payouts, edit shop details (real), workspace switcher,
+// account and sign out. No sales history is invented: payments through
+// Canopy aren't built, so requests are how buyers reach the seller.
+
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart' hide MaterialType;
+import 'package:image_picker/image_picker.dart';
 
+import '../../Community/Home/community_home.dart';
+import '../../Community/Profile/security_screen.dart';
+import '../../Community/Profile/support_sheet.dart';
+import '../../Models/marketplace/canopy_listing.dart';
 import '../../Models/marketplace/marketplace_seller_profile.dart';
-import '../../Shared/theme/app_theme.dart';
-import '../../Shared/theme/canopy_ui.dart';
+import '../../Services/Authentication/auth.dart';
+import '../../Services/Geo/geo_registry.dart';
+import '../../Services/Marketplace/listing_service.dart';
+import '../../Shared/Pages/login.dart';
 import '../../Shared/widgets/role_context_switcher.dart';
+import '../../theme/canopy_components.dart';
+import '../The Market/marketplace_shop_view.dart';
+import '../market_ui.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  SellerProfilePage
-//
-//  Marketplace seller profile. Displays:
-//    1. Shop header (banner with shop logo, name, role, location, bio)
-//    2. Stats row (kg_diverted, impact_points, active_listings)
-//    3. Transaction history section
-//    4. Material specialisations
-//    5. Craft badge (for Makers only)
-//    6. Settings section
-//    7. Sign out button
-//
-//  Data source: marketplace_sellers/{uid}
-// ─────────────────────────────────────────────────────────────────────────────
-
-class SellerProfilePage extends StatefulWidget {
+class SellerProfilePage extends StatelessWidget {
   final WidgetBuilder? orgContextBuilder;
   final WidgetBuilder? memberContextBuilder;
   final WidgetBuilder? envOpsContextBuilder;
@@ -40,875 +46,301 @@ class SellerProfilePage extends StatefulWidget {
     this.hasCultural = false,
   });
 
-  @override
-  State<SellerProfilePage> createState() => _SellerProfilePageState();
-}
+  void _go(BuildContext context, WidgetBuilder b) =>
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(MaterialPageRoute(builder: b), (_) => false);
 
-class _SellerProfilePageState extends State<SellerProfilePage> {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
+  Future<void> _signOut(BuildContext context) async {
+    final ok = await showCanopyConfirm(context, title: 'Sign out?', message: "You'll need to sign in again to manage your shop.", confirmLabel: 'Sign out');
+    if (!ok) return;
+    await AuthService().signOut();
+    if (context.mounted) _go(context, (_) => LoginPage());
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (uid == null) {
-      return Scaffold(
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          centerTitle: true,
-          title: const Text(
-            'My Profile',
-            style: TextStyle(
-              color: AppTheme.darkGreen,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-            ),
-          ),
+    final p = context.canopy;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const CanopyScaffold(body: CanopySignedOutState());
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Profile', showBack: false, actions: [
+        CanopyIconButton(
+          icon: Icons.edit_outlined,
+          tooltip: 'Edit shop details',
+          onPressed: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => const EditShopScreen())),
         ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.lock_outline,
-                  size: 48, color: AppTheme.primary.withOpacity(0.3)),
-              const SizedBox(height: 16),
-              Text(
-                'Not authenticated',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppTheme.darkGreen.withOpacity(0.5),
+        const SizedBox(width: CanopySpace.s8),
+      ]),
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance.collection('marketplace_sellers').doc(uid).snapshots(),
+        builder: (context, snap) {
+          if (snap.hasError) return const CanopyErrorState(title: "Couldn't load your shop");
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          final data = snap.data!.data() ?? const <String, dynamic>{};
+          final shop = MarketplaceSellerProfile.fromMap(uid, data);
+          final points = (data['impact_points'] as num?)?.toInt() ?? 0;
+          return StreamBuilder<List<CanopyListing>>(
+            stream: ListingService.instance.watchByMember(uid),
+            builder: (context, ls) {
+              final listings = (ls.data ?? const <CanopyListing>[]).where((l) => l.isCreative && l.status != ListingStatus.closed).toList();
+              final live = listings.where((l) => l.isActive).length;
+              final withRequests = listings.where((l) => l.responseCount > 0).toList();
+              final requests = withRequests.fold(0, (s, l) => s + l.responseCount);
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+                children: [
+                  ShopHeader(
+                    shop: shop,
+                    action: CanopyButton.secondary(
+                      label: 'Public shop',
+                      size: CanopyButtonSize.compact,
+                      onPressed: () => Navigator.of(context, rootNavigator: true)
+                          .push(MaterialPageRoute(builder: (_) => MarketplaceShopViewScreen(sellerId: uid))),
                     ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: CanopyUi.canvas,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        centerTitle: true,
-        toolbarHeight: 68,
-        title: const Text(
-          'My Profile',
-          style: TextStyle(
-            color: AppTheme.darkGreen,
-            fontWeight: FontWeight.w800,
-            fontSize: 18,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () {
-              // TODO: Navigate to edit profile
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Edit profile — coming soon'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-            icon: const Icon(Icons.edit_outlined, color: AppTheme.primary),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('marketplace_sellers')
-            .doc(uid)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(
-              child: CircularProgressIndicator(color: AppTheme.primary),
-            );
-          }
-
-          if (!snapshot.hasData) {
-            return _buildEmptyState();
-          }
-
-          final sellerData =
-              snapshot.data!.data() as Map<String, dynamic>? ?? {};
-          final seller = MarketplaceSellerProfile.fromMap(uid!, sellerData);
-          final shopName = seller.name;
-          final role = seller.role;
-          final city = seller.city;
-          final area = seller.area;
-          final bio = seller.bio;
-          final shopLogoUrl = seller.logoUrl;
-          final kgDiverted = seller.kgDiverted;
-          final impactPoints =
-              (sellerData['impact_points'] as num?)?.toInt() ?? 0;
-          final activeListings = seller.activeListings;
-          final specialisations = seller.specialisations;
-          final creativeCategories = seller.categories;
-
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Context switcher — only shown when context builders were injected
-                if (widget.orgContextBuilder != null ||
-                    widget.memberContextBuilder != null) ...[
-                  const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: CanopySpace.section),
+                  SellerStatStrip(liveListings: live, requests: requests, kgDiverted: shop.kgDiverted, impactPoints: points),
+                  const CanopySectionHeader(title: 'Buyer requests', padding: EdgeInsets.only(top: CanopySpace.section)),
+                  if (withRequests.isEmpty)
+                    Text('Requests from buyers appear here, by listing.', style: CanopyType.body.copyWith(color: p.inkMuted))
+                  else
+                    CanopyCard(
+                      padding: EdgeInsets.zero,
+                      child: Column(children: [
+                        for (var i = 0; i < withRequests.length; i++) ...[
+                          if (i > 0) Divider(height: 1, color: p.outline),
+                          InventoryRow(listing: withRequests[i], onTap: () => showListingResponses(context, withRequests[i])),
+                        ],
+                      ]),
+                    ),
+                  const SizedBox(height: CanopySpace.s8),
+                  Text('Payments through Canopy aren\'t built yet, so there is no sales history here — you arrange payment with each buyer.',
+                      style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                  if (points > 0) ...[
+                    const SizedBox(height: CanopySpace.section),
+                    const CanopyComingSoon(
+                      boxed: true,
+                      icon: Icons.payments_outlined,
+                      label: 'Not built yet',
+                      title: 'Cash out impact points to M-Pesa',
+                      line: 'Your points are recorded. Redeeming them for money isn\'t available yet.',
+                    ),
+                  ],
+                  const CanopySectionHeader(title: 'Workspace', padding: EdgeInsets.only(top: CanopySpace.section)),
                   RoleContextSwitcher(
                     activeContext: 'marketplace',
                     hasMarketplace: true,
-                    hasEnvOps: widget.hasEnvOps,
-                    hasCultural: widget.hasCultural,
+                    hasEnvOps: hasEnvOps,
+                    hasCultural: hasCultural,
                     onOrgTap: () {
-                      if (widget.orgContextBuilder != null) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: widget.orgContextBuilder!),
-                          (_) => false,
-                        );
-                      }
+                      if (orgContextBuilder != null) _go(context, orgContextBuilder!);
                     },
-                    onMemberTap: () {
-                      if (widget.memberContextBuilder != null) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                              builder: widget.memberContextBuilder!),
-                          (_) => false,
-                        );
-                      }
-                    },
+                    onMemberTap: () => _go(context, memberContextBuilder ?? (_) => const CommunityHomeScreen()),
                     onMarketplaceTap: () {},
-                    onEnvOpsTap: widget.envOpsContextBuilder != null
-                        ? () => Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(
-                                  builder: widget.envOpsContextBuilder!),
-                              (_) => false,
-                            )
-                        : null,
-                    onCulturalTap: widget.culturalContextBuilder != null
-                        ? () => Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(
-                                  builder: widget.culturalContextBuilder!),
-                              (_) => false,
-                            )
-                        : null,
+                    onEnvOpsTap: envOpsContextBuilder == null ? null : () => _go(context, envOpsContextBuilder!),
+                    onCulturalTap: culturalContextBuilder == null ? null : () => _go(context, culturalContextBuilder!),
                   ),
-                  const SizedBox(height: 4),
+                  const CanopySectionHeader(title: 'Account', padding: EdgeInsets.only(top: CanopySpace.section)),
+                  CanopyListGroup(children: [
+                    CanopyListRow(
+                      icon: Icons.storefront_outlined,
+                      title: 'Shop details',
+                      subtitle: 'Name, logo, banner, bio, specialisations',
+                      onTap: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => const EditShopScreen())),
+                    ),
+                    CanopyListRow(
+                      icon: Icons.lock_outline,
+                      title: 'Password & security',
+                      onTap: () => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => const SecurityScreen())),
+                    ),
+                    CanopyListRow(icon: Icons.help_outline, title: 'Get help', onTap: () => showSupportSheet(context)),
+                  ]),
+                  const SizedBox(height: CanopySpace.section),
+                  Center(child: CanopyButton.quietDanger(label: 'Sign out', onPressed: () => _signOut(context))),
                 ],
-                // Shop Header
-                _buildShopHeader(
-                  shopName: shopName,
-                  role: role,
-                  city: city,
-                  area: area,
-                  bio: bio,
-                  logoUrl: shopLogoUrl,
-                ),
-
-                const SizedBox(height: 20),
-
-                // Stats Row
-                _buildStatsRow(
-                  kgDiverted: kgDiverted,
-                  impactPoints: impactPoints,
-                  activeListings: activeListings,
-                ),
-
-                const SizedBox(height: 24),
-
-                // Transaction History
-                _buildTransactionHistorySection(context),
-
-                const SizedBox(height: 24),
-
-                // Specialisations
-                if (specialisations.isNotEmpty)
-                  _buildSpecialisationsSection(
-                    specialisations: specialisations,
-                    creativeCategories: creativeCategories,
-                    role: role,
-                  ),
-
-                if (specialisations.isNotEmpty) const SizedBox(height: 24),
-
-                // Craft Badge (Makers only)
-                if (role == 'Maker') ...[
-                  _buildCraftBadgeSection(context),
-                  const SizedBox(height: 24),
-                ],
-
-                // Settings
-                _buildSettingsSection(context),
-
-                const SizedBox(height: 100),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
     );
   }
+}
 
-  Widget _buildShopHeader({
-    required String shopName,
-    required String role,
-    required String city,
-    required String area,
-    required String bio,
-    required String? logoUrl,
-  }) {
-    final locationText = [area, city].where((s) => s.isNotEmpty).join(', ');
+// ─────────────────────────────────────────────────────────────────────────────
+// EDIT SHOP
+// ─────────────────────────────────────────────────────────────────────────────
 
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.darkGreen, AppTheme.primary],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Logo + Role
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.2),
-                  ),
-                ),
-                child: logoUrl != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          logoUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Icon(
-                              Icons.storefront_outlined,
-                              size: 32,
-                              color: Colors.white.withOpacity(0.6),
-                            ),
-                          ),
-                        ),
-                      )
-                    : Center(
-                        child: Text(
-                          shopName.isNotEmpty ? shopName[0].toUpperCase() : 'S',
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      shopName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.tertiary.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _roleIcon(role),
-                            size: 12,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            role,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+class EditShopScreen extends StatefulWidget {
+  const EditShopScreen({super.key});
 
-          const SizedBox(height: 14),
+  @override
+  State<EditShopScreen> createState() => _EditShopScreenState();
+}
 
-          // Location
-          if (locationText.isNotEmpty) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.location_on,
-                  size: 14,
-                  color: Colors.white.withOpacity(0.75),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    locationText,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.85),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-          ],
+class _EditShopScreenState extends State<EditShopScreen> {
+  final _uid = FirebaseAuth.instance.currentUser?.uid;
+  final _name = TextEditingController();
+  final _bio = TextEditingController();
+  final _city = TextEditingController();
+  final _area = TextEditingController();
+  final Set<String> _specialisations = {};
+  String? _logoUrl, _bannerUrl;
+  File? _newLogo, _newBanner;
+  bool _loading = true, _saving = false, _showErrors = false;
 
-          // Bio
-          if (bio.isNotEmpty)
-            Text(
-              bio,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.white.withOpacity(0.8),
-                height: 1.4,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-        ],
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  Widget _buildStatsRow({
-    required double kgDiverted,
-    required int impactPoints,
-    required int activeListings,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: _StatTile(
-              label: 'Kg Diverted',
-              value: kgDiverted.toStringAsFixed(1),
-              icon: Icons.scale_outlined,
-              color: AppTheme.secondary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatTile(
-              label: 'Impact Points',
-              value: impactPoints.toString(),
-              icon: Icons.stars_outlined,
-              color: AppTheme.tertiary,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('M-Pesa redemption — coming soon'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatTile(
-              label: 'Listings',
-              value: activeListings.toString(),
-              icon: Icons.storefront_outlined,
-              color: AppTheme.primary,
-            ),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    for (final c in [_name, _bio, _city, _area]) {
+      c.dispose();
+    }
+    super.dispose();
   }
 
-  Widget _buildTransactionHistorySection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.verified_outlined, color: AppTheme.tertiary, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'Transaction History',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppTheme.darkGreen,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primary.withOpacity(0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.history_outlined,
-                  size: 40,
-                  color: AppTheme.primary.withOpacity(0.3),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Your verified transaction history will appear here.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.darkGreen.withOpacity(0.6),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Every completed sale builds your pricing leverage.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.darkGreen.withOpacity(0.5),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  Future<void> _load() async {
+    try {
+      final d = (await FirebaseFirestore.instance.collection('marketplace_sellers').doc(_uid).get()).data() ?? {};
+      final s = MarketplaceSellerProfile.fromMap(_uid!, d);
+      _name.text = s.name == 'Canopy seller' ? '' : s.name;
+      _bio.text = s.bio;
+      _city.text = s.city;
+      _area.text = s.area;
+      _logoUrl = s.logoUrl;
+      _bannerUrl = s.bannerUrl;
+      _specialisations.addAll(s.specialisations);
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
   }
 
-  Widget _buildSpecialisationsSection({
-    required List<String> specialisations,
-    required List<String> creativeCategories,
-    required String role,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Specialisations',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppTheme.darkGreen,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: specialisations.map((spec) {
-              return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
-                ),
-                child: Text(
-                  spec,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary,
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          if (role == 'Maker' && creativeCategories.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(
-              'Creative Categories',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.darkGreen.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: creativeCategories.map((cat) {
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accent.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.accent.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    cat,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.accent,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ],
-        ],
-      ),
-    );
+  Future<void> _pick(bool logo) async {
+    final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 82);
+    if (f != null) setState(() => logo ? _newLogo = File(f.path) : _newBanner = File(f.path));
   }
 
-  Widget _buildCraftBadgeSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppTheme.tertiary.withOpacity(0.12),
-              AppTheme.tertiary.withOpacity(0.05),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.tertiary.withOpacity(0.3)),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              Icons.verified_rounded,
-              size: 48,
-              color: AppTheme.tertiary,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Pending Review',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.tertiary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Circular Craft Badge',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppTheme.tertiary.withOpacity(0.75),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Awarded for sourcing materials directly from the Canopy supply chain.',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppTheme.darkGreen.withOpacity(0.6),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 14),
-            TextButton(
-              onPressed: () {
-                // TODO: Navigate to learn more
-              },
-              child: const Text('Learn More'),
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<String> _upload(File f, String name) async {
+    final ref = FirebaseStorage.instance.ref('marketplace_sellers/$_uid/${name}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await ref.putFile(f);
+    return ref.getDownloadURL();
   }
 
-  Widget _buildSettingsSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Settings',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                icon: Icons.storefront_outlined,
-                title: 'Edit Shop Details',
-                onTap: () {},
-              ),
-              _SettingsItem(
-                icon: Icons.category,
-                title: 'Edit Specialisations',
-                onTap: () {},
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.storefront_outlined,
-            size: 48,
-            color: AppTheme.primary.withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No seller data',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.darkGreen,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Settings or data loading issue',
-            style: TextStyle(
-              fontSize: 13,
-              color: AppTheme.darkGreen.withOpacity(0.6),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _roleIcon(String role) {
-    switch (role.toLowerCase()) {
-      case 'collector':
-        return Icons.recycling_outlined;
-      case 'processor':
-        return Icons.factory_outlined;
-      case 'maker':
-        return Icons.palette_outlined;
-      default:
-        return Icons.storefront_outlined;
+  Future<void> _save() async {
+    setState(() => _showErrors = true);
+    if (_name.text.trim().isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final logo = _newLogo != null ? await _upload(_newLogo!, 'shop_logo') : _logoUrl;
+      final banner = _newBanner != null ? await _upload(_newBanner!, 'banner') : _bannerUrl;
+      await GeoRegistry.instance.ensureLoaded();
+      final geo = GeoRegistry.instance.resolve(area: _area.text.trim(), county: _city.text.trim(), country: 'Kenya');
+      await FirebaseFirestore.instance.collection('marketplace_sellers').doc(_uid).set({
+        ...geo.toFirestore(),
+        'shop_name': _name.text.trim(),
+        'bio': _bio.text.trim(),
+        'city': _city.text.trim(),
+        'area': _area.text.trim(),
+        'shop_logo_url': logo,
+        'banner_url': banner,
+        'specialisations': _specialisations.toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      if (!mounted) return;
+      showCanopySnack(context, 'Shop details saved.');
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't save. Try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
-}
-
-class _StatTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final VoidCallback? onTap;
-
-  const _StatTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    this.onTap,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, size: 16, color: color),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.darkGreen.withOpacity(0.7),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SettingsCard extends StatelessWidget {
-  final List<_SettingsItem> items;
-
-  const _SettingsCard({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: items.asMap().entries.map((entry) {
-          final index = entry.key;
-          final item = entry.value;
-          final isLast = index == items.length - 1;
-
-          return Column(
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.vertical(
-                    top: index == 0 ? const Radius.circular(16) : Radius.zero,
-                    bottom: isLast ? const Radius.circular(16) : Radius.zero,
-                  ),
-                  onTap: item.onTap,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.lightGreen.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(item.icon,
-                              color: AppTheme.primary, size: 20),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                  color: AppTheme.darkGreen,
-                                ),
-                          ),
-                        ),
-                        Icon(Icons.chevron_right, color: AppTheme.primary),
-                      ],
+    final p = context.canopy;
+    if (_loading) return CanopyScaffold(appBar: canopyAppBar(context, title: 'Shop details'), body: const Center(child: CircularProgressIndicator()));
+    const gap = SizedBox(height: CanopySpace.s16);
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Shop details'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          SizedBox(
+            height: 186,
+            child: Stack(clipBehavior: Clip.none, children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 150,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(CanopyRadius.md),
+                  child: Material(
+                    color: p.surfaceMuted,
+                    child: InkWell(
+                      onTap: () => _pick(false),
+                      child: Stack(fit: StackFit.expand, children: [
+                        if (_newBanner != null)
+                          Image.file(_newBanner!, fit: BoxFit.cover)
+                        else if (_bannerUrl != null)
+                          CanopyImage(url: _bannerUrl)
+                        else
+                          Center(child: Text('Add a banner photo', style: CanopyType.label.copyWith(color: p.inkMuted))),
+                        Positioned(right: CanopySpace.s8, bottom: CanopySpace.s8, child: Icon(Icons.edit_outlined, color: p.ink)),
+                      ]),
                     ),
                   ),
                 ),
               ),
-              if (!isLast)
-                Padding(
-                  padding: const EdgeInsets.only(left: 62),
-                  child: Divider(
-                    height: 1,
-                    color: AppTheme.lightGreen.withOpacity(0.2),
+              Positioned(
+                left: CanopySpace.s16,
+                top: 114,
+                child: GestureDetector(
+                  onTap: () => _pick(true),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(color: p.canvas, borderRadius: BorderRadius.circular(24)),
+                    child: _newLogo != null
+                        ? ClipRRect(borderRadius: BorderRadius.circular(22), child: Image.file(_newLogo!, width: 72, height: 72, fit: BoxFit.cover))
+                        : CanopyAvatar(url: _logoUrl, name: _name.text, size: 72, org: true),
                   ),
                 ),
-            ],
-          );
-        }).toList(),
+              ),
+            ]),
+          ),
+          Text('Tap the banner or logo to change them.', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+          gap,
+          CanopyTextField(
+            label: 'Shop name',
+            controller: _name,
+            error: _showErrors && _name.text.trim().isEmpty ? 'Your shop needs a name.' : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          gap,
+          CanopyTextField(label: 'About your shop', hint: 'What you make and how', controller: _bio, minLines: 3, maxLines: 8, maxLength: 800),
+          gap,
+          Row(children: [
+            Expanded(child: CanopyTextField(label: 'County or city', controller: _city)),
+            const SizedBox(width: CanopySpace.s12),
+            Expanded(child: CanopyTextField(label: 'Area', controller: _area)),
+          ]),
+          const SizedBox(height: CanopySpace.section),
+          Text('Materials you work with', style: CanopyType.label.copyWith(color: p.ink)),
+          const SizedBox(height: CanopySpace.s8),
+          Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s8, children: [
+            for (final m in MaterialType.values.where((m) => m != MaterialType.mixed))
+              CanopyFilterChip(
+                label: m.label,
+                selected: _specialisations.contains(m.label),
+                onTap: () => setState(() => _specialisations.contains(m.label) ? _specialisations.remove(m.label) : _specialisations.add(m.label)),
+              ),
+          ]),
+        ],
       ),
+      sticky: StickyActionBar(children: [CanopyButton(label: 'Save shop details', expand: true, loading: _saving, onPressed: _save)]),
     );
   }
-}
-
-class _SettingsItem {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-
-  _SettingsItem({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
 }

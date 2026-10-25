@@ -1,44 +1,33 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+// lib/Organization/Home/Operations/send_partnership_request.dart
+//
+// Send partnership request (ORG_HANDOFF §3.5, T): pick a target organisation
+// (search Canopy orgs, or name one that isn't on Canopy yet), choose
+// collaboration chips, add a message. For a Canopy org two mirrored docs are
+// written — ours 'invited', theirs 'pending' — sharing a pairId, so the
+// request shows under "Awaiting your response" on their side.
 
-import '../../../Shared/theme/app_theme.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+
+import '../../../theme/canopy_components.dart';
 
 class SendPartnershipRequestScreen extends StatefulWidget {
   final String orgId;
   const SendPartnershipRequestScreen({super.key, required this.orgId});
 
   @override
-  State<SendPartnershipRequestScreen> createState() =>
-      _SendPartnershipRequestScreenState();
+  State<SendPartnershipRequestScreen> createState() => _SendPartnershipRequestScreenState();
 }
 
-class _SendPartnershipRequestScreenState
-    extends State<SendPartnershipRequestScreen>
-    with SingleTickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
+class _Target {
+  final String? id;
+  final String name;
+  final String? logo;
+  final String sector;
+  const _Target({this.id, required this.name, this.logo, this.sector = ''});
+}
 
-  final _nameController = TextEditingController();
-  final _messageController = TextEditingController();
-  String? _selectedSector;
-  String? _selectedGoal;
-  bool _saving = false;
-
-  static const _sectors = [
-    'Environmental',
-    'Technology',
-    'Agriculture',
-    'Health',
-    'Education',
-    'Youth',
-    'Community',
-    'Research',
-    'NGO / Non-profit',
-    'Government',
-    'Other',
-  ];
-
+class _SendPartnershipRequestScreenState extends State<SendPartnershipRequestScreen> {
   static const _goals = [
     'Co-host events',
     'Share resources',
@@ -46,55 +35,75 @@ class _SendPartnershipRequestScreenState
     'Knowledge exchange',
     'Volunteer sharing',
     'Advocacy',
-    'Other',
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-        duration: const Duration(milliseconds: 350), vsync: this)
-      ..forward();
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-  }
+  final _message = TextEditingController();
+  _Target? _target;
+  final Set<String> _picked = {};
+  bool _saving = false, _showErrors = false;
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _messageController.dispose();
-    _animController.dispose();
+    _message.dispose();
     super.dispose();
   }
 
+  Future<void> _pickTarget() async {
+    final t = await showCanopySheet<_Target>(context, tall: true, builder: (_) => _OrgSearchSheet(selfId: widget.orgId));
+    if (t != null) setState(() => _target = t);
+  }
+
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    setState(() => _showErrors = true);
+    final t = _target;
+    if (t == null || _picked.isEmpty) return;
     setState(() => _saving = true);
+    final db = FirebaseFirestore.instance;
     try {
-      await FirebaseFirestore.instance.collection('orgPartners').add({
+      final me = (await db.collection('organizations').doc(widget.orgId).get()).data() ?? {};
+      final myName = ((me['org_name'] ?? me['name']) as String?) ?? 'Organisation';
+      final pair = db.collection('orgPartners').doc().id;
+      final goals = _picked.toList();
+      final msg = _message.text.trim();
+      final batch = db.batch();
+      batch.set(db.collection('orgPartners').doc(), {
         'orgId': widget.orgId,
-        'partnerName': _nameController.text.trim(),
-        'partnerSector': _selectedSector ?? '',
-        'partnershipGoal': _selectedGoal ?? '',
-        'message': _messageController.text.trim(),
+        'partnerOrgId': t.id,
+        'partnerName': t.name,
+        'partnerLogoUrl': t.logo,
+        'partnerSector': t.sector,
+        'partnershipGoal': goals.join(', '),
+        'goals': goals,
+        'message': msg,
         'status': 'invited',
+        'pairId': pair,
         'sharedEvents': 0,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Partnership request sent'),
-          backgroundColor: AppTheme.primary,
-        ),
-      );
-    } catch (e) {
-      debugPrint('SendPartnership error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to send request. Try again.')),
-        );
+      if (t.id != null) {
+        batch.set(db.collection('orgPartners').doc(), {
+          'orgId': t.id,
+          'partnerOrgId': widget.orgId,
+          'partnerName': myName,
+          'partnerLogoUrl': me['logoUrl'] ?? me['profilePhoto'],
+          'partnerSector': (me['sector'] ?? me['orgDesignation'] ?? '') as String,
+          'partnerEmail': me['email'],
+          'partnerPhone': me['phone'],
+          'partnershipGoal': goals.join(', '),
+          'goals': goals,
+          'message': msg,
+          'status': 'pending',
+          'pairId': pair,
+          'sharedEvents': 0,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       }
+      await batch.commit();
+      if (!mounted) return;
+      showCanopySnack(context, 'Request sent to ${t.name}.');
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't send the request. Try again.", error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -102,370 +111,152 @@ class _SendPartnershipRequestScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F3EE),
-      appBar: AppBar(
-        title: const Text(
-          'Send Partnership Request',
-          style: TextStyle(
-              color: AppTheme.darkGreen,
-              fontWeight: FontWeight.w700,
-              fontSize: 16),
-        ),
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: AppTheme.darkGreen,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child:
-              Divider(height: 1, color: AppTheme.lightGreen.withOpacity(0.2)),
-        ),
-      ),
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-            children: [
-              // Intro card
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppTheme.darkGreen,
-                      AppTheme.primary,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
+    final p = context.canopy;
+    final t = _target;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Partnership request'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          Text('ORGANISATION', style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+          const SizedBox(height: CanopySpace.s8),
+          if (t == null)
+            CanopyPickerField(
+              label: 'Who do you want to work with?',
+              value: null,
+              placeholder: 'Search organisations',
+              error: _showErrors ? 'Choose an organisation.' : null,
+              onTap: _pickTarget,
+            )
+          else
+            CanopyCard(
+              padding: const EdgeInsets.all(CanopySpace.s12),
+              onTap: _pickTarget,
+              child: Row(children: [
+                CanopyAvatar(url: t.logo, name: t.name, size: 40, org: true),
+                const SizedBox(width: CanopySpace.s12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(t.name, style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+                    Text(t.id == null ? 'Not on Canopy yet — tracked on your side only' : (t.sector.isEmpty ? 'On Canopy' : t.sector),
+                        style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                  ]),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.handshake_outlined,
-                          color: Colors.white, size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('New Partnership',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14)),
-                          SizedBox(height: 3),
-                          Text('Invite another organisation to collaborate',
-                              style: TextStyle(
-                                  color: Colors.white70, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                Text('Change', style: CanopyType.label.copyWith(color: p.primaryInk)),
+              ]),
+            ),
+          const SizedBox(height: CanopySpace.section),
+          Text('WORK TOGETHER ON', style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+          const SizedBox(height: CanopySpace.s8),
+          Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s8, children: [
+            for (final g in _goals)
+              CanopyFilterChip(
+                label: g,
+                selected: _picked.contains(g),
+                onTap: () => setState(() => _picked.contains(g) ? _picked.remove(g) : _picked.add(g)),
               ),
-
-              const SizedBox(height: 24),
-
-              _SectionLabel('Partner Organisation'),
-              const SizedBox(height: 8),
-              _StyledField(
-                controller: _nameController,
-                hint: 'Organisation name',
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-
-              const SizedBox(height: 20),
-
-              _SectionLabel('Sector'),
-              const SizedBox(height: 8),
-              _StyledDropdown<String>(
-                value: _selectedSector,
-                hint: 'Select sector',
-                items: _sectors,
-                onChanged: (v) => setState(() => _selectedSector = v),
-                validator: (v) => v == null ? 'Required' : null,
-              ),
-
-              const SizedBox(height: 20),
-
-              _SectionLabel('Partnership Goal'),
-              const SizedBox(height: 8),
-              _StyledDropdown<String>(
-                value: _selectedGoal,
-                hint: 'What do you hope to achieve?',
-                items: _goals,
-                onChanged: (v) => setState(() => _selectedGoal = v),
-                validator: (v) => v == null ? 'Required' : null,
-              ),
-
-              const SizedBox(height: 20),
-
-              _SectionLabel('Message'),
-              const SizedBox(height: 8),
-              _StyledTextArea(
-                controller: _messageController,
-                hint:
-                    'Introduce your organisation and explain why you would like to partner...',
-                validator: (v) =>
-                    (v == null || v.trim().length < 20)
-                        ? 'Please write at least 20 characters'
-                        : null,
-              ),
-
-              const SizedBox(height: 32),
-
-              // Submit
-              GestureDetector(
-                onTap: _saving ? null : _submit,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  height: 52,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: _saving
-                          ? [Colors.grey.shade400, Colors.grey.shade300]
-                          : [AppTheme.darkGreen, AppTheme.primary],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: _saving
-                        ? []
-                        : [
-                            BoxShadow(
-                              color: AppTheme.primary.withOpacity(0.35),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                  ),
-                  child: Center(
-                    child: _saving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text(
-                            'Send Partnership Request',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15),
-                          ),
-                  ),
-                ),
-              ),
-            ],
+          ]),
+          if (_showErrors && _picked.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: CanopySpace.s8),
+              child: Text('Pick at least one.', style: CanopyType.caption.copyWith(color: p.danger)),
+            ),
+          const SizedBox(height: CanopySpace.section),
+          CanopyTextField(
+            label: 'Message',
+            hint: 'Say who you are and what you have in mind',
+            controller: _message,
+            minLines: 4,
+            maxLines: 8,
+            maxLength: 600,
           ),
-        ),
+        ],
       ),
+      sticky: StickyActionBar(children: [
+        CanopyButton(label: 'Send request', expand: true, loading: _saving, onPressed: _submit),
+      ]),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared form widgets (inspired by create_activity.dart style)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
+class _OrgSearchSheet extends StatefulWidget {
+  final String selfId;
+  const _OrgSearchSheet({required this.selfId});
 
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        color: AppTheme.darkGreen,
-        letterSpacing: 0.4,
-      ),
-    );
-  }
+  State<_OrgSearchSheet> createState() => _OrgSearchSheetState();
 }
 
-class _StyledField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final String? Function(String?)? validator;
+class _OrgSearchSheetState extends State<_OrgSearchSheet> {
+  String _q = '';
+  late final Future<List<_Target>> _orgs = _load();
 
-  const _StyledField({
-    required this.controller,
-    required this.hint,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      style: const TextStyle(
-          fontSize: 14, color: AppTheme.darkGreen, fontWeight: FontWeight.w500),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(
-            fontSize: 14, color: AppTheme.darkGreen.withOpacity(0.35)),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              BorderSide(color: AppTheme.lightGreen.withOpacity(0.3)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              BorderSide(color: AppTheme.lightGreen.withOpacity(0.25)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-      ),
-    );
+  Future<List<_Target>> _load() async {
+    final s = await FirebaseFirestore.instance.collection('organizations').limit(300).get();
+    return s.docs
+        .where((d) => d.id != widget.selfId)
+        .map((d) {
+          final m = d.data();
+          return _Target(
+            id: d.id,
+            name: ((m['org_name'] ?? m['name']) as String?)?.trim() ?? '',
+            logo: (m['logoUrl'] ?? m['profilePhoto']) as String?,
+            sector: [(m['orgDesignation'] ?? m['sector']) as String?, m['city'] as String?]
+                .whereType<String>()
+                .where((e) => e.trim().isNotEmpty)
+                .join(' · '),
+          );
+        })
+        .where((t) => t.name.isNotEmpty)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
-}
-
-class _StyledTextArea extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final String? Function(String?)? validator;
-
-  const _StyledTextArea({
-    required this.controller,
-    required this.hint,
-    this.validator,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      maxLines: 5,
-      style: const TextStyle(
-          fontSize: 14, color: AppTheme.darkGreen, fontWeight: FontWeight.w500),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(
-            fontSize: 14, color: AppTheme.darkGreen.withOpacity(0.35)),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              BorderSide(color: AppTheme.lightGreen.withOpacity(0.3)),
+    final p = context.canopy;
+    return CanopySheetBody(
+      title: 'Find an organisation',
+      children: [
+        CanopyTextField.search(
+            hint: 'Organisation name', autofocus: true, onChanged: (v) => setState(() => _q = v.trim())),
+        const SizedBox(height: CanopySpace.s12),
+        FutureBuilder<List<_Target>>(
+          future: _orgs,
+          builder: (context, snap) {
+            if (snap.hasError) return const CanopyErrorState(inline: true, title: "Couldn't load organisations.");
+            if (!snap.hasData) return const CanopyListSkeleton(rows: 4);
+            final q = _q.toLowerCase();
+            final list = snap.data!.where((t) => q.isEmpty || t.name.toLowerCase().contains(q)).take(40).toList();
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (list.isNotEmpty)
+                CanopyListGroup(children: [
+                  for (final t in list)
+                    CanopyListRow(
+                      leading: CanopyAvatar(url: t.logo, name: t.name, size: 36, org: true),
+                      title: t.name,
+                      subtitle: t.sector.isEmpty ? null : t.sector,
+                      chevron: false,
+                      onTap: () => Navigator.pop(context, t),
+                    ),
+                ])
+              else
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: CanopySpace.s12),
+                  child: Text('No organisations match.', style: CanopyType.body.copyWith(color: p.inkMuted)),
+                ),
+              if (_q.isNotEmpty) ...[
+                const SizedBox(height: CanopySpace.s12),
+                CanopyButton.secondary(
+                  label: 'Add "$_q" — not on Canopy',
+                  expand: true,
+                  onPressed: () => Navigator.pop(context, _Target(name: _q)),
+                ),
+              ],
+            ]);
+          },
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              BorderSide(color: AppTheme.lightGreen.withOpacity(0.25)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-      ),
-    );
-  }
-}
-
-class _StyledDropdown<T> extends StatelessWidget {
-  final T? value;
-  final String hint;
-  final List<T> items;
-  final ValueChanged<T?> onChanged;
-  final String? Function(T?)? validator;
-
-  const _StyledDropdown({
-    required this.value,
-    required this.hint,
-    required this.items,
-    required this.onChanged,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      value: value,
-      validator: validator,
-      onChanged: onChanged,
-      hint: Text(hint,
-          style: TextStyle(
-              fontSize: 14, color: AppTheme.darkGreen.withOpacity(0.35))),
-      style: const TextStyle(
-          fontSize: 14,
-          color: AppTheme.darkGreen,
-          fontWeight: FontWeight.w500),
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              BorderSide(color: AppTheme.lightGreen.withOpacity(0.3)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              BorderSide(color: AppTheme.lightGreen.withOpacity(0.25)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-      ),
-      dropdownColor: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      items: items
-          .map((e) => DropdownMenuItem<T>(
-                value: e,
-                child: Text(e.toString()),
-              ))
-          .toList(),
+      ],
     );
   }
 }

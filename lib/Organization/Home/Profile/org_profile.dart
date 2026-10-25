@@ -1,20 +1,48 @@
-import 'package:flutter/material.dart';
+// lib/Organization/Home/Profile/org_profile.dart
+//
+// Org profile (ORG_HANDOFF §3.7, F). Gradient identity header (logo, name,
+// verified line, est. · members · events) → "See your public page" →
+// Tools for your organisation (capability cards: Marketplace · Environmental
+// Ops · Cultural Archive — Not applied / Under review / Enabled) → role
+// switcher card → groups Organisation / Account / Help → Sign out.
+// Every row goes somewhere real; unbuilt settings aren't listed.
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../Culture/culture_home.dart';
-import '../../../EnvironmentalOps/env_ops_shell.dart';
-import '../../../MarketPlace/market_home.dart';
-import '../../../Community/Home/community_home.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../../../Community/Profile/security_screen.dart';
+import '../../../Community/Profile/support_sheet.dart';
+import '../../../Culture/Heritage/Create/heritage_backgrounds_screen.dart';
 import '../../../Services/Authentication/auth.dart';
 import '../../../Services/Authentication/community_auth.dart';
 import '../../../Shared/Pages/login.dart';
-import '../../../Shared/theme/app_theme.dart';
-import '../../../Shared/theme/canopy_ui.dart';
-import '../../../Shared/widgets/role_context_switcher.dart';
+import '../../../Shared/widgets/workspace_switch.dart';
+import '../../../theme/canopy_components.dart';
+import '../../Explorer/org_view_screen.dart';
+import '../../org_ui.dart';
+import '../Articles/org_articles.dart';
+import '../Dashboard/edit_org_details_screen.dart';
+import '../org_home.dart';
+
+String _normalizeStatus(dynamic raw) {
+  final s = (raw ?? '').toString().trim().toLowerCase();
+  if (const {'approved', 'active', 'enabled', 'yes'}.contains(s)) return 'approved';
+  if (const {'pending', 'under review', 'review'}.contains(s)) return 'pending';
+  if (const {'rejected', 'denied', 'declined'}.contains(s)) return 'rejected';
+  return 'none';
+}
+
+CapabilityState _capState(String s) => switch (s) {
+      'approved' => CapabilityState.enabled,
+      'pending' => CapabilityState.underReview,
+      _ => CapabilityState.notApplied,
+    };
 
 class OrgProfile extends StatefulWidget {
-  /// Passed by OrganizationHome so context-switch destinations can navigate back
-  /// without creating a circular import (org_home → org_profile → org_home).
+  /// Kept for call-site compatibility; workspace switching lives in
+  /// workspace_switch.dart now.
   final WidgetBuilder? orgHomeBuilder;
 
   const OrgProfile({super.key, this.orgHomeBuilder});
@@ -24,1936 +52,358 @@ class OrgProfile extends StatefulWidget {
 }
 
 class _OrgProfileState extends State<OrgProfile> {
-  final AuthService _authService = AuthService();
-  late Future<Map<String, dynamic>?> _orgDataFuture;
+  final _db = FirebaseFirestore.instance;
+  String? _orgId;
+  Map<String, dynamic> _org = const {};
+  int? _events;
+  bool _loading = true, _failed = false;
 
   @override
   void initState() {
     super.initState();
-    _orgDataFuture = _fetchOrgData();
+    _load();
   }
 
-  static String _normalizeStatus(dynamic raw) {
-    if (raw == null) return 'none';
-    final s = raw.toString().trim().toLowerCase();
-    if (s == 'approved' || s == 'active' || s == 'enabled' || s == 'yes')
-      return 'approved';
-    if (s == 'pending' || s == 'under review' || s == 'review')
-      return 'pending';
-    if (s == 'rejected' || s == 'denied' || s == 'declined') return 'rejected';
-    if (s.isEmpty || s == 'none' || s == 'null') return 'none';
-    return s;
-  }
-
-  Future<Map<String, dynamic>?> _fetchOrgData() async {
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) return null;
-
-      final firestore = FirebaseFirestore.instance;
-
-      final userDoc =
-          await firestore.collection('Users').doc(currentUser.uid).get();
-      if (!userDoc.exists) return null;
-
-      final userData = userDoc.data() as Map<String, dynamic>;
-      final orgId = userData['orgId'] as String?;
-      if (orgId == null) return null;
-
-      final orgDoc =
-          await firestore.collection('organizations').doc(orgId).get();
-      if (!orgDoc.exists) return null;
-
-      final data =
-          Map<String, dynamic>.from(orgDoc.data() as Map<String, dynamic>);
-      data['orgId'] = orgId;
-      // Normalise special-ops status fields so every consumer sees a canonical
-      // lowercase value regardless of how it was written to Firestore.
-      for (final key in [
-        'marketplaceStatus',
-        'envOpsStatus',
-        'culturalStatus'
-      ]) {
-        final raw = data[key];
-        if (raw != null) data[key] = _normalizeStatus(raw);
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) throw StateError('signed out');
+      final u = await _db.collection('Users').doc(uid).get();
+      final id = u.data()?['orgId'] as String?;
+      if (id == null) throw StateError('no org');
+      final o = await _db.collection('organizations').doc(id).get();
+      final data = Map<String, dynamic>.from(o.data() ?? {});
+      for (final k in ['marketplaceStatus', 'envOpsStatus', 'culturalStatus']) {
+        data[k] = _normalizeStatus(data[k]);
       }
-      return data;
-    } catch (e) {
-      debugPrint('Error fetching org data: $e');
-      return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: CanopyUi.canvas,
-      appBar: AppBar(
-        backgroundColor: CanopyUi.canvas,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        toolbarHeight: 68,
-        centerTitle: true,
-        title: Text(
-          'Canopy',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.darkGreen,
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-              ),
-        ),
-      ),
-      body: FutureBuilder<Map<String, dynamic>?>(
-        future: _orgDataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Text('Error loading organization data',
-                  style: TextStyle(color: AppTheme.darkGreen)),
-            );
-          }
-
-          final orgData = snapshot.data;
-          final currentUser = FirebaseAuth.instance.currentUser;
-          final isOrgRep = currentUser != null &&
-              orgData != null &&
-              orgData['org_rep_uid'] == currentUser.uid;
-
-          final orgId = orgData?['orgId'] as String?;
-
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 20),
-                _buildHeader(context, orgData),
-                const SizedBox(height: 16),
-                if (orgId != null) ...[
-                  _buildStatsRow(context, orgId),
-                  const SizedBox(height: 24),
-                ] else
-                  const SizedBox(height: 8),
-                if (isOrgRep) ...[
-                  _buildRoleContextSwitcher(context, orgData),
-                  const SizedBox(height: 20),
-                  _buildSpecialOpsButton(context, orgData),
-                  const SizedBox(height: 24),
-                ],
-                _buildOrganizationInfo(context, orgData),
-                const SizedBox(height: 24),
-                _buildAccountSection(context),
-                const SizedBox(height: 16),
-                _buildNotificationsSection(context),
-                const SizedBox(height: 16),
-                _buildSupportSection(context),
-                const SizedBox(height: 24),
-                _buildSignOutButton(context),
-                const SizedBox(height: 100),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ── Header ──────────────────────────────────────────────────────────────────
-
-  Widget _buildHeader(BuildContext context, Map<String, dynamic>? orgData) {
-    final orgName = orgData?['org_name'] as String? ?? 'Organisation';
-    final designation = orgData?['designation'] as String? ?? '';
-    final logoUrl = orgData?['logoUrl'] as String?;
-    final city = orgData?['city'] as String? ?? '';
-    final area = orgData?['area'] as String? ?? '';
-    final description =
-        orgData?['description'] as String? ?? orgData?['bio'] as String? ?? '';
-    final locationText = [area, city].where((s) => s.isNotEmpty).join(', ');
-
-    final parts = orgName.trim().split(RegExp(r'\s+'));
-    final initials = parts.length >= 2
-        ? '${parts[0][0]}${parts[1][0]}'.toUpperCase()
-        : orgName.isNotEmpty
-            ? orgName[0].toUpperCase()
-            : 'O';
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.darkGreen, AppTheme.primary],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.3),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Logo / initials
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.2)),
-                ),
-                child: logoUrl != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          logoUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Text(initials,
-                                style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white)),
-                          ),
-                        ),
-                      )
-                    : Center(
-                        child: Text(initials,
-                            style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white)),
-                      ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      orgName,
-                      style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white),
-                    ),
-                    if (designation.isNotEmpty) ...[
-                      const SizedBox(height: 7),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.apartment_outlined,
-                                size: 12, color: Colors.white),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(designation,
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white),
-                                  overflow: TextOverflow.ellipsis),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (locationText.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.location_on,
-                    size: 14, color: Colors.white.withOpacity(0.75)),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(locationText,
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.white.withOpacity(0.85))),
-                ),
-              ],
-            ),
-          ],
-          if (description.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              description,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.8),
-                  height: 1.4),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── Stats row ────────────────────────────────────────────────────────────────
-
-  Widget _buildStatsRow(BuildContext context, String orgId) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('OrgMembers')
-            .where('orgId', isEqualTo: orgId)
-            .snapshots(),
-        builder: (context, membSnap) {
-          return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('activities')
-                .where('orgId', isEqualTo: orgId)
-                .snapshots(),
-            builder: (context, actSnap) {
-              final members = membSnap.data?.docs.length ?? 0;
-              final events = actSnap.data?.docs.length ?? 0;
-              final verified = actSnap.data?.docs
-                      .where((d) =>
-                          (d.data() as Map)['impactStatus'] == 'confirmed')
-                      .length ??
-                  0;
-
-              return Row(
-                children: [
-                  Expanded(
-                    child: _OrgStatTile(
-                      label: 'Members',
-                      value: membSnap.hasData ? '$members' : '—',
-                      icon: Icons.people_outline,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _OrgStatTile(
-                      label: 'Events',
-                      value: actSnap.hasData ? '$events' : '—',
-                      icon: Icons.event_outlined,
-                      color: AppTheme.accent,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _OrgStatTile(
-                      label: 'Verified',
-                      value: actSnap.hasData ? '$verified' : '—',
-                      icon: Icons.verified_outlined,
-                      color: AppTheme.tertiary,
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  // ── Role context switcher ────────────────────────────────────────────────────
-
-  Widget _buildRoleContextSwitcher(
-      BuildContext context, Map<String, dynamic>? orgData) {
-    final hasMarketplace = orgData?['marketplaceStatus'] == 'approved';
-    final hasEnvOps = orgData?['envOpsStatus'] == 'approved';
-    final hasCultural = orgData?['culturalStatus'] == 'approved';
-    final orgId = orgData?['orgId'] as String? ?? '';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: RoleContextSwitcher(
-        activeContext: 'org',
-        hasMarketplace: hasMarketplace,
-        hasEnvOps: hasEnvOps,
-        hasCultural: hasCultural,
-        onOrgTap: () {},
-        onMemberTap: () {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const CommunityHomeScreen()),
-            (route) => false,
-          );
-        },
-        onMarketplaceTap: () {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (_) => SellerHomeScreen(
-                hasEnvOps: hasEnvOps,
-                hasCultural: hasCultural,
-                orgContextBuilder: widget.orgHomeBuilder,
-                memberContextBuilder: (_) => const CommunityHomeScreen(),
-                envOpsContextBuilder: hasEnvOps
-                    ? (_) => EnvOpsShell(
-                          hasMarketplace: hasMarketplace,
-                          hasCultural: hasCultural,
-                          orgContextBuilder: widget.orgHomeBuilder,
-                          memberContextBuilder: (_) =>
-                              const CommunityHomeScreen(),
-                        )
-                    : null,
-                culturalContextBuilder: hasCultural
-                    ? (_) => CultureHomeScreen(
-                          orgId: orgId,
-                          orgContextBuilder: widget.orgHomeBuilder,
-                          memberContextBuilder: (_) =>
-                              const CommunityHomeScreen(),
-                        )
-                    : null,
-              ),
-            ),
-            (route) => false,
-          );
-        },
-        onEnvOpsTap: () {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (_) => EnvOpsShell(
-                hasMarketplace: hasMarketplace,
-                hasCultural: hasCultural,
-                orgContextBuilder: widget.orgHomeBuilder,
-                memberContextBuilder: (_) => const CommunityHomeScreen(),
-                marketplaceContextBuilder: hasMarketplace
-                    ? (_) => SellerHomeScreen(
-                          hasEnvOps: hasEnvOps,
-                          hasCultural: hasCultural,
-                          orgContextBuilder: widget.orgHomeBuilder,
-                          memberContextBuilder: (_) =>
-                              const CommunityHomeScreen(),
-                        )
-                    : null,
-                culturalContextBuilder: hasCultural
-                    ? (_) => CultureHomeScreen(
-                          orgId: orgId,
-                          orgContextBuilder: widget.orgHomeBuilder,
-                          memberContextBuilder: (_) =>
-                              const CommunityHomeScreen(),
-                        )
-                    : null,
-              ),
-            ),
-            (route) => false,
-          );
-        },
-        onCulturalTap: () {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-                builder: (_) => CultureHomeScreen(
-                      orgId: orgId,
-                      orgContextBuilder: widget.orgHomeBuilder,
-                      memberContextBuilder: (_) => const CommunityHomeScreen(),
-                    )),
-            (route) => false,
-          );
-        },
-      ),
-    );
-  }
-
-  // ── Special Operations button ────────────────────────────────────────────────
-
-  Widget _buildSpecialOpsButton(
-      BuildContext context, Map<String, dynamic>? orgData) {
-    final marketStatus = orgData?['marketplaceStatus'] as String? ?? 'none';
-    final envStatus = orgData?['envOpsStatus'] as String? ?? 'none';
-    final culturalStatus = orgData?['culturalStatus'] as String? ?? 'none';
-    final statuses = [marketStatus, envStatus, culturalStatus];
-    final activeCount = statuses.where((s) => s == 'approved').length;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: GestureDetector(
-        onTap: () => _openSpecialOps(context, orgData),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primary.withOpacity(0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(9),
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.extension_outlined,
-                    color: AppTheme.primary, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Special Operations',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: AppTheme.darkGreen,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      activeCount == 0
-                          ? 'Marketplace · Env Ops · Cultural Archive'
-                          : '$activeCount of 3 enabled',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.darkGreen.withOpacity(0.55),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Row(
-                children: [
-                  _StatusDot(status: marketStatus),
-                  const SizedBox(width: 4),
-                  _StatusDot(status: envStatus),
-                  const SizedBox(width: 4),
-                  _StatusDot(status: culturalStatus),
-                ],
-              ),
-              const SizedBox(width: 10),
-              Icon(Icons.chevron_right,
-                  color: AppTheme.primary.withOpacity(0.6), size: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openSpecialOps(BuildContext context, Map<String, dynamic>? orgData) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _SpecialOpsSheet(
-        orgData: orgData,
-        orgHomeBuilder: widget.orgHomeBuilder,
-        onChanged: () => setState(() {
-          _orgDataFuture = _fetchOrgData();
-        }),
-      ),
-    );
-  }
-
-  // ── Organization info ────────────────────────────────────────────────────────
-
-  Widget _buildOrganizationInfo(
-      BuildContext context, Map<String, dynamic>? orgData) {
-    final type = orgData?['designation'] as String? ??
-        orgData?['type'] as String? ??
-        '—';
-    final city = orgData?['city'] as String? ?? '';
-    final area = orgData?['area'] as String? ?? '';
-    final locationText = [area, city].where((s) => s.isNotEmpty).join(', ');
-    final createdAt = orgData?['createdAt'];
-    String establishedStr = '—';
-    if (createdAt is Timestamp) {
-      final dt = createdAt.toDate();
-      const months = [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec'
-      ];
-      establishedStr = '${months[dt.month - 1]} ${dt.year}';
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primary.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Organisation Details',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppTheme.darkGreen,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: Icon(Icons.edit, color: AppTheme.primary, size: 20),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _InfoRow(icon: Icons.category, label: 'Type', value: type),
-            const SizedBox(height: 12),
-            _InfoRow(
-                icon: Icons.location_on,
-                label: 'Operating Area',
-                value: locationText.isEmpty ? '—' : locationText),
-            const SizedBox(height: 12),
-            _InfoRow(
-                icon: Icons.calendar_today,
-                label: 'Established',
-                value: establishedStr),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Account section ──────────────────────────────────────────────────────────
-
-  Widget _buildAccountSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Account Management',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                  icon: Icons.account_circle,
-                  title: 'Account Details',
-                  onTap: () {}),
-              _SettingsItem(
-                  icon: Icons.lock,
-                  title: 'Password and Security',
-                  onTap: () {}),
-              _SettingsItem(
-                  icon: Icons.location_city,
-                  title: 'Organization Address',
-                  onTap: () {}),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotificationsSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Notifications',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                  icon: Icons.email,
-                  title: 'Email Notifications',
-                  onTap: () {}),
-              _SettingsItem(
-                  icon: Icons.notifications,
-                  title: 'Push Notifications',
-                  onTap: () {}),
-              _SettingsItem(
-                  icon: Icons.notifications_off,
-                  title: 'Manage Preferences',
-                  onTap: () {}),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSupportSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Support & Information',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                  icon: Icons.help_outline, title: 'Help Center', onTap: () {}),
-              _SettingsItem(
-                  icon: Icons.info_outline,
-                  title: 'About Canopy',
-                  onTap: () {}),
-              _SettingsItem(
-                  icon: Icons.privacy_tip_outlined,
-                  title: 'Privacy Policy',
-                  onTap: () {}),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSignOutButton(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.red.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () async {
-              final shouldSignOut = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  backgroundColor: Colors.white,
-                  title: Text('Sign Out',
-                      style: TextStyle(
-                          color: AppTheme.darkGreen,
-                          fontWeight: FontWeight.w700)),
-                  content: Text('Are you sure you want to sign out?',
-                      style: TextStyle(color: AppTheme.darkGreen)),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text('Cancel',
-                          style: TextStyle(color: AppTheme.darkGreen)),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style:
-                          FilledButton.styleFrom(backgroundColor: Colors.red),
-                      child: const Text('Sign Out'),
-                    ),
-                  ],
-                ),
-              );
-              if (shouldSignOut == true) {
-                await _authService.signOut();
-                if (!mounted) return;
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => LoginPage()),
-                );
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.logout, color: Colors.red, size: 20),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Sign Out',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.red,
-                          ),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, color: Colors.red),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Status dot ──────────────────────────────────────────────────────────────
-
-class _StatusDot extends StatelessWidget {
-  final String status;
-
-  const _StatusDot({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (status) {
-      'approved' => Colors.green,
-      'pending' => Colors.amber,
-      _ => Colors.grey[300]!,
-    };
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
-
-// ─── Special Operations bottom sheet ─────────────────────────────────────────
-
-class _SpecialOpsSheet extends StatefulWidget {
-  final Map<String, dynamic>? orgData;
-  final VoidCallback onChanged;
-  final WidgetBuilder? orgHomeBuilder;
-
-  const _SpecialOpsSheet({
-    required this.orgData,
-    required this.onChanged,
-    this.orgHomeBuilder,
-  });
-
-  @override
-  State<_SpecialOpsSheet> createState() => _SpecialOpsSheetState();
-}
-
-class _SpecialOpsSheetState extends State<_SpecialOpsSheet> {
-  final _communityAuth = CommunityAuthService();
-
-  // Local status mirrors — updated optimistically after successful registration
-  late String _marketplaceStatus;
-  late String _envOpsStatus;
-  late String _culturalStatus;
-  bool _refreshing = false;
-
-  // Marketplace
-  String? _sellerRole;
-  bool _applyingMarketplace = false;
-
-  // Env Ops
-  final Set<String> _envActivities = {};
-  bool _applyingEnvOps = false;
-
-  // Cultural Archive
-  String? _culturalRole;
-  bool _applyingCultural = false;
-
-  static const _envActivityOptions = [
-    ('market', 'Material Market', Icons.storefront_outlined),
-    ('territory', 'Territory', Icons.map_outlined),
-    ('trees', 'Tree Monitoring', Icons.park_outlined),
-    ('fleet', 'Collector Fleet', Icons.directions_bike_outlined),
-    ('credits', 'Impact Credits', Icons.verified_outlined),
-  ];
-
-  static const _culturalRoleOptions = [
-    (
-      'documentation',
-      'Heritage Documentation',
-      'Documenting and archiving community cultural knowledge'
-    ),
-    (
-      'council',
-      'Community Voice',
-      'Representing a community\'s cultural heritage interests'
-    ),
-    (
-      'research',
-      'Research & Education',
-      'Academic, archival, or educational cultural work'
-    ),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    final d = widget.orgData;
-    _marketplaceStatus = _normalize(d?['marketplaceStatus']);
-    _envOpsStatus = _normalize(d?['envOpsStatus']);
-    _culturalStatus = _normalize(d?['culturalStatus']);
-    debugPrint('[SpecialOps] initState — '
-        'marketplace=$_marketplaceStatus  '
-        'envOps=$_envOpsStatus  '
-        'cultural=$_culturalStatus');
-  }
-
-  String? get _orgId => widget.orgData?['orgId'] as String?;
-
-  // Same normalisation logic as _OrgProfileState._normalizeStatus.
-  static String _normalize(dynamic raw) {
-    if (raw == null) return 'none';
-    final s = raw.toString().trim().toLowerCase();
-    if (s == 'approved' || s == 'active' || s == 'enabled' || s == 'yes')
-      return 'approved';
-    if (s == 'pending' || s == 'under review' || s == 'review')
-      return 'pending';
-    if (s == 'rejected' || s == 'denied' || s == 'declined') return 'rejected';
-    if (s.isEmpty || s == 'none' || s == 'null') return 'none';
-    return s;
-  }
-
-  // ── Refresh ──────────────────────────────────────────────────────────────────
-
-  Future<void> _refreshStatuses() async {
-    final id = _orgId;
-    if (id == null) {
-      debugPrint('[SpecialOps] refresh — orgId is null, skipping');
-      return;
-    }
-    setState(() => _refreshing = true);
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(id)
-          .get();
-      if (!mounted || !doc.exists) {
-        debugPrint('[SpecialOps] refresh — doc not found for id=$id');
-        return;
-      }
-      final d = doc.data()!;
-
-      // Print raw Firestore values so mismatches are immediately visible
-      debugPrint('[SpecialOps] refresh raw values from Firestore:');
-      debugPrint('  marketplaceStatus = ${d['marketplaceStatus']}');
-      debugPrint('  envOpsStatus      = ${d['envOpsStatus']}');
-      debugPrint('  culturalStatus    = ${d['culturalStatus']}');
-
-      final mkt = _normalize(d['marketplaceStatus']);
-      final env = _normalize(d['envOpsStatus']);
-      final cul = _normalize(d['culturalStatus']);
-
-      debugPrint('[SpecialOps] after normalisation:');
-      debugPrint('  marketplace=$mkt  envOps=$env  cultural=$cul');
-
+      int? events;
+      try {
+        events = (await _db.collection('activities').where('orgId', isEqualTo: id).count().get()).count;
+      } catch (_) {}
+      if (!mounted) return;
       setState(() {
-        _marketplaceStatus = mkt;
-        _envOpsStatus = env;
-        _culturalStatus = cul;
+        _orgId = id;
+        _org = data;
+        _events = events;
+        _loading = false;
       });
-      widget.onChanged();
-    } catch (e) {
-      debugPrint('[SpecialOps] refresh error: $e');
-    } finally {
-      if (mounted) setState(() => _refreshing = false);
-    }
-  }
-
-  // ── Apply methods ────────────────────────────────────────────────────────────
-
-  Future<void> _applyForMarketplace() async {
-    if (_sellerRole == null || _orgId == null) return;
-    setState(() => _applyingMarketplace = true);
-    try {
-      await _communityAuth.applyForMarketplaceSeller(
-        orgId: _orgId!,
-        sellerRole: _sellerRole!,
-      );
-      setState(() {
-        _marketplaceStatus = 'pending';
-        _sellerRole = null;
-      });
-      widget.onChanged();
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(_snack(
-          'Marketplace application submitted — you\'ll be notified when approved.',
-          Colors.amber.shade700,
-        ));
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
       }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(_errSnack());
-    } finally {
-      if (mounted) setState(() => _applyingMarketplace = false);
     }
   }
 
-  Future<void> _applyForEnvOps() async {
-    if (_envActivities.isEmpty || _orgId == null) return;
-    setState(() => _applyingEnvOps = true);
-    try {
-      await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(_orgId)
-          .update({
-        'envOpsStatus': 'approved',
-        'envOpsActivities': _envActivities.toList(),
-        'envOpsRegisteredAt': FieldValue.serverTimestamp(),
-      });
-      setState(() {
-        _envOpsStatus = 'approved';
-        _envActivities.clear();
-      });
-      widget.onChanged();
+  void _push(Widget w) => Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => w));
+
+  Future<void> _signOut() async {
+    final ok = await showCanopyConfirm(context,
+        title: 'Sign out?', message: "You'll need to sign in again to manage your organisation.", confirmLabel: 'Sign out');
+    if (!ok) return;
+    await AuthService().signOut();
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true)
+        .pushAndRemoveUntil(MaterialPageRoute(builder: (_) => LoginPage()), (_) => false);
+  }
+
+  Future<void> _apply(String kind) async {
+    final applied = await showCanopySheet<bool>(context, builder: (_) => _ApplySheet(kind: kind, orgId: _orgId!));
+    if (applied == true) {
+      await _load();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(_snack(
-          'Environmental Operations enabled. Use the Env Ops tab to switch.',
-          const Color(0xFF2E7D5E),
-        ));
+        showCanopySnack(context,
+            kind == 'envOps' ? 'Environmental Ops is on. Open it below.' : "Application sent — you'll hear back after review.");
       }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(_errSnack());
-    } finally {
-      if (mounted) setState(() => _applyingEnvOps = false);
     }
   }
 
-  Future<void> _applyForCultural() async {
-    if (_culturalRole == null || _orgId == null) return;
-    setState(() => _applyingCultural = true);
-    try {
-      await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(_orgId)
-          .update({
-        'culturalStatus': 'pending',
-        'culturalRole': _culturalRole,
-        'culturalRegisteredAt': FieldValue.serverTimestamp(),
-      });
-      setState(() {
-        _culturalStatus = 'pending';
-        _culturalRole = null;
-      });
-      widget.onChanged();
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(_errSnack());
-    } finally {
-      if (mounted) setState(() => _applyingCultural = false);
-    }
-  }
-
-  // Fixed (not floating) so the snackbar doesn't conflict with the parent
-  // Scaffold's bottomNavigationBar when shown from inside a bottom sheet.
-  SnackBar _snack(String msg, Color bg) => SnackBar(
-        content: Text(msg),
-        backgroundColor: bg,
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    if (_loading) return const CanopyScaffold(body: Center(child: CircularProgressIndicator()));
+    if (_failed) {
+      return CanopyScaffold(
+        appBar: canopyAppBar(context, title: 'Profile', showBack: false),
+        body: CanopyErrorState(title: "Couldn't load your organisation", onRetry: _load),
       );
+    }
+    final orgId = _orgId!;
+    final o = _org;
+    final name = ((o['org_name'] ?? o['name']) as String?) ?? 'Your organisation';
+    final logo = (o['logoUrl'] ?? o['profilePhoto']) as String?;
+    final verified = o['verified'] == true;
+    final designation = ((o['orgDesignation'] ?? o['designation']) as String?)?.trim() ?? '';
+    final city = (o['city'] as String?)?.trim() ?? '';
+    final founded = (o['foundedAt'] ?? o['createdAt']);
+    final members = (o['memberCount'] as num?)?.toInt();
+    final switcher = workspaceSwitcher(context, activeContext: 'org', orgId: orgId, org: o);
+    final shell = OrgShellScope.of(context);
 
-  SnackBar _errSnack() =>
-      _snack('Something went wrong. Please try again.', Colors.red.shade700);
+    final facts = [
+      if (founded is Timestamp) 'Est. ${DateFormat('yyyy').format(founded.toDate())}',
+      if (members != null) '$members member${members == 1 ? '' : 's'}',
+      if (_events != null) '$_events event${_events == 1 ? '' : 's'}',
+    ];
 
-  // ── Build ────────────────────────────────────────────────────────────────────
+    Widget cap(String key, IconData icon, String title, String line, VoidCallback onOpen) {
+      final status = o['${key}Status'] as String? ?? 'none';
+      final applied = o[key == 'marketplace' ? 'marketplaceAppliedAt' : '${key}RegisteredAt'];
+      return Padding(
+        padding: const EdgeInsets.only(bottom: CanopySpace.s12),
+        child: CapabilityCard(
+          icon: icon,
+          title: title,
+          description: status == 'rejected' ? 'Not approved last time. You can apply again.' : line,
+          state: _capState(status),
+          reviewNote: applied is Timestamp ? 'Applied ${DateFormat('d MMM yyyy').format(applied.toDate())}' : null,
+          onApply: () => _apply(key),
+          onOpen: onOpen,
+        ),
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.72,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // Handle
-              Padding(
-                padding: const EdgeInsets.only(top: 12, bottom: 4),
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 8, 4),
-                child: Row(
-                  children: [
-                    Text(
-                      'Special Operations',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen,
-                      ),
-                    ),
-                    const Spacer(),
-                    _refreshing
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : IconButton(
-                            icon: Icon(Icons.refresh,
-                                color: AppTheme.darkGreen.withOpacity(0.5)),
-                            iconSize: 20,
-                            tooltip: 'Refresh status',
-                            onPressed: _refreshStatuses,
-                          ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                      color: AppTheme.darkGreen,
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Text(
-                  'Extend your organisation\'s capabilities on Canopy.',
-                  style: TextStyle(
-                      fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.6)),
-                ),
-              ),
-              const Divider(height: 1),
-              // Op cards
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                  children: [
-                    _buildMarketplaceCard(context),
-                    const SizedBox(height: 12),
-                    _buildEnvOpsCard(context),
-                    const SizedBox(height: 12),
-                    _buildCulturalCard(context),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ── Marketplace card ─────────────────────────────────────────────────────────
-
-  Widget _buildMarketplaceCard(BuildContext context) {
-    return _OpCard(
-      icon: Icons.storefront_outlined,
-      color: AppTheme.tertiary,
-      title: 'Marketplace',
-      description:
-          'List materials, processed goods, or artisan products. Your verified org identity backs every listing.',
-      status: _marketplaceStatus,
-      onOpenTap: _marketplaceStatus == 'approved'
-          ? () {
-              final hasEnvOps = _envOpsStatus == 'approved';
-              final hasCultural = _culturalStatus == 'approved';
-              final orgId = _orgId ?? '';
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => SellerHomeScreen(
-                    hasEnvOps: hasEnvOps,
-                    hasCultural: hasCultural,
-                    orgContextBuilder: widget.orgHomeBuilder,
-                    memberContextBuilder: (_) => const CommunityHomeScreen(),
-                    envOpsContextBuilder: hasEnvOps
-                        ? (_) => EnvOpsShell(
-                              hasMarketplace: true,
-                              hasCultural: hasCultural,
-                              orgContextBuilder: widget.orgHomeBuilder,
-                              memberContextBuilder: (_) =>
-                                  const CommunityHomeScreen(),
-                              marketplaceContextBuilder: (_) =>
-                                  SellerHomeScreen(
-                                hasEnvOps: true,
-                                hasCultural: hasCultural,
-                                orgContextBuilder: widget.orgHomeBuilder,
-                                memberContextBuilder: (_) =>
-                                    const CommunityHomeScreen(),
-                              ),
-                              culturalContextBuilder: hasCultural
-                                  ? (_) => CultureHomeScreen(
-                                        orgId: orgId,
-                                        orgContextBuilder:
-                                            widget.orgHomeBuilder,
-                                        memberContextBuilder: (_) =>
-                                            const CommunityHomeScreen(),
-                                      )
-                                  : null,
-                            )
-                        : null,
-                    culturalContextBuilder: hasCultural
-                        ? (_) => CultureHomeScreen(
-                              orgId: orgId,
-                              orgContextBuilder: widget.orgHomeBuilder,
-                              memberContextBuilder: (_) =>
-                                  const CommunityHomeScreen(),
-                            )
-                        : null,
-                  ),
-                ),
-                (r) => false,
-              );
-            }
-          : null,
-      form: _marketplaceStatus != 'approved' && _marketplaceStatus != 'pending'
-          ? _buildMarketplaceForm()
-          : null,
-    );
-  }
-
-  Widget _buildMarketplaceForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Your seller role',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.darkGreen.withOpacity(0.7))),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+    return CanopyScaffold(
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: EdgeInsets.zero,
           children: [
-            _roleChip('collector', 'Collector', AppTheme.primary, _sellerRole,
-                (v) => setState(() => _sellerRole = v)),
-            _roleChip('processor', 'Processor', AppTheme.accent, _sellerRole,
-                (v) => setState(() => _sellerRole = v)),
-            _roleChip('maker', 'Maker / Artisan', AppTheme.tertiary,
-                _sellerRole, (v) => setState(() => _sellerRole = v)),
-          ],
-        ),
-        const SizedBox(height: 14),
-        _applyButton(
-          label: 'Apply to Sell',
-          color: AppTheme.tertiary,
-          enabled: _sellerRole != null,
-          loading: _applyingMarketplace,
-          onTap: _applyForMarketplace,
-        ),
-      ],
-    );
-  }
-
-  // ── Env Ops card ─────────────────────────────────────────────────────────────
-
-  Widget _buildEnvOpsCard(BuildContext context) {
-    return _OpCard(
-      icon: Icons.eco_outlined,
-      color: const Color(0xFF2E7D5E),
-      title: 'Environmental Operations',
-      description:
-          'Track material collection, territory, tree planting, collector fleet, and impact credits.',
-      status: _envOpsStatus,
-      onOpenTap: _envOpsStatus == 'approved'
-          ? () {
-              final hasMarketplace = _marketplaceStatus == 'approved';
-              final hasCultural = _culturalStatus == 'approved';
-              final orgId = _orgId ?? '';
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => EnvOpsShell(
-                    hasMarketplace: hasMarketplace,
-                    hasCultural: hasCultural,
-                    orgContextBuilder: widget.orgHomeBuilder,
-                    memberContextBuilder: (_) => const CommunityHomeScreen(),
-                    marketplaceContextBuilder: hasMarketplace
-                        ? (_) => SellerHomeScreen(
-                              hasEnvOps: true,
-                              hasCultural: hasCultural,
-                              orgContextBuilder: widget.orgHomeBuilder,
-                              memberContextBuilder: (_) =>
-                                  const CommunityHomeScreen(),
-                              envOpsContextBuilder: (_) => EnvOpsShell(
-                                hasMarketplace: true,
-                                hasCultural: hasCultural,
-                                orgContextBuilder: widget.orgHomeBuilder,
-                                memberContextBuilder: (_) =>
-                                    const CommunityHomeScreen(),
-                              ),
-                              culturalContextBuilder: hasCultural
-                                  ? (_) => CultureHomeScreen(
-                                        orgId: orgId,
-                                        orgContextBuilder:
-                                            widget.orgHomeBuilder,
-                                        memberContextBuilder: (_) =>
-                                            const CommunityHomeScreen(),
-                                      )
-                                  : null,
-                            )
-                        : null,
-                    culturalContextBuilder: hasCultural
-                        ? (_) => CultureHomeScreen(
-                              orgId: orgId,
-                              orgContextBuilder: widget.orgHomeBuilder,
-                              memberContextBuilder: (_) =>
-                                  const CommunityHomeScreen(),
-                            )
-                        : null,
-                  ),
-                ),
-                (r) => false,
-              );
-            }
-          : null,
-      form: _envOpsStatus != 'approved' && _envOpsStatus != 'pending'
-          ? _buildEnvOpsForm()
-          : null,
-    );
-  }
-
-  Widget _buildEnvOpsForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Select the areas your org will use',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.darkGreen.withOpacity(0.7))),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _envActivityOptions.map((opt) {
-            final (key, label, icon) = opt;
-            final selected = _envActivities.contains(key);
-            return GestureDetector(
-              onTap: () => setState(() {
-                if (selected)
-                  _envActivities.remove(key);
-                else
-                  _envActivities.add(key);
-              }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? const Color(0xFF2E7D5E).withOpacity(0.1)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: selected
-                        ? const Color(0xFF2E7D5E)
-                        : const Color(0xFF2E7D5E).withOpacity(0.3),
-                    width: selected ? 1.5 : 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, size: 13, color: const Color(0xFF2E7D5E)),
-                    const SizedBox(width: 5),
-                    Text(label,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF2E7D5E))),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 14),
-        _applyButton(
-          label: 'Enable Environmental Ops',
-          color: const Color(0xFF2E7D5E),
-          enabled: _envActivities.isNotEmpty,
-          loading: _applyingEnvOps,
-          onTap: _applyForEnvOps,
-        ),
-      ],
-    );
-  }
-
-  // ── Cultural Archive card ────────────────────────────────────────────────────
-
-  Widget _buildCulturalCard(BuildContext context) {
-    final orgId = _orgId ?? '';
-    return _OpCard(
-      icon: Icons.auto_stories_outlined,
-      color: const Color(0xFF7A5230),
-      title: 'Cultural Archive',
-      description:
-          'Document and preserve community heritage — oral traditions, music, craft, language, food, and more.',
-      status: _culturalStatus,
-      onOpenTap: _culturalStatus == 'approved'
-          ? () => Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => CultureHomeScreen(
-                          orgId: orgId,
-                          orgContextBuilder: widget.orgHomeBuilder,
-                          memberContextBuilder: (_) =>
-                              const CommunityHomeScreen(),
-                        )),
-                (r) => false,
-              )
-          : null,
-      form: _culturalStatus != 'approved' && _culturalStatus != 'pending'
-          ? _buildCulturalForm()
-          : null,
-    );
-  }
-
-  Widget _buildCulturalForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Your organisation\'s role',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.darkGreen.withOpacity(0.7))),
-        const SizedBox(height: 10),
-        ..._culturalRoleOptions.map((opt) {
-          final (key, label, desc) = opt;
-          final selected = _culturalRole == key;
-          return GestureDetector(
-            onTap: () => setState(() => _culturalRole = key),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: selected
-                    ? const Color(0xFF7A5230).withOpacity(0.08)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: selected ? const Color(0xFF7A5230) : Colors.grey[300]!,
-                  width: selected ? 1.5 : 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(label,
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: selected
-                                    ? const Color(0xFF7A5230)
-                                    : AppTheme.darkGreen)),
-                        const SizedBox(height: 2),
-                        Text(desc,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.darkGreen.withOpacity(0.55))),
-                      ],
-                    ),
-                  ),
-                  if (selected)
-                    Icon(Icons.check_circle,
-                        size: 18, color: const Color(0xFF7A5230)),
-                ],
-              ),
-            ),
-          );
-        }),
-        const SizedBox(height: 6),
-        _applyButton(
-          label: 'Enable Cultural Archive',
-          color: const Color(0xFF7A5230),
-          enabled: _culturalRole != null,
-          loading: _applyingCultural,
-          onTap: _applyForCultural,
-        ),
-      ],
-    );
-  }
-
-  // ── Shared helpers ───────────────────────────────────────────────────────────
-
-  Widget _roleChip(
-    String key,
-    String label,
-    Color color,
-    String? selected,
-    void Function(String) onTap,
-  ) {
-    final active = selected == key;
-    return GestureDetector(
-      onTap: () => onTap(key),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? color.withOpacity(0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active ? color : color.withOpacity(0.3),
-            width: active ? 1.5 : 1,
-          ),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w600, color: color)),
-      ),
-    );
-  }
-
-  Widget _applyButton({
-    required String label,
-    required Color color,
-    required bool enabled,
-    required bool loading,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        onPressed: enabled && !loading ? onTap : null,
-        style: FilledButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          disabledBackgroundColor: color.withOpacity(0.35),
-        ),
-        child: loading
-            ? const SizedBox(
-                height: 18,
-                width: 18,
-                child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
-              )
-            : Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ),
-    );
-  }
-}
-
-// ─── Op card ──────────────────────────────────────────────────────────────────
-
-class _OpCard extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String description;
-  final String status;
-  final VoidCallback? onOpenTap;
-  final Widget? form;
-
-  const _OpCard({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.description,
-    required this.status,
-    this.onOpenTap,
-    this.form,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color:
-              status == 'approved' ? color.withOpacity(0.4) : Colors.grey[200]!,
-          width: status == 'approved' ? 1.5 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title row
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 18, color: color),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(title,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.darkGreen)),
-              ),
-              _StatusChip(status: status),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(description,
-              style: TextStyle(
-                  fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.6))),
-
-          // Approved state: open button
-          if (status == 'approved' && onOpenTap != null) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: onOpenTap,
-                icon: Icon(Icons.open_in_new, size: 15, color: color),
-                label: Text('Open', style: TextStyle(color: color)),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: color.withOpacity(0.5)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-              ),
-            ),
-          ],
-
-          // Pending state
-          if (status == 'pending') ...[
-            const SizedBox(height: 10),
+            // ── Gradient identity header ──────────────────────────────────
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [p.surfaceBrand, p.canvas],
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.schedule, size: 14, color: Colors.amber.shade700),
-                  const SizedBox(width: 6),
-                  Text('Application under review',
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.amber.shade700)),
-                ],
-              ),
-            ),
-          ],
-
-          // Registration form (not enrolled)
-          if (form != null) ...[
-            const SizedBox(height: 14),
-            const Divider(height: 1),
-            const SizedBox(height: 14),
-            form!,
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Status chip ──────────────────────────────────────────────────────────────
-
-class _StatusChip extends StatelessWidget {
-  final String status;
-
-  const _StatusChip({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, bg, fg) = switch (status) {
-      'approved' => (
-          'Active',
-          Colors.green.withOpacity(0.12),
-          Colors.green.shade700
-        ),
-      'pending' => (
-          'Pending',
-          Colors.amber.withOpacity(0.12),
-          Colors.amber.shade700
-        ),
-      'rejected' => (
-          'Reapply',
-          Colors.red.withOpacity(0.1),
-          Colors.red.shade700
-        ),
-      _ => ('Apply', AppTheme.primary.withOpacity(0.08), AppTheme.primary),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(label,
-          style:
-              TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
-    );
-  }
-}
-
-// ─── Shared helpers ───────────────────────────────────────────────────────────
-
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _InfoRow(
-      {required this.icon, required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppTheme.lightGreen.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: AppTheme.primary, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.darkGreen.withOpacity(0.6))),
-              const SizedBox(height: 2),
-              Text(value,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.darkGreen,
-                      )),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingsCard extends StatelessWidget {
-  final List<_SettingsItem> items;
-
-  const _SettingsCard({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: items.asMap().entries.map((entry) {
-          final index = entry.key;
-          final item = entry.value;
-          final isLast = index == items.length - 1;
-          return Column(
-            children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.vertical(
-                    top: index == 0 ? const Radius.circular(16) : Radius.zero,
-                    bottom: isLast ? const Radius.circular(16) : Radius.zero,
-                  ),
-                  onTap: item.onTap,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppTheme.lightGreen.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(item.icon,
-                              color: AppTheme.primary, size: 20),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            item.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                  color: AppTheme.darkGreen,
-                                ),
-                          ),
-                        ),
-                        Icon(Icons.chevron_right, color: AppTheme.primary),
-                      ],
+              padding: EdgeInsets.fromLTRB(
+                  CanopySpace.gutter, MediaQuery.paddingOf(context).top + CanopySpace.s24, CanopySpace.gutter, CanopySpace.s16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                CanopyAvatar(url: logo, name: name, size: 72, org: true),
+                const SizedBox(height: CanopySpace.s12),
+                Text(name, style: CanopyType.display.copyWith(color: p.ink)),
+                const SizedBox(height: CanopySpace.s4),
+                Row(children: [
+                  if (verified) ...[
+                    Icon(Icons.verified, size: 16, color: p.primary),
+                    const SizedBox(width: CanopySpace.s4),
+                  ],
+                  Flexible(
+                    child: Text(
+                      [
+                        verified ? 'Verified${designation.isEmpty ? '' : ' $designation'}' : designation,
+                        city,
+                      ].where((s) => s.isNotEmpty).join(' · '),
+                      style: CanopyType.label.copyWith(color: p.inkMuted),
                     ),
                   ),
+                ]),
+                if (facts.isNotEmpty) ...[
+                  const SizedBox(height: CanopySpace.s4),
+                  Text(facts.join(' · '), style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                ],
+                const SizedBox(height: CanopySpace.s16),
+                CanopyButton.secondary(
+                  label: 'See your public page',
+                  expand: true,
+                  onPressed: () => _push(OrgViewScreen(orgId: orgId, orgData: o)),
                 ),
-              ),
-              if (!isLast)
-                Padding(
-                  padding: const EdgeInsets.only(left: 62),
-                  child: Divider(
-                      height: 1, color: AppTheme.lightGreen.withOpacity(0.2)),
-                ),
-            ],
-          );
-        }).toList(),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, 0, CanopySpace.gutter, CanopySpace.s32),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                const CanopySectionHeader(title: 'Tools for your organisation', padding: EdgeInsets.only(top: CanopySpace.s16)),
+                cap('marketplace', Icons.storefront_outlined, 'Marketplace',
+                    'Sell recycled material and products to buyers on Canopy.', () => switcher.onMarketplaceTap?.call()),
+                cap('envOps', Icons.recycling_outlined, 'Environmental Ops',
+                    'Run collection territory, a material market, tree monitoring and a fleet.', () => switcher.onEnvOpsTap?.call()),
+                cap('cultural', Icons.account_balance_outlined, 'Cultural Archive',
+                    "Document and look after a community's heritage.", () => switcher.onCulturalTap?.call()),
+                const SizedBox(height: CanopySpace.s8),
+                switcher,
+                const CanopySectionHeader(title: 'Organisation', padding: EdgeInsets.only(top: CanopySpace.section)),
+                CanopyListGroup(children: [
+                  CanopyListRow(
+                    icon: Icons.edit_outlined,
+                    title: 'Organisation details',
+                    subtitle: 'Name, logo, cover, about, contact',
+                    onTap: () async {
+                      final saved = await Navigator.of(context, rootNavigator: true)
+                          .push<bool>(MaterialPageRoute(builder: (_) => EditOrgDetailsScreen(orgId: orgId)));
+                      if (saved == true) _load();
+                    },
+                  ),
+                  if (shell != null)
+                    CanopyListRow(icon: Icons.people_outline, title: 'People & teams', onTap: () => shell.goTo(OrgTab.people)),
+                  CanopyListRow(icon: Icons.article_outlined, title: 'Articles', onTap: () => _push(OrgArticlesScreen(orgId: orgId))),
+                  if (shell != null)
+                    CanopyListRow(
+                      icon: Icons.handshake_outlined,
+                      title: 'Partners',
+                      onTap: () => shell.goTo(OrgTab.operations, sub: 'partners'),
+                    ),
+                  CanopyListRow(
+                    icon: Icons.landscape_outlined,
+                    title: 'Heritage backgrounds',
+                    onTap: () => _push(HeritageBackgroundsScreen(orgId: orgId)),
+                  ),
+                ]),
+                const CanopySectionHeader(title: 'Account', padding: EdgeInsets.only(top: CanopySpace.section)),
+                CanopyListGroup(children: [
+                  CanopyListRow(
+                    icon: Icons.lock_outline,
+                    title: 'Password & security',
+                    subtitle: FirebaseAuth.instance.currentUser?.email,
+                    onTap: () => _push(const SecurityScreen()),
+                  ),
+                  CanopyListRow(
+                    icon: Icons.notifications_none,
+                    title: 'Notifications',
+                    onTap: () => Navigator.of(context, rootNavigator: true).pushNamed('/notifications'),
+                  ),
+                ]),
+                const CanopySectionHeader(title: 'Help', padding: EdgeInsets.only(top: CanopySpace.section)),
+                CanopyListGroup(children: [
+                  CanopyListRow(
+                    icon: Icons.help_outline,
+                    title: 'Get help',
+                    subtitle: 'Send a question to the Canopy team',
+                    onTap: () => showSupportSheet(context),
+                  ),
+                ]),
+                const SizedBox(height: CanopySpace.section),
+                Center(child: CanopyButton.quietDanger(label: 'Sign out', onPressed: _signOut)),
+              ]),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _SettingsItem {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
+// ─────────────────────────────────────────────────────────────────────────────
+// APPLY SHEET
+// ─────────────────────────────────────────────────────────────────────────────
 
-  _SettingsItem({required this.icon, required this.title, required this.onTap});
+class _ApplySheet extends StatefulWidget {
+  final String kind; // marketplace · envOps · cultural
+  final String orgId;
+  const _ApplySheet({required this.kind, required this.orgId});
+
+  @override
+  State<_ApplySheet> createState() => _ApplySheetState();
 }
 
-// ─── Org stat tile ────────────────────────────────────────────────────────────
+class _ApplySheetState extends State<_ApplySheet> {
+  static const _sellerRoles = [
+    ('collector', 'Collector', 'You gather recyclable material'),
+    ('processor', 'Processor', 'You turn material into feedstock'),
+    ('maker', 'Maker', 'You sell finished products'),
+  ];
+  static const _envActivities = [
+    ('market', 'Material market'),
+    ('territory', 'Territory'),
+    ('trees', 'Tree monitoring'),
+    ('fleet', 'Collector fleet'),
+  ];
+  static const _culturalRoles = [
+    ('documentation', 'Heritage documentation', 'Documenting and archiving community knowledge'),
+    ('council', 'Community voice', "Representing a community's heritage interests"),
+    ('research', 'Research & education', 'Academic, archival or educational work'),
+  ];
 
-class _OrgStatTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
+  String? _role;
+  final Set<String> _acts = {};
+  bool _busy = false, _showErrors = false;
 
-  const _OrgStatTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
+  bool get _valid => widget.kind == 'envOps' ? _acts.isNotEmpty : _role != null;
+
+  Future<void> _submit() async {
+    setState(() => _showErrors = true);
+    if (!_valid) return;
+    setState(() => _busy = true);
+    final ref = FirebaseFirestore.instance.collection('organizations').doc(widget.orgId);
+    try {
+      switch (widget.kind) {
+        case 'marketplace':
+          await CommunityAuthService().applyForMarketplaceSeller(orgId: widget.orgId, sellerRole: _role!);
+        case 'envOps':
+          // Existing behaviour: Environmental Ops is self-serve.
+          await ref.update({
+            'envOpsStatus': 'approved',
+            'envOpsActivities': _acts.toList(),
+            'envOpsRegisteredAt': FieldValue.serverTimestamp(),
+          });
+        default:
+          await ref.update({
+            'culturalStatus': 'pending',
+            'culturalRole': _role,
+            'culturalRegisteredAt': FieldValue.serverTimestamp(),
+          });
+      }
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        showCanopySnack(context, "Couldn't send that. Try again.", error: true);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.12)),
-        boxShadow: [
-          BoxShadow(
-              color: color.withOpacity(0.07),
-              blurRadius: 10,
-              offset: const Offset(0, 3)),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+    final p = context.canopy;
+    final (title, caption) = switch (widget.kind) {
+      'marketplace' => ('Apply for Marketplace', 'The Canopy team reviews applications.'),
+      'envOps' => ('Turn on Environmental Ops', 'Pick what you run. You can change this later.'),
+      _ => ('Apply for Cultural Archive', 'The Canopy team reviews applications.'),
+    };
+    return CanopySheetBody(
+      title: title,
+      caption: caption,
+      children: [
+        if (widget.kind == 'envOps')
+          for (final a in _envActivities)
+            CanopyCheckRow(
+              label: a.$2,
+              value: _acts.contains(a.$1),
+              onChanged: (v) => setState(() => v ? _acts.add(a.$1) : _acts.remove(a.$1)),
+            )
+        else
+          for (final r in widget.kind == 'marketplace' ? _sellerRoles : _culturalRoles) ...[
+            CanopyOptionCard(
+              selected: _role == r.$1,
+              title: r.$2,
+              caption: r.$3,
+              onTap: () => setState(() => _role = r.$1),
             ),
-            child: Icon(icon, size: 16, color: color),
+            const SizedBox(height: CanopySpace.s8),
+          ],
+        if (_showErrors && !_valid)
+          Padding(
+            padding: const EdgeInsets.only(top: CanopySpace.s8),
+            child: Text(widget.kind == 'envOps' ? 'Pick at least one.' : 'Pick one.',
+                style: CanopyType.caption.copyWith(color: p.danger)),
           ),
-          const SizedBox(height: 8),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: color,
-                  height: 1)),
-          const SizedBox(height: 4),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.darkGreen.withOpacity(0.55))),
-        ],
-      ),
+      ],
+      actions: [
+        CanopyButton(
+          label: widget.kind == 'envOps' ? 'Turn on' : 'Send application',
+          expand: true,
+          loading: _busy,
+          onPressed: _submit,
+        ),
+      ],
     );
   }
 }

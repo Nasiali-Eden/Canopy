@@ -1,151 +1,233 @@
-import 'dart:async';
+// lib/Community/Contributions/entry_feed_card.dart
+//
+// FeedCard (v3) for a logged contribution: the photo fills the card, with
+// story-style progress bars and the organisation's logo + name over it; below,
+// the title, a three-line summary with "Read more", date · type, copy-link and
+// share, and the organisation's social links when they have added any. Tapping
+// opens the full post (feed_post_screen.dart) with the map pin. In the owner's
+// own list it also shows the review status and Edit / Delete.
+// 1px outline, no shadow, lg radius.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../Organization/Explorer/org_view_screen.dart';
 import '../../Services/Contributions/contribution_service.dart';
-import '../../Shared/theme/app_theme.dart';
-import '../../Shared/widgets/image_caption_overlay.dart';
-import 'entry_feed_time.dart';
+import '../../theme/canopy_components.dart';
+import 'feed_post_screen.dart';
 
-/// Number of characters of [FeedEntry.description] shown before "Show more".
-const int _kDescriptionPreviewChars = 50;
 
-/// How long each carousel image stays before auto-advancing (and how long the
-/// indicator takes to fill).
-const Duration _kDwell = Duration(seconds: 6);
+/// Feed cards use a tight 6dp corner.
+const double _kCardRadius = 6;
 
-/// Corner radius applied to the whole card (all sides).
-const double _kRadius = 8;
+/// The organisation behind a post: logo, verified tick and any social links.
+class FeedOrg {
+  final String name;
+  final String? orgId; // null when the poster is a member, not an organisation
+  final String? logoUrl;
+  final bool verified;
+  final Map<String, String> socials;
+  const FeedOrg({this.name = '', this.orgId, this.logoUrl, this.verified = false, this.socials = const {}});
+}
 
-/// Silvery grey for the social link icons.
-const Color _kSocialGrey = Color(0xFF9AA0A6);
+final Map<String, Future<FeedOrg>> _orgCache = {};
 
-/// Social platforms rendered (in order) when the entry provides a link.
-const List<(String, IconData)> _kSocialOrder = [
-  ('facebook', Icons.facebook),
-  ('instagram', Icons.camera_alt_outlined),
-  ('tiktok', Icons.music_note),
-  ('linkedin', Icons.business),
+/// One read per organisation per session, shared by every card in the feed.
+Future<FeedOrg> feedOrgFor(String? orgId) {
+  if (orgId == null || orgId.isEmpty) return Future.value(const FeedOrg());
+  return _orgCache.putIfAbsent(orgId, () async {
+    try {
+      final d = (await FirebaseFirestore.instance.collection('organizations').doc(orgId).get()).data() ?? {};
+      final socials = <String, String>{};
+      void take(dynamic raw) {
+        if (raw is Map) {
+          raw.forEach((k, v) {
+            if (v != null && v.toString().trim().isNotEmpty) socials[k.toString().toLowerCase()] = v.toString();
+          });
+        }
+      }
+
+      take(d['socialLinks']);
+      take(d['socials']);
+      for (final k in const ['facebook', 'instagram', 'linkedin', 'tiktok']) {
+        final v = d[k];
+        if (v is String && v.trim().isNotEmpty) socials[k] = v;
+      }
+      return FeedOrg(
+          name: '${d['org_name'] ?? d['name'] ?? ''}'.trim(),
+          orgId: orgId,
+          logoUrl: (d['logoUrl'] ?? d['profilePhoto']) as String?,
+          verified: d['verified'] == true,
+          socials: socials);
+    } catch (_) {
+      _orgCache.remove(orgId);
+      return const FeedOrg();
+    }
+  });
+}
+
+final Map<String, Future<FeedOrg>> _posterCache = {};
+
+/// Who to show on a post: its organisation, else the organisation that ran the
+/// activity it was logged against, else the organisation the poster represents,
+/// else the member themselves.
+Future<FeedOrg> feedPosterFor(FeedEntry e) {
+  final key = '${e.orgId}|${e.activityId}|${e.userId}';
+  return _posterCache.putIfAbsent(key, () async {
+    final db = FirebaseFirestore.instance;
+    try {
+      var orgId = e.orgId;
+      if ((orgId == null || orgId.isEmpty) && (e.activityId ?? '').isNotEmpty) {
+        final a = (await db.collection('activities').doc(e.activityId).get()).data();
+        orgId = (a?['orgId'] ?? a?['org_id']) as String?;
+      }
+      if (orgId != null && orgId.isNotEmpty) {
+        final o = await feedOrgFor(orgId);
+        if (o.name.isNotEmpty) return o;
+      }
+      if ((e.userId ?? '').isNotEmpty) {
+        final u = (await db.collection('Users').doc(e.userId).get()).data() ?? {};
+        // An organisation's representative posts as their organisation.
+        final repOrg = '${u['orgId'] ?? ''}'.trim();
+        if (repOrg.isNotEmpty) {
+          final o = await feedOrgFor(repOrg);
+          if (o.name.isNotEmpty) return o;
+        }
+        final first = '${u['FirstName'] ?? ''}'.trim();
+        final last = '${u['LastName'] ?? ''}'.trim();
+        final name = '${u['name'] ?? ''}'.trim().isNotEmpty ? '${u['name']}'.trim() : '$first $last'.trim();
+        if (name.isNotEmpty) {
+          return FeedOrg(name: name, logoUrl: (u['profilePhoto'] ?? u['photoUrl'] ?? u['avatarUrl']) as String?);
+        }
+      }
+    } catch (_) {
+      _posterCache.remove(key);
+    }
+    return FeedOrg(name: e.orgName);
+  });
+}
+
+const List<(String, IconData, String)> _kSocialOrder = [
+  ('facebook', Icons.facebook, 'Facebook'),
+  ('instagram', Icons.camera_alt_outlined, 'Instagram'),
+  ('tiktok', Icons.music_note, 'TikTok'),
+  ('linkedin', Icons.business, 'LinkedIn'),
 ];
 
+/// One slide: an image and an optional Before / After caption.
+typedef FeedSlide = ({String url, String? label});
+
 /// A single community feed entry rendered by [EntryFeedCard].
-///
-/// Kept deliberately simple (plain Dart) so it can be built from either
-/// hard-coded placeholders or a Firestore document map.
 class FeedEntry {
   final String title;
   final String description;
-
-  /// Name of the posting organisation — shown top-left over the image.
   final String orgName;
-
-  /// Organisation id — when set, tapping the org name opens its profile.
   final String? orgId;
-
-  /// Work type — drives the accent colour of the type line.
   final String type;
-
-  /// 1:1 images shown in the auto-advancing carousel.
   final List<String> imageUrls;
 
-  /// Optional social links keyed by platform (facebook/instagram/tiktok/
-  /// linkedin). Only the platforms present here render an icon.
+  /// Photos taken after the work. When present, slide 1 is labelled Before
+  /// and the first after photo follows as slide 2.
+  final List<String> afterImageUrls;
   final Map<String, String> socials;
-
-  /// Firestore document id of the backing contribution, when this entry was
-  /// built from one. Needed to persist edits.
   final String? contributionId;
-
-  /// When this contribution was created — shown in the image caption overlay
-  /// alongside the org name (Phase 1.3 image treatment).
   final Timestamp? postedAt;
+  final String? userId;
+  final String? activityId;
+
+  /// Where the work happened (place text and the exact point, when logged).
+  final String location;
+  final double? latitude, longitude;
+
+  /// pending / verified / rejected.
+  final String status;
 
   const FeedEntry({
     required this.title,
     required this.description,
     required this.type,
     required this.imageUrls,
+    this.afterImageUrls = const [],
     this.orgName = '',
     this.orgId,
     this.socials = const {},
     this.contributionId,
     this.postedAt,
+    this.userId,
+    this.activityId,
+    this.location = '',
+    this.latitude,
+    this.longitude,
+    this.status = 'pending',
   });
 
-  /// Build a feed entry from a `contributions` Firestore document map.
-  ///
-  /// Tolerant of the field aliases the writer uses: images come from `photos`
-  /// (falling back to the legacy `beforeImages`), the type line from
-  /// `workType` (falling back to `type`), and socials from `socialLinks`.
-  factory FeedEntry.fromContribution(Map<String, dynamic> d,
-      {String orgName = '', String? contributionId}) {
-    List<String> images(dynamic v) => (v is List)
-        ? v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList()
-        : const [];
-
+  /// Build from a `contributions` document. Images come from `photos`
+  /// (falling back to `beforeImages`); after photos from `afterImages`.
+  factory FeedEntry.fromContribution(Map<String, dynamic> d, {String orgName = '', String? contributionId}) {
+    List<String> images(dynamic v) =>
+        (v is List) ? v.map((e) => e.toString()).where((s) => s.isNotEmpty).toList() : const [];
     var photos = images(d['photos']);
     if (photos.isEmpty) photos = images(d['beforeImages']);
+    final after = images(d['afterImages']).where((u) => !photos.contains(u)).toList();
 
-    final socialsRaw = d['socialLinks'];
     final socials = <String, String>{};
-    if (socialsRaw is Map) {
-      socialsRaw.forEach((k, v) {
-        if (v != null && v.toString().trim().isNotEmpty) {
-          socials[k.toString()] = v.toString();
-        }
+    final raw = d['socialLinks'];
+    if (raw is Map) {
+      raw.forEach((k, v) {
+        if (v != null && v.toString().trim().isNotEmpty) socials[k.toString()] = v.toString();
       });
     }
-
+    final title = (d['title'] as String?)?.trim() ?? '';
     return FeedEntry(
-      title: (d['title'] as String?)?.trim().isNotEmpty == true
-          ? d['title'] as String
-          : (d['workType'] as String? ?? 'Contribution'),
+      title: title.isNotEmpty ? title : (d['workType'] as String? ?? 'Contribution'),
       description: d['description'] as String? ?? '',
       type: d['workType'] as String? ?? d['type'] as String? ?? '',
       imageUrls: photos,
-      orgName: orgName,
+      afterImageUrls: after,
+      orgName: orgName.isNotEmpty ? orgName : (d['orgName'] as String? ?? ''),
+      orgId: d['orgId'] as String?,
       socials: socials,
       contributionId: contributionId ?? d['id'] as String?,
       postedAt: d['createdAt'] as Timestamp?,
+      userId: d['userId'] as String?,
+      activityId: d['activityId'] as String?,
+      location: (d['location'] as String?)?.trim() ?? '',
+      latitude: (d['latitude'] as num?)?.toDouble(),
+      longitude: (d['longitude'] as num?)?.toDouble(),
+      status: d['status'] as String? ?? 'pending',
     );
   }
-}
 
-/// Accent colour for a work type — the small line above the title.
-Color feedTypeColor(String type) {
-  switch (type) {
-    case 'Cleanup':
-      return AppTheme.primary;
-    case 'Tree Planting':
-      return const Color(0xFF4CAF50);
-    case 'School Upgrading':
-      return AppTheme.tertiary;
-    case 'Waste Management':
-      return const Color(0xFF9C27B0);
-    case 'Water & Sanitation':
-      return const Color(0xFF2196F3);
-    case 'Infrastructure':
-      return const Color(0xFFFF9800);
-    default:
-      return AppTheme.primary;
+  List<FeedSlide> get slides {
+    if (afterImageUrls.isEmpty) return [for (final u in imageUrls) (url: u, label: null)];
+    return [
+      if (imageUrls.isNotEmpty) (url: imageUrls.first, label: 'Before'),
+      (url: afterImageUrls.first, label: 'After'),
+      for (final u in imageUrls.skip(1)) (url: u, label: null),
+      for (final u in afterImageUrls.skip(1)) (url: u, label: null),
+    ];
   }
 }
 
-/// Community feed card:
-///   • full-width 1:1 image carousel spanning the card width, with the posting
-///     org name (tappable → org profile) overlaid top-left and a story-style
-///     page indicator overlaid bottom;
-///   • below the image: a colour-coded type line, the title, an expandable
-///     description, and grey social icons for any links the entry provided.
+IconData feedTypeIcon(String type) => switch (type) {
+      'Cleanup' => Icons.cleaning_services_outlined,
+      'Tree Planting' => Icons.park_outlined,
+      'School Upgrading' => Icons.school_outlined,
+      'Waste Management' => Icons.recycling,
+      'Water & Sanitation' => Icons.water_drop_outlined,
+      'Infrastructure' => Icons.construction_outlined,
+      _ => Icons.volunteer_activism_outlined,
+    };
+
 class EntryFeedCard extends StatefulWidget {
   final FeedEntry entry;
 
-  /// When true, shows an edit affordance that lets the owner change the title
-  /// and description only. Requires [FeedEntry.contributionId] to be set.
+  /// Owner view: shows the review status and Edit / Delete.
   final bool editable;
 
   const EntryFeedCard({super.key, required this.entry, this.editable = false});
@@ -154,699 +236,344 @@ class EntryFeedCard extends StatefulWidget {
   State<EntryFeedCard> createState() => _EntryFeedCardState();
 }
 
-class _EntryFeedCardState extends State<EntryFeedCard>
-    with SingleTickerProviderStateMixin {
-  final PageController _pageController = PageController();
-  late final AnimationController _progress;
+class _EntryFeedCardState extends State<EntryFeedCard> {
+  final _pages = PageController();
   int _current = 0;
-  bool _active = false;
-
-  // Local copies so an edit reflects immediately, before the Firestore stream
-  // round-trips. Only title and description are editable.
   late String _title = widget.entry.title;
   late String _description = widget.entry.description;
-  bool _savingEdit = false;
-  bool _deleted = false;
-
-  ScrollPosition? _position;
-
-  List<String> get _images => widget.entry.imageUrls;
-  bool get _multi => _images.length > 1;
+  bool _busy = false, _deleted = false;
 
   @override
-  void initState() {
-    super.initState();
-    _progress = AnimationController(vsync: this, duration: _kDwell)
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) _advance();
-      });
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final newPos = Scrollable.maybeOf(context)?.position;
-    if (newPos != _position) {
-      _position?.removeListener(_onScroll);
-      _position = newPos;
-      _position?.addListener(_onScroll);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _recomputeActive());
-  }
-
-  void _onScroll() => _recomputeActive();
-
-  void _recomputeActive() {
-    if (!mounted) return;
-    bool visible = true;
-    final box = context.findRenderObject() as RenderBox?;
-    final viewport =
-        _position?.context.storageContext.findRenderObject() as RenderBox?;
-    if (box != null && box.attached && viewport != null && viewport.attached) {
-      final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
-      final h = box.size.height;
-      final vh = viewport.size.height;
-      final shown = (top + h).clamp(0.0, vh) - top.clamp(0.0, vh);
-      visible = h > 0 && shown / h >= 0.4;
-    }
-    _setActive(visible);
-  }
-
-  void _setActive(bool value) {
-    if (value == _active) return;
-    _active = value;
-    if (!_multi) return;
-    if (value) {
-      _progress.forward();
-    } else {
-      _progress.stop();
-    }
-  }
-
-  void _advance() {
-    if (!mounted || !_pageController.hasClients || !_multi) return;
-    final next = (_current + 1) % _images.length;
-    _pageController.animateToPage(
-      next,
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeInOut,
-    );
-  }
-
-  void _onPageChanged(int i) {
-    setState(() => _current = i);
-    if (_multi && _active) {
-      _progress.forward(from: 0);
-    } else {
-      _progress.value = 0;
-    }
-  }
-
-  Future<void> _openOrg() async {
-    final orgId = widget.entry.orgId;
+  Future<void> _openOrg(String? orgId) async {
     if (orgId == null || orgId.isEmpty) return;
-    final navigator = Navigator.of(context);
+    final nav = Navigator.of(context);
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(orgId)
-          .get();
+      final doc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
       if (!mounted || !doc.exists) return;
-      navigator.push(MaterialPageRoute(
-        builder: (_) => OrgViewScreen(orgId: orgId, orgData: doc.data()!),
-      ));
-    } catch (_) {/* ignore — org profile just won't open */}
+      nav.push(MaterialPageRoute(builder: (_) => OrgViewScreen(orgId: orgId, orgData: doc.data()!)));
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't open the organisation.", error: true);
+    }
   }
 
-  Future<void> _openEditSheet() async {
+  Future<void> _edit() async {
     final id = widget.entry.contributionId;
     if (id == null) return;
-
-    final result = await showModalBottomSheet<(String, String)>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _EditContributionSheet(
-        initialTitle: _title,
-        initialDescription: _description,
-      ),
+    final result = await showCanopySheet<(String, String)>(
+      context,
+      builder: (_) => _EditSheet(title: _title, description: _description),
     );
     if (result == null || !mounted) return;
-
-    final (newTitle, newDescription) = result;
-    setState(() => _savingEdit = true);
+    setState(() => _busy = true);
     try {
-      await FirebaseFirestore.instance
-          .collection('contributions')
-          .doc(id)
-          .update({
-        'title': newTitle,
-        'description': newDescription,
+      await FirebaseFirestore.instance.collection('contributions').doc(id).update({
+        'title': result.$1,
+        'description': result.$2,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
       setState(() {
-        _title = newTitle;
-        _description = newDescription;
-        _savingEdit = false;
+        _title = result.$1;
+        _description = result.$2;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _savingEdit = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save changes: $e')),
-      );
+      showCanopySnack(context, 'Saved.');
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't save. Try again.", error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _confirmDelete() async {
+  Future<void> _delete() async {
     final id = widget.entry.contributionId;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (id == null || uid == null) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Delete contribution?'),
-        content: const Text(
-            'This permanently removes the contribution and its points. This '
-            'cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final ok = await showCanopyConfirm(
+      context,
+      title: 'Delete this contribution?',
+      message: 'It is removed from your record along with any points it earned. This cannot be undone.',
+      confirmLabel: 'Delete',
+      danger: true,
     );
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _savingEdit = true);
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
     try {
-      await ContributionService()
-          .deleteContribution(contributionId: id, userId: uid);
-      if (!mounted) return;
-      setState(() {
-        _deleted = true;
-        _savingEdit = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _savingEdit = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete: $e')),
-      );
+      await ContributionService().deleteContribution(contributionId: id, userId: uid);
+      if (mounted) setState(() => _deleted = true);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        showCanopySnack(context, "Couldn't delete. Try again.", error: true);
+      }
     }
   }
 
   Future<void> _openUrl(String raw) async {
     var url = raw.trim();
-    if (url.isEmpty) return;
     if (!url.startsWith('http')) url = 'https://$url';
     final uri = Uri.tryParse(url);
     if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't open that link.", error: true);
+    }
   }
 
-  @override
-  void dispose() {
-    _position?.removeListener(_onScroll);
-    _progress.dispose();
-    _pageController.dispose();
-    super.dispose();
+  (String, Color) _status(CanopyPalette p) => switch (widget.entry.status) {
+        'verified' => ('Verified', p.success),
+        'rejected' => ('Not accepted', p.danger),
+        _ => ('In review', p.warning),
+      };
+
+  String get _shareText {
+    final e = widget.entry;
+    final desc = _description.trim();
+    final short = desc.length > 160 ? '${desc.substring(0, 160).trimRight()}…' : desc;
+    return [
+      _title,
+      if (short.isNotEmpty) short,
+      if (e.orgName.trim().isNotEmpty) 'Posted by ${e.orgName.trim()} on Canopy',
+    ].join('\n\n');
   }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: _shareText));
+    if (mounted) showCanopySnack(context, 'Copied to your clipboard.');
+  }
+
+  Future<void> _share() => SharePlus.instance.share(ShareParams(text: _shareText, subject: _title));
+
+  void _openPost() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FeedPostScreen(entry: widget.entry)));
 
   @override
   Widget build(BuildContext context) {
     if (_deleted) return const SizedBox.shrink();
-    final accent = feedTypeColor(widget.entry.type);
-    final orgName = widget.entry.orgName.trim();
-    final socials = <(String, IconData, String)>[
-      for (final (key, icon) in _kSocialOrder)
-        if ((widget.entry.socials[key] ?? '').trim().isNotEmpty)
-          (key, icon, widget.entry.socials[key]!.trim()),
-    ];
+    final p = context.canopy;
+    final e = widget.entry;
+    final slides = e.slides;
+    final desc = _description.trim();
+    final date = e.postedAt == null ? null : DateFormat('EEE d MMM').format(e.postedAt!.toDate());
+    final meta = [if (date != null) date, if (e.type.isNotEmpty) e.type].join(' · ');
+    const shade = Color(0xB3000000);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(_kRadius),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.darkGreen.withOpacity(0.10),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── Image (full card width, square) ───────────────────────────────
-          ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(_kRadius)),
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  PageView.builder(
-                    controller: _pageController,
-                    itemCount: _images.length,
-                    onPageChanged: _onPageChanged,
-                    itemBuilder: (_, i) => _CarouselImage(url: _images[i]),
+    return FutureBuilder<FeedOrg>(
+      future: feedPosterFor(e),
+      builder: (context, org) {
+        final o = org.data ?? const FeedOrg();
+        final orgName = o.name.trim().isNotEmpty ? o.name.trim() : e.orgName.trim();
+        // Social links: the ones on this post, then the organisation's own.
+        final merged = {...o.socials, ...e.socials};
+        final socials = [
+          for (final (key, icon, name) in _kSocialOrder)
+            if ((merged[key] ?? '').trim().isNotEmpty) (icon, name, merged[key]!.trim()),
+        ];
+        return CanopyCard(
+          padding: EdgeInsets.zero,
+          radius: _kCardRadius,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            // Photo with progress bars and the organisation over it.
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(_kCardRadius - 1)),
+              child: AspectRatio(
+                aspectRatio: 1.1,
+                child: Stack(fit: StackFit.expand, children: [
+                  GestureDetector(
+                    onTap: _openPost,
+                    child: slides.isEmpty
+                        ? CanopyImage(url: null, fallbackIcon: feedTypeIcon(e.type))
+                        : PageView.builder(
+                            controller: _pages,
+                            itemCount: slides.length,
+                            onPageChanged: (i) => setState(() => _current = i),
+                            itemBuilder: (_, i) => Semantics(
+                              image: true,
+                              label: slides[i].label == null ? 'Photo ${i + 1} of ${slides.length}' : '${slides[i].label} photo',
+                              child: CanopyImage(url: slides[i].url, fallbackIcon: feedTypeIcon(e.type)),
+                            ),
+                          ),
                   ),
-                  // Thin scrim so the carousel progress indicator stays
-                  // legible over a light photo.
-                  if (_multi)
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: 36,
-                      child: IgnorePointer(
+                  // Top scrim so the bars and chip read on any photo.
+                  const IgnorePointer(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        height: 96,
+                        width: double.infinity,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withOpacity(0.24),
-                                Colors.transparent,
-                              ],
+                              colors: [Color(0x73000000), Color(0x00000000)],
                             ),
                           ),
                         ),
                       ),
                     ),
-                  if (_multi)
-                    Positioned(
-                      left: 12,
-                      right: 12,
-                      top: 10,
-                      child: AnimatedBuilder(
-                        animation: _progress,
-                        builder: (_, __) => _StoryIndicator(
-                          count: _images.length,
-                          current: _current,
-                          fill: _progress.value,
-                        ),
-                      ),
-                    ),
-                  // Bottom-up gradient caption — org name + posted date
-                  // (Phase 1.3 image treatment).
-                  if (orgName.isNotEmpty)
-                    ImageCaptionOverlay(
-                      name: orgName,
-                      dateLabel: widget.entry.postedAt != null
-                          ? feedCardTimeAgo(widget.entry.postedAt!)
-                          : null,
-                      onTap: _openOrg,
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Content ───────────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _TitleWithAccent(title: _title, accent: accent),
-                    ),
-                    if (widget.editable &&
-                        widget.entry.contributionId != null) ...[
-                      const SizedBox(width: 8),
-                      if (_savingEdit)
-                        const Padding(
-                          padding: EdgeInsets.all(4),
-                          child: SizedBox(
-                              width: 16,
-                              height: 16,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2)),
-                        )
-                      else ...[
-                        InkWell(
-                          onTap: _openEditSheet,
-                          customBorder: const CircleBorder(),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(Icons.edit_outlined,
-                                size: 18,
-                                color: AppTheme.darkGreen.withOpacity(0.55)),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: _confirmDelete,
-                          customBorder: const CircleBorder(),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(Icons.delete_outline_rounded,
-                                size: 18, color: Colors.red.shade300),
+                  ),
+                  Positioned(
+                    top: CanopySpace.s8,
+                    left: CanopySpace.s12,
+                    right: CanopySpace.s12,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (slides.length > 1)
+                        Row(children: [
+                          for (var i = 0; i < slides.length; i++)
+                            Expanded(
+                              child: Container(
+                                height: 3,
+                                margin: EdgeInsets.only(right: i == slides.length - 1 ? 0 : 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(i <= _current ? 235 : 90),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ),
+                        ]),
+                      if (orgName.isNotEmpty) ...[
+                        SizedBox(height: slides.length > 1 ? CanopySpace.s12 : 0),
+                        GestureDetector(
+                          onTap: (o.orgId ?? e.orgId ?? '').isEmpty ? null : () => _openOrg(o.orgId ?? e.orgId),
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
+                            decoration: BoxDecoration(color: shade, borderRadius: BorderRadius.circular(CanopyRadius.pill)),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              CanopyAvatar(url: o.logoUrl, name: orgName, size: 28, org: o.orgId != null),
+                              const SizedBox(width: CanopySpace.s8),
+                              Flexible(
+                                child: Text(orgName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: CanopyType.label.copyWith(color: Colors.white)),
+                              ),
+                              if (o.verified) ...[
+                                const SizedBox(width: CanopySpace.s4),
+                                const Icon(Icons.verified_outlined, size: 15, color: Colors.white),
+                              ],
+                            ]),
                           ),
                         ),
                       ],
-                    ],
-                  ],
-                ),
-                if (_description.trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  _ExpandableText(text: _description.trim()),
-                ],
-                if (socials.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      for (final (_, icon, url) in socials)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 14),
-                          child: InkWell(
-                            onTap: () => _openUrl(url),
-                            customBorder: const CircleBorder(),
-                            child: Icon(icon, size: 22, color: _kSocialGrey),
-                          ),
-                        ),
-                    ],
+                    ]),
                   ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CarouselImage extends StatelessWidget {
-  final String url;
-  const _CarouselImage({required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          color: AppTheme.lightGreen.withOpacity(0.15),
-          child: const Center(
-            child: SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: AppTheme.primary),
-            ),
-          ),
-        );
-      },
-      errorBuilder: (_, __, ___) => Container(
-        color: AppTheme.lightGreen.withOpacity(0.2),
-        child: Icon(Icons.broken_image_outlined,
-            color: AppTheme.lightGreen, size: 36),
-      ),
-    );
-  }
-}
-
-/// Story-style page indicator — thin segments spanning the width; segments
-/// before the current one are filled, the current one fills left-to-right by
-/// [fill] (0..1), the rest are dim. Sits on top of the image.
-class _StoryIndicator extends StatelessWidget {
-  final int count;
-  final int current;
-  final double fill;
-
-  const _StoryIndicator({
-    required this.count,
-    required this.current,
-    required this.fill,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(count, (i) {
-        final double f = i < current
-            ? 1.0
-            : i == current
-                ? fill.clamp(0.0, 1.0)
-                : 0.0;
-        return Expanded(
-          child: Container(
-            height: 4,
-            margin: EdgeInsets.only(right: i == count - 1 ? 0 : 5),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.4),
-              borderRadius: BorderRadius.circular(2),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: f,
-                  child: Container(color: Colors.white),
-                ),
+                  if (slides.isNotEmpty && slides[_current].label != null)
+                    Positioned(
+                      left: CanopySpace.s12,
+                      bottom: CanopySpace.s12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: CanopySpace.s8, vertical: CanopySpace.s4),
+                        decoration: BoxDecoration(color: shade, borderRadius: BorderRadius.circular(CanopyRadius.xs)),
+                        child: Text(slides[_current].label!.toUpperCase(), style: CanopyType.statusLabel.copyWith(color: Colors.white)),
+                      ),
+                    ),
+                ]),
               ),
             ),
-          ),
-        );
-      }),
-    );
-  }
-}
-
-/// Colour-coded accent line at ≈1/3 of the title's measured width, directly
-/// above the title.
-class _TitleWithAccent extends StatelessWidget {
-  final String title;
-  final Color accent;
-
-  const _TitleWithAccent({required this.title, required this.accent});
-
-  static const TextStyle _titleStyle = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w800,
-    color: AppTheme.darkGreen,
-    height: 1.2,
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.of(context).size.width;
-        final painter = TextPainter(
-          text: TextSpan(text: title, style: _titleStyle),
-          maxLines: 2,
-          textDirection: Directionality.of(context),
-        )..layout(maxWidth: maxWidth);
-
-        final lineWidth = (painter.width / 3).clamp(18.0, maxWidth);
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: lineWidth,
-              height: 3,
-              decoration: BoxDecoration(
-                color: accent,
-                borderRadius: BorderRadius.circular(2),
+            // Body
+            InkWell(
+              onTap: _openPost,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(CanopySpace.cardPadding, CanopySpace.s12, CanopySpace.cardPadding, 0),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  if (widget.editable) ...[
+                    StatusLabel(_status(p).$1, color: _status(p).$2),
+                    const SizedBox(height: CanopySpace.s4),
+                  ],
+                  Text(_title, style: CanopyType.subhead.copyWith(color: p.ink)),
+                  if (desc.isNotEmpty) ...[
+                    const SizedBox(height: CanopySpace.s4),
+                    Text(desc, maxLines: 3, overflow: TextOverflow.ellipsis, style: CanopyType.body.copyWith(color: p.inkMuted)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: CanopySpace.s8),
+                      child: Text('Read more', style: CanopyType.label.copyWith(color: p.primaryInk)),
+                    ),
+                  ] else
+                    const SizedBox(height: CanopySpace.s8),
+                ]),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: _titleStyle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(CanopySpace.cardPadding, 0, CanopySpace.s8, CanopySpace.s8),
+              child: Row(children: [
+                Expanded(child: Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: CanopyType.caption.copyWith(color: p.inkMuted))),
+                for (final (icon, name, url) in socials)
+                  CanopyIconButton(icon: icon, tooltip: name, color: p.inkMuted, onPressed: () => _openUrl(url)),
+                CanopyIconButton(icon: Icons.link, tooltip: 'Copy link', color: p.inkMuted, onPressed: _copy),
+                CanopyIconButton(icon: Icons.ios_share, tooltip: 'Share', color: p.inkMuted, onPressed: _share),
+              ]),
             ),
-          ],
+            if (widget.editable && e.contributionId != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(CanopySpace.cardPadding, 0, CanopySpace.cardPadding, CanopySpace.cardPadding),
+                child: _busy
+                    ? const LinearProgressIndicator()
+                    : Row(children: [
+                        CanopyButton(label: 'Edit', variant: CanopyButtonVariant.quiet, size: CanopyButtonSize.compact, onPressed: _edit),
+                        const SizedBox(width: CanopySpace.s8),
+                        CanopyButton(label: 'Delete', variant: CanopyButtonVariant.quietDanger, size: CanopyButtonSize.compact, onPressed: _delete),
+                      ]),
+              ),
+          ]),
         );
       },
     );
   }
 }
 
-/// Description that collapses after [_kDescriptionPreviewChars] characters with
-/// an inline "Show more" / "Show less" toggle.
-class _ExpandableText extends StatefulWidget {
-  final String text;
-  const _ExpandableText({required this.text});
+class _EditSheet extends StatefulWidget {
+  final String title, description;
+  const _EditSheet({required this.title, required this.description});
 
   @override
-  State<_ExpandableText> createState() => _ExpandableTextState();
+  State<_EditSheet> createState() => _EditSheetState();
 }
 
-class _ExpandableTextState extends State<_ExpandableText> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = widget.text;
-    final isLong = text.length > _kDescriptionPreviewChars;
-    final style = TextStyle(
-      fontSize: 13,
-      height: 1.45,
-      color: AppTheme.darkGreen.withOpacity(0.7),
-    );
-
-    if (!isLong) {
-      return Text(text, style: style);
-    }
-
-    final shown = _expanded
-        ? text
-        : '${text.substring(0, _kDescriptionPreviewChars).trimRight()}… ';
-
-    return GestureDetector(
-      onTap: () => setState(() => _expanded = !_expanded),
-      behavior: HitTestBehavior.opaque,
-      child: Text.rich(
-        TextSpan(
-          text: shown,
-          style: style,
-          children: [
-            TextSpan(
-              text: _expanded ? '  Show less' : 'Show more',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.primary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EDIT SHEET — title + description only
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _EditContributionSheet extends StatefulWidget {
-  final String initialTitle;
-  final String initialDescription;
-
-  const _EditContributionSheet({
-    required this.initialTitle,
-    required this.initialDescription,
-  });
-
-  @override
-  State<_EditContributionSheet> createState() => _EditContributionSheetState();
-}
-
-class _EditContributionSheetState extends State<_EditContributionSheet> {
-  late final TextEditingController _title =
-      TextEditingController(text: widget.initialTitle);
-  late final TextEditingController _description =
-      TextEditingController(text: widget.initialDescription);
+class _EditSheetState extends State<_EditSheet> {
+  late final _title = TextEditingController(text: widget.title);
+  late final _desc = TextEditingController(text: widget.description);
+  bool _showErrors = false;
 
   @override
   void dispose() {
     _title.dispose();
-    _description.dispose();
+    _desc.dispose();
     super.dispose();
-  }
-
-  void _save() {
-    final title = _title.text.trim();
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title cannot be empty')),
-      );
-      return;
-    }
-    Navigator.of(context).pop((title, _description.text.trim()));
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    return CanopySheetBody(
+      title: 'Edit contribution',
+      caption: 'Only the title and description can change. Photos and details stay as logged.',
+      children: [
+        CanopyTextField(
+          label: 'Title',
+          controller: _title,
+          error: _showErrors && _title.text.trim().isEmpty ? 'Add a title.' : null,
+          onChanged: (_) => setState(() {}),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.darkGreen.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text('Edit contribution',
-                style: TextStyle(
-                    color: AppTheme.darkGreen,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            Text('You can update the title and description.',
-                style: TextStyle(
-                    color: AppTheme.darkGreen.withOpacity(0.55),
-                    fontSize: 13)),
-            const SizedBox(height: 18),
-            const Text('Title',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _title,
-              maxLength: 50,
-              decoration: InputDecoration(
-                hintText: 'Contribution title',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text('Description',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _description,
-              maxLines: 5,
-              minLines: 3,
-              decoration: InputDecoration(
-                hintText: 'Describe the work…',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              height: 48,
-              child: FilledButton(
-                onPressed: _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Save changes',
-                    style: TextStyle(fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
+        const SizedBox(height: CanopySpace.s16),
+        CanopyTextField(label: 'Description', controller: _desc, maxLines: 5),
+      ],
+      actions: [
+        CanopyButton(
+          label: 'Save',
+          expand: true,
+          onPressed: () {
+            if (_title.text.trim().isEmpty) {
+              setState(() => _showErrors = true);
+              return;
+            }
+            Navigator.pop(context, (_title.text.trim(), _desc.text.trim()));
+          },
         ),
-      ),
+      ],
     );
   }
 }

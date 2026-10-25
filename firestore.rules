@@ -20,76 +20,91 @@ rules_version = '2';
 //      instead of aspirational.
 // =============================================================================
 
-function isSignedIn() {
-  return request.auth != null;
-}
-
-function uid() {
-  return request.auth.uid;
-}
-
-function isServerWrite() {
-  // NOTE ON HOW THIS ACTUALLY PROTECTS ANYTHING:
-  // Cloud Functions using the Admin SDK (functions/src/*.ts) bypass these
-  // rules entirely by design — that's the real enforcement mechanism, and
-  // it's why "protected" fields above are only ever written from
-  // functions/src, never from the Flutter client. This claim check is a
-  // defense-in-depth backstop for any future path that talks to Firestore
-  // through a *client* SDK using a limited-privilege service identity
-  // (e.g. a Cloud Run job that isn't using Admin privileges) — it is not
-  // what makes Admin-SDK Cloud Function writes work; those already bypass
-  // this file. See functions/src/auth.ts for where such a claim would be
-  // minted if that path is ever built.
-  return isSignedIn() &&
-    request.auth.token.keys().hasAny(['server']) &&
-    request.auth.token.server == true;
-}
-
-function isOwner(ownerField) {
-  return isSignedIn() && ownerField == uid();
-}
-
-// Org membership check. Reads the caller's own Users/{uid} doc — this is a
-// single extra read per rule evaluation, which Firestore caches per-request,
-// so it is not the N+1 cost it looks like at first glance.
-function callerOrgId() {
-  return isSignedIn() &&
-    exists(/databases/$(database)/documents/Users/$(uid()))
-      ? get(/databases/$(database)/documents/Users/$(uid())).data.get('orgId', '')
-      : '';
-}
-
-function isSuperAdminOrg(orgId) {
-  // Phase 5.1 of the release roadmap — "special" (blockchain/financial-
-  // literacy) articles are restricted to one org for now. orgId == null is
-  // never true here (organizations docs require an id), so this only ever
-  // matches a real, explicitly-flagged org.
-  //
-  // BOOTSTRAP: the literal below must be kept identical to kSuperAdminOrgId
-  // in lib/Shared/config/platform_config.dart — this lets the restriction
-  // work by editing one constant instead of writing a Firestore doc field.
-  // Replace 'REPLACE_WITH_SHIELD_ORG_ID' in BOTH places with the real org
-  // id at the same time. The isSuperAdmin doc-flag check below still works
-  // independently once that's set, if a future org needs this without a
-  // code change.
-  return orgId == 'REPLACE_WITH_SHIELD_ORG_ID' ||
-    (orgId != null &&
-      exists(/databases/$(database)/documents/organizations/$(orgId)) &&
-      get(/databases/$(database)/documents/organizations/$(orgId)).data.get('isSuperAdmin', false) == true);
-}
-
-function isOrgMember(orgId) {
-  return isSignedIn() && callerOrgId() == orgId;
-}
-
-// Fields no client write may ever touch directly, regardless of role.
-// Server (Cloud Functions, via Admin SDK) is the only writer for these.
-function protectedFieldsUntouched(protectedKeys) {
-  return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedKeys);
-}
-
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helpers live INSIDE this match on purpose: `database` is only bound
+    // here. Declared at file top level, $(database) is null and every helper
+    // that reads a document (callerOrgId, isSuperAdminOrg) silently failed.
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function isServerWrite() {
+      // NOTE ON HOW THIS ACTUALLY PROTECTS ANYTHING:
+      // Cloud Functions using the Admin SDK (functions/src/*.ts) bypass these
+      // rules entirely by design — that's the real enforcement mechanism, and
+      // it's why "protected" fields above are only ever written from
+      // functions/src, never from the Flutter client. This claim check is a
+      // defense-in-depth backstop for any future path that talks to Firestore
+      // through a *client* SDK using a limited-privilege service identity
+      // (e.g. a Cloud Run job that isn't using Admin privileges) — it is not
+      // what makes Admin-SDK Cloud Function writes work; those already bypass
+      // this file. See functions/src/auth.ts for where such a claim would be
+      // minted if that path is ever built.
+      return isSignedIn() &&
+        request.auth.token.keys().hasAny(['server']) &&
+        request.auth.token.server == true;
+    }
+
+    function isOwner(ownerField) {
+      return isSignedIn() && ownerField == uid();
+    }
+
+    // Org membership check. Reads the caller's own Users/{uid} doc — this is a
+    // single extra read per rule evaluation, which Firestore caches per-request,
+    // so it is not the N+1 cost it looks like at first glance.
+    function callerOrgId() {
+      // Parenthesised on purpose: `a && b ? x : y` parses as `a && (b ? x : y)`,
+      // which made this return a bool/null and broke every isOrgMember() check.
+      return (isSignedIn() &&
+        exists(/databases/$(database)/documents/Users/$(uid())))
+          ? get(/databases/$(database)/documents/Users/$(uid())).data.get('orgId', '')
+          : '';
+    }
+
+    function isSuperAdminOrg(orgId) {
+      // Phase 5.1 of the release roadmap — "special" (blockchain/financial-
+      // literacy) articles are restricted to one org for now. orgId == null is
+      // never true here (organizations docs require an id), so this only ever
+      // matches a real, explicitly-flagged org.
+      //
+      // BOOTSTRAP: the literal below must be kept identical to kSuperAdminOrgId
+      // in lib/Shared/config/platform_config.dart — this lets the restriction
+      // work by editing one constant instead of writing a Firestore doc field.
+      // Replace 'REPLACE_WITH_SHIELD_ORG_ID' in BOTH places with the real org
+      // id at the same time. The isSuperAdmin doc-flag check below still works
+      // independently once that's set, if a future org needs this without a
+      // code change.
+      return orgId == 'REPLACE_WITH_SHIELD_ORG_ID' ||
+        (orgId != null &&
+          exists(/databases/$(database)/documents/organizations/$(orgId)) &&
+          get(/databases/$(database)/documents/organizations/$(orgId)).data.get('isSuperAdmin', false) == true);
+    }
+
+    // Article/response upvote counter step: +1 only when the caller's vote doc
+    // is being created in this batch, -1 only when it is being deleted.
+    function voteStepOk(before, after, votePath) {
+      return (after.get('upvotes', 0) == before.get('upvotes', 0) + 1 &&
+                !exists(votePath) && existsAfter(votePath)) ||
+             (after.get('upvotes', 0) == before.get('upvotes', 0) - 1 &&
+                exists(votePath) && !existsAfter(votePath));
+    }
+
+    function isOrgMember(orgId) {
+      return isSignedIn() && callerOrgId() == orgId;
+    }
+
+    // Fields no client write may ever touch directly, regardless of role.
+    // Server (Cloud Functions, via Admin SDK) is the only writer for these.
+    function protectedFieldsUntouched(protectedKeys) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedKeys);
+    }
 
     // ── Identity ──────────────────────────────────────────────────────────
     // Covers both casings found in the codebase (`Users`, `users`) until
@@ -140,9 +155,18 @@ service cloud.firestore {
       allow update: if isServerWrite();
       allow delete: if false;
 
+      match /collectionHandoffs/{handoffId} {
+        allow read: if true;
+        allow create: if isOrgMember(orgId);
+        allow update: if isOrgMember(orgId) &&
+          protectedFieldsUntouched(['verified', 'impactPointsAwarded', 'verificationStatus']);
+        allow update: if isServerWrite();
+      }
       match /{subcollection}/{docId} {
         allow read: if true;
-        allow write: if isOrgMember(orgId) || isServerWrite();
+        // collectionHandoffs has its own stricter rule; rules OR together, so
+        // it must be excluded here or members could self-verify handoffs.
+        allow write: if (isOrgMember(orgId) && subcollection != 'collectionHandoffs') || isServerWrite();
       }
     }
     match /organisations/{orgId} {
@@ -162,7 +186,9 @@ service cloud.firestore {
       }
       match /{subcollection}/{docId} {
         allow read: if true;
-        allow write: if isOrgMember(orgId) || isServerWrite();
+        // collectionHandoffs has its own stricter rule; rules OR together, so
+        // it must be excluded here or members could self-verify handoffs.
+        allow write: if (isOrgMember(orgId) && subcollection != 'collectionHandoffs') || isServerWrite();
       }
     }
     match /Organizations/{orgId} {
@@ -176,12 +202,33 @@ service cloud.firestore {
     }
     match /OrgMembers/{docId} {
       allow read: if isSignedIn();
-      allow write: if isServerWrite() ||
-        (isSignedIn() && isOrgMember(request.resource.data.orgId));
+      // Org staff manage their roster; a member may request to join (pending,
+      // member role) and withdraw / leave their own record.
+      // Access to run the organisation (grantsAccess / accessRole) is only ever
+      // written by the invite/accept/remove functions, never by a client.
+      allow create: if isServerWrite() ||
+        (isOrgMember(request.resource.data.orgId) &&
+          !request.resource.data.keys().hasAny(['grantsAccess', 'accessRole', 'userId'])) ||
+        (isOwner(request.resource.data.userId) &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.role == 'member' &&
+          !request.resource.data.keys().hasAny(['grantsAccess', 'accessRole']));
+      allow update: if isServerWrite() ||
+        (isOrgMember(resource.data.orgId) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['grantsAccess', 'accessRole', 'userId', 'orgId']));
+      // An invited person may decline their own invite (only the status, only to 'declined').
+      allow update: if isSignedIn() &&
+        resource.data.status == 'invited' &&
+        resource.data.contact == request.auth.token.email.lower() &&
+        request.resource.data.status == 'declined' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+      allow delete: if isServerWrite() || isOrgMember(resource.data.orgId) ||
+        isOwner(resource.data.get('userId', ''));
     }
     match /Teams/{teamId} {
       allow read: if isSignedIn();
-      allow write: if isOrgMember(resource.data.orgId) || isServerWrite();
+      allow create: if isServerWrite() || isOrgMember(request.resource.data.orgId);
+      allow update, delete: if isServerWrite() || isOrgMember(resource.data.orgId);
     }
 
     // ── Community participation ─────────────────────────────────────────
@@ -249,6 +296,11 @@ service cloud.firestore {
       allow write: if isOrgMember(resource.data.orgId) || isServerWrite() ||
         (request.resource != null && isOrgMember(request.resource.data.orgId));
     }
+    // Contact support (Profile → Help). Members create; only server/admin reads.
+    match /support_requests/{reqId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if false;
+    }
     match /activity_registrations/{regId} {
       allow read: if isSignedIn();
       allow create: if isOwner(request.resource.data.userId);
@@ -264,7 +316,10 @@ service cloud.firestore {
     }
     match /announcements/{docId} {
       allow read: if true;
-      allow write: if isOrgMember(resource.data.orgId) || isServerWrite();
+      // Create checks the incoming orgId (resource is null on create — the
+      // old single rule silently refused every org broadcast).
+      allow create: if isServerWrite() || isOrgMember(request.resource.data.orgId);
+      allow update, delete: if isServerWrite() || isOrgMember(resource.data.orgId);
     }
     match /articles/{docId} {
       allow read: if true;
@@ -287,8 +342,64 @@ service cloud.firestore {
           isSuperAdminOrg(request.resource.data.get('orgId', null))
         );
       allow update: if isOwner(resource.data.createdBy) &&
-        protectedFieldsUntouched(['createdBy', 'authorName']);
+        protectedFieldsUntouched(['createdBy', 'authorName', 'upvotes']);
       allow update: if isServerWrite();
+      // Upvote counter: only 'upvotes', by exactly one, in the same batch as
+      // the caller's own vote doc appearing (+1) or going (-1).
+      allow update: if isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes']) &&
+        voteStepOk(resource.data, request.resource.data,
+          /databases/$(database)/documents/articles/$(docId)/votes/$(uid()));
+
+      match /votes/{voterId} {
+        allow read: if isOwner(voterId);
+        allow create: if isOwner(voterId) &&
+          getAfter(/databases/$(database)/documents/articles/$(docId)).data.get('upvotes', 0) ==
+            get(/databases/$(database)/documents/articles/$(docId)).data.get('upvotes', 0) + 1;
+        allow delete: if isOwner(voterId) &&
+          getAfter(/databases/$(database)/documents/articles/$(docId)).data.get('upvotes', 0) ==
+            get(/databases/$(database)/documents/articles/$(docId)).data.get('upvotes', 0) - 1;
+      }
+
+      // Responses: public to read, any signed-in member may post as
+      // themselves. Author edits text or removes (blanks) their own; the
+      // publishing organisation may remove (blank) any on its article.
+      match /responses/{responseId} {
+        allow read: if true;
+        allow create: if isSignedIn() &&
+          request.resource.data.authorUid == uid() &&
+          request.resource.data.upvotes == 0 &&
+          request.resource.data.deleted == false &&
+          request.resource.data.body is string &&
+          request.resource.data.body.size() > 0 &&
+          request.resource.data.body.size() <= 2000 &&
+          (request.resource.data.parentId == null ||
+            exists(/databases/$(database)/documents/articles/$(docId)/responses/$(request.resource.data.parentId)));
+        allow update: if isOwner(resource.data.authorUid) &&
+          resource.data.deleted == false &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt']) &&
+          request.resource.data.body.size() > 0 &&
+          request.resource.data.body.size() <= 2000;
+        allow update: if (isOwner(resource.data.authorUid) ||
+            isOrgMember(get(/databases/$(database)/documents/articles/$(docId)).data.get('orgId', null))) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'deleted', 'removedBy']) &&
+          request.resource.data.deleted == true &&
+          request.resource.data.body == '';
+        allow update: if isSignedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvotes']) &&
+          voteStepOk(resource.data, request.resource.data,
+            /databases/$(database)/documents/articles/$(docId)/responses/$(responseId)/votes/$(uid()));
+
+        match /votes/{voterId} {
+          allow read: if isOwner(voterId);
+          allow create: if isOwner(voterId) &&
+            getAfter(/databases/$(database)/documents/articles/$(docId)/responses/$(responseId)).data.get('upvotes', 0) ==
+              get(/databases/$(database)/documents/articles/$(docId)/responses/$(responseId)).data.get('upvotes', 0) + 1;
+          allow delete: if isOwner(voterId) &&
+            getAfter(/databases/$(database)/documents/articles/$(docId)/responses/$(responseId)).data.get('upvotes', 0) ==
+              get(/databases/$(database)/documents/articles/$(docId)/responses/$(responseId)).data.get('upvotes', 0) - 1;
+        }
+      }
     }
     match /notifications/{docId} {
       allow read: if isOwner(resource.data.userId);
@@ -297,6 +408,12 @@ service cloud.firestore {
     match /map_pins/{docId} {
       allow read: if true;
       allow write: if isServerWrite() || (isSignedIn() && request.resource.data.reportedBy == uid());
+      // Pins placed from the org map tools (org_map_ops.dart) carry
+      // added_by_org_id rather than reportedBy.
+      allow create: if isSignedIn() && request.resource.data.get('added_by_org_id', '') != '' &&
+        isOrgMember(request.resource.data.added_by_org_id);
+      allow update, delete: if isSignedIn() && resource.data.get('added_by_org_id', '') != '' &&
+        isOrgMember(resource.data.added_by_org_id);
     }
 
     // ── Environmental Operations ────────────────────────────────────────
@@ -348,7 +465,12 @@ service cloud.firestore {
     match /market_order/{orderId} { allow read: if true; allow write: if isServerWrite() || isSignedIn(); }
     match /market_listings/{docId} { allow read: if true; allow write: if isServerWrite() || isSignedIn(); }
     match /marketOrders/{docId} { allow read: if true; allow write: if isServerWrite() || isSignedIn(); }
-    match /collectors/{docId} { allow read: if true; allow write: if isServerWrite() || isOwner(resource.data.userId); }
+    // Legacy fleet mirror: docs carry org_id (not userId), so scope by org.
+    match /collectors/{docId} {
+      allow read: if true;
+      allow create: if isServerWrite() || isOrgMember(request.resource.data.org_id);
+      allow update, delete: if isServerWrite() || isOrgMember(resource.data.org_id);
+    }
     match /fleetCollectors/{docId} { allow read: if isSignedIn(); allow write: if isServerWrite(); }
     match /Volunteers/{docId} { allow read: if isSignedIn(); allow write: if isOwner(resource.data.userId) || isServerWrite(); }
     match /volunteerRsvps/{docId} { allow read: if isSignedIn(); allow write: if isOwner(resource.data.userId) || isServerWrite(); }
@@ -385,15 +507,47 @@ service cloud.firestore {
     // so it is scoped to just the two people on it.
     match /service_listings/{listingId} {
       allow read: if true; // public browse, same as /listings
-      allow create: if isSignedIn() && request.resource.data.postedByUid == uid();
+      // Electrical/plumbing listings need a personal trade license
+      // (EPRA/NCA) that Canopy verifies by hand before the listing is
+      // public — see ServiceCategory.requiresLicenseVerification and
+      // USER_PAGES_SERVICE_CATEGORIES_BRIEF.md. Every other category
+      // creates with licenseVerificationStatus 'notRequired', same as
+      // before this pipeline existed. This hardcodes the same two
+      // category names as that Dart getter — rules can't call into app
+      // code, so keep the two lists in sync by hand if it ever changes.
+      allow create: if isSignedIn() && request.resource.data.postedByUid == uid() &&
+        (
+          (request.resource.data.category in ['electrical', 'plumbing'] &&
+            request.resource.data.licenseVerificationStatus == 'pending' &&
+            request.resource.data.licenseDocumentUrl is string &&
+            request.resource.data.licenseDocumentUrl.size() > 0) ||
+          (!(request.resource.data.category in ['electrical', 'plumbing']) &&
+            request.resource.data.licenseVerificationStatus == 'notRequired')
+        );
       // Owner manages their own listing (title/pricing/status/etc). Any
       // signed-in member may additionally bump the engagement counters —
       // this is what ServiceMarketplaceService.incrementListingView (any
       // viewer) and .requestBooking (the requester, bumping bookingCount on
       // a listing they don't own) actually need to do from the client.
+      // licenseVerifiedAt/licenseVerifiedBy/licenseRejectionReason are
+      // never owner-writable — only a server write (Cloud Functions Admin
+      // SDK, or a human editing Firestore directly in the console, same as
+      // ContributionService.status today) can set them. An owner MAY
+      // resubmit licenseDocumentUrl after a rejection, but only by moving
+      // licenseVerificationStatus back to 'pending' — never straight to
+      // 'verified' from the client, and never once it's already
+      // 'verified' (no silently swapping a verified provider's document).
       allow update: if isServerWrite() ||
         (isOwner(resource.data.postedByUid) &&
-          protectedFieldsUntouched(['postedByUid', 'orgId', 'createdAt'])) ||
+          protectedFieldsUntouched(['postedByUid', 'orgId', 'createdAt',
+            'licenseVerifiedAt', 'licenseVerifiedBy', 'licenseRejectionReason']) &&
+          (protectedFieldsUntouched(['licenseDocumentUrl', 'licenseVerificationStatus']) ||
+            (resource.data.get('licenseVerificationStatus', 'notRequired') != 'verified' &&
+              request.resource.data.licenseVerificationStatus == 'pending')) &&
+          // A verified license covers one trade — a verified plumber can't
+          // re-badge as a verified electrician by switching category.
+          (resource.data.get('licenseVerificationStatus', 'notRequired') != 'verified' ||
+            protectedFieldsUntouched(['category']))) ||
         (isSignedIn() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['viewCount', 'bookingCount', 'updatedAt']));
@@ -417,18 +571,22 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'quotedPriceKes', 'quoteNote', 'quotedAt', 'updatedAt']) &&
           request.resource.data.status in ['quoted', 'declined']) ||
-        // Accept quote / pay / cancel: only the requester named on this
-        // booking. The fee split (platformFeeKes/providerPayoutKes/etc.) and
-        // paymentStatus are computed and written client-side here — the same
-        // documented limitation as /marketplace_transactions ("simulated
-        // rather than reconciled through authenticated callbacks"). Real
-        // payment integration (explicitly deferred — see
-        // IMPLEMENTATION_NOTES_SERVICES.md) is where this becomes a server
-        // (isServerWrite()) check instead.
+        // Accept quote / cancel: only the requester named on this booking,
+        // and only the fee split (platformFeeKes/providerPayoutKes/etc.)
+        // locked in at acceptance — never paymentStatus or anything
+        // Safaricom reports back. Those are written exclusively by
+        // initiateServicePayment / darajaStkCallback /
+        // onServiceBookingCompleted / darajaB2cResultCallback
+        // (functions/src/index.ts, Admin SDK — bypasses these rules
+        // entirely, see isServerWrite()'s own comment above). A client that
+        // could set paymentStatus: 'paid' itself could pay nothing and
+        // still mark its own job paid — this replaces the previously
+        // client-writable paymentStatus field now that real payment
+        // integration (Daraja) exists.
         (isSignedIn() && resource.data.requesterUid == uid() &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'agreedPriceKes', 'platformFeeKes', 'providerPayoutKes',
-                      'requesterBookingFeeKes', 'requesterTotalKes', 'paymentStatus',
+                      'requesterBookingFeeKes', 'requesterTotalKes',
                       'acceptedAt', 'cancellationReason', 'updatedAt'])) ||
         // Scheduling / completion: only the provider named on this booking.
         (isSignedIn() && resource.data.providerUid == uid() &&
@@ -445,15 +603,25 @@ service cloud.firestore {
         (request.resource != null && isOrgMember(request.resource.data.orgId));
     }
     match /programme_enquiries/{docId} {
-      allow read: if isOwner(resource.data.userId) || isOrgMember(resource.data.orgId);
-      allow create: if isOwner(request.resource.data.userId);
+      // The model writes fromUserId (not userId).
+      allow read: if isOwner(resource.data.fromUserId) || isOrgMember(resource.data.orgId);
+      allow create: if isOwner(request.resource.data.fromUserId);
       allow update: if isOrgMember(resource.data.orgId) || isServerWrite();
     }
 
     // ── Members / partners ───────────────────────────────────────────────
     match /members/{docId} { allow read: if isSignedIn(); allow write: if isServerWrite() || isOrgMember(resource.data.orgId); }
     match /Members/{docId} { allow read: if isSignedIn(); allow write: if isServerWrite() || isOrgMember(resource.data.orgId); }
-    match /orgPartners/{docId} { allow read: if true; allow write: if isOrgMember(resource.data.orgId) || isServerWrite(); }
+    // Partnerships are two mirrored docs sharing a pairId: the sender's
+    // ('invited') and the target's ('pending'). Either side may update or
+    // remove both halves.
+    match /orgPartners/{docId} {
+      allow read: if true;
+      allow create: if isOrgMember(request.resource.data.orgId)
+        || (isOrgMember(request.resource.data.partnerOrgId) && request.resource.data.status == 'pending');
+      allow update, delete: if isOrgMember(resource.data.orgId)
+        || isOrgMember(resource.data.get('partnerOrgId', '')) || isServerWrite();
+    }
 
     // ── Cultural Archive — visibility spectrum enforced server-side ────────
     // Public/community_only/restricted/sealed states (Layer 4/5 architecture
@@ -461,20 +629,51 @@ service cloud.firestore {
     // than a simple ownership check — the trusted API is the right place to
     // gate "restricted"/"sealed" reads, not client-evaluated rules alone.
     // Rules here cover writes and the "public" read case only.
+    // Fields match what the app writes (org_id, locality map). Drafts are
+    // stored with visibility 'draft' and are private to their organisation;
+    // only drafts can be deleted — published entries are sealed instead.
     match /cultural_entries/{entryId} {
-      allow read: if resource.data.visibility == 'public' || isServerWrite() || isSignedIn();
-      allow create: if isSignedIn() &&
-        request.resource.data.keys().hasAll(['contributorOrgId', 'communityId']);
-      allow update: if isServerWrite() || isOrgMember(resource.data.contributorOrgId);
+      allow read: if resource.data.visibility == 'public' || isServerWrite() ||
+        (isSignedIn() && resource.data.visibility != 'draft') ||
+        isOrgMember(resource.data.org_id);
+      allow create: if isOrgMember(request.resource.data.org_id);
+      allow update: if isServerWrite() || isOrgMember(resource.data.org_id);
+      allow delete: if isOrgMember(resource.data.org_id) && resource.data.visibility == 'draft';
     }
-    match /cultural_media/{docId} { allow read: if isSignedIn(); allow write: if isServerWrite() || isSignedIn(); }
+    match /cultural_media/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isServerWrite() || isOrgMember(request.resource.data.org_id);
+      allow update, delete: if isServerWrite() || isOrgMember(resource.data.org_id);
+    }
+    // Members write to the archive (question / addition / dispute); the
+    // owning organisation replies, assigns and resolves — reply fields only.
     match /cultural_comments/{docId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.authorId == uid();
-      allow update: if isServerWrite(); // dispute routing must stay server-controlled
+      allow create: if isSignedIn() && request.resource.data.commenter_id == uid();
+      allow update: if isServerWrite() ||
+        (isOrgMember(get(/databases/$(database)/documents/cultural_entries/$(resource.data.entry_id)).data.org_id) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'reply_text', 'has_reply', 'replied_at', 'status', 'is_resolved',
+            'owner_uid', 'owner_name', 'resolution_note', 'resolved_at']));
     }
-    match /cultural_relations/{docId} { allow read: if isSignedIn(); allow write: if isServerWrite(); }
-    match /heritage_hierarchy/{docId} { allow read: if true; allow write: if isServerWrite(); }
+    match /cultural_relations/{docId} {
+      allow read: if isSignedIn();
+      allow update: if isServerWrite() ||
+        isOrgMember(get(/databases/$(database)/documents/cultural_entries/$(resource.data.from_entry_id)).data.org_id) ||
+        isOrgMember(get(/databases/$(database)/documents/cultural_entries/$(resource.data.to_entry_id)).data.org_id);
+      allow create, delete: if isServerWrite();
+    }
+    // Org reps set country / category / community background images from the
+    // Cultural Archive's Backgrounds screen — image fields only.
+    match /heritage_hierarchy/{docId} {
+      allow read: if true;
+      allow create: if isServerWrite() ||
+        (isSignedIn() && callerOrgId() != null && request.resource.data.keys().hasOnly(['bg_image_url', 'card_image_url']));
+      allow update: if isServerWrite() ||
+        (isSignedIn() && callerOrgId() != null &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bg_image_url', 'card_image_url']));
+      allow delete: if isServerWrite();
+    }
 
     // ── Everything else: default deny ───────────────────────────────────
     match /{document=**} {

@@ -12,7 +12,20 @@
           "package_name": "com.impactledger.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "147547439386-bvpuiseq4oits7m8nuien9l6k78sqmcb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.impactledger.app",
+            "certificate_hash": "d4b1fb0b518b4e9fcf1003b3a482cb7a360dbc2c"
+          }
+        },
+        {
+          "client_id": "147547439386-sph1blplv5cp3ljqjphkughb152902f2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDyCwcbp4PZPpoSswqnSbpEJcwOC0XwxMs"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "147547439386-sph1blplv5cp3ljqjphkughb152902f2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

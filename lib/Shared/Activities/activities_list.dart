@@ -1,5 +1,12 @@
-import 'package:flutter/material.dart';
+// lib/Shared/Activities/activities_list.dart
+//
+// Activities list (DESIGN_HANDOFF.md §3) — the new ActivityCard. Type filter
+// chips (ink when selected), upcoming soonest-first, then a "Past" section.
+// Status, type, timeframe and location are filtered client-side so the
+// stream stays index-free (see CommunityService.getActivitiesStream).
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../Models/geo/canopy_location.dart';
@@ -7,35 +14,19 @@ import '../../Models/user.dart';
 import '../../Providers/location_provider.dart';
 import '../../Services/Community/community_service.dart';
 import '../../Services/Geo/geo_registry.dart';
-import '../theme/app_theme.dart';
+import '../../theme/canopy_components.dart';
 import 'activity_card.dart';
 import 'activity_filter_sheet.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPE CHIP CONFIGURATION  (new schema types)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _TypeOption {
-  final String? value; // null = all
-  final String label;
-  final IconData icon;
-
-  const _TypeOption({required this.value, required this.label, required this.icon});
-}
-
-const List<_TypeOption> _typeOptions = [
-  _TypeOption(value: null, label: 'All', icon: Icons.grid_view_rounded),
-  _TypeOption(value: 'cleanup', label: 'Cleanup', icon: Icons.delete_sweep_outlined),
-  _TypeOption(value: 'tree_planting', label: 'Planting', icon: Icons.park_outlined),
-  _TypeOption(value: 'awareness', label: 'Awareness', icon: Icons.campaign_outlined),
-  _TypeOption(value: 'training', label: 'Training', icon: Icons.school_outlined),
-  _TypeOption(value: 'monitoring', label: 'Monitoring', icon: Icons.monitor_heart_outlined),
-  _TypeOption(value: 'other', label: 'Other', icon: Icons.event_outlined),
+const _typeOptions = <(String?, String)>[
+  (null, 'All'),
+  ('cleanup', 'Clean-up'),
+  ('tree_planting', 'Planting'),
+  ('awareness', 'Awareness'),
+  ('training', 'Training'),
+  ('monitoring', 'Monitoring'),
+  ('other', 'Other'),
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
 
 class ActivitiesListScreen extends StatefulWidget {
   final bool embedded;
@@ -52,163 +43,146 @@ class ActivitiesListScreen extends StatefulWidget {
 }
 
 class _ActivitiesListScreenState extends State<ActivitiesListScreen> {
-  // Local type selection overrides filter.type from the parent AppBar filter
-  late String? _localType;
-
-  @override
-  void initState() {
-    super.initState();
-    _localType = widget.filter.type;
-  }
+  late String? _type = widget.filter.type;
+  int _retry = 0;
 
   @override
   void didUpdateWidget(ActivitiesListScreen old) {
     super.didUpdateWidget(old);
-    // Sync local type when parent filter changes (e.g. user cleared the filter)
     if (old.filter.type != widget.filter.type) {
-      setState(() => _localType = widget.filter.type);
+      setState(() => _type = widget.filter.type);
     }
   }
 
-  // Status + type are filtered here rather than in the query: the stream is
-  // deliberately index-free (see CommunityService.getActivitiesStream).
-  List<QueryDocumentSnapshot> _applyStatusAndType(
-      List<QueryDocumentSnapshot> docs) {
+  List<QueryDocumentSnapshot> _filter(
+      List<QueryDocumentSnapshot> docs, LocationFilter scope) {
     final statuses =
         CommunityService.visibleStatuses(includeFull: widget.filter.showFull);
-    return docs.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      final status = data['status'] as String? ?? 'open';
-      if (!statuses.contains(status)) return false;
-      if (_localType != null && data['type'] != _localType) return false;
-      return true;
-    }).toList();
-  }
-
-  // Location filter. Applied client-side for the same reason status and type
-  // are: CommunityService.getActivitiesStream is deliberately index-free, and
-  // adding geo as a second server-side equality predicate alongside its
-  // existing orderBy would require a composite index per tier.
-  //
-  // Documents written before the geo migration carry no canonical ids. Those
-  // are resolved on the fly from their legacy {area, city} fields so a
-  // community's existing activities do not vanish the moment the filter ships.
-  List<QueryDocumentSnapshot> _applyLocation(
-      List<QueryDocumentSnapshot> docs, LocationFilter scope) {
-    if (!widget.filter.useLocationScope || scope.isEverywhere) return docs;
-    return docs.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      final raw = (data['location'] as Map<String, dynamic>?) ?? data;
-      final resolved = GeoRegistry.instance.resolveFromDocument(raw);
-      return widget.filter.matchesLocation(resolved, scope);
-    }).toList();
-  }
-
-  // Client-side timeframe filter applied after Firestore fetch
-  List<QueryDocumentSnapshot> _applyTimeframe(List<QueryDocumentSnapshot> docs) {
     final tf = widget.filter.timeframe;
-    if (tf == null) return docs;
     final now = DateTime.now();
     return docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
-      final ts = data['scheduledAt'] as Timestamp?;
-      if (ts == null) return false;
-      final dt = ts.toDate();
-      return switch (tf) {
-        'today' => dt.year == now.year &&
-            dt.month == now.month &&
-            dt.day == now.day,
-        'this_week' =>
-          dt.isAfter(now) &&
+      if (!statuses.contains(data['status'] as String? ?? 'open')) return false;
+      if (_type != null && data['type'] != _type) return false;
+      if (tf != null) {
+        final dt = (data['scheduledAt'] as Timestamp?)?.toDate();
+        if (dt == null) return false;
+        final ok = switch (tf) {
+          'today' => dt.year == now.year && dt.month == now.month && dt.day == now.day,
+          'this_week' => dt.isAfter(now) &&
               dt.isBefore(now.add(Duration(days: 7 - now.weekday + 1))),
-        'this_month' =>
-          dt.year == now.year && dt.month == now.month,
-        _ => true,
-      };
+          'this_month' => dt.year == now.year && dt.month == now.month,
+          _ => true,
+        };
+        if (!ok) return false;
+      }
+      if (widget.filter.useLocationScope && !scope.isEverywhere) {
+        // Pre-geo docs resolve on the fly from legacy {area, city}.
+        final raw = (data['location'] as Map<String, dynamic>?) ?? data;
+        final resolved = GeoRegistry.instance.resolveFromDocument(raw);
+        if (!widget.filter.matchesLocation(resolved, scope)) return false;
+      }
+      return true;
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<F_User?>(context);
-
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Type chip bar ──────────────────────────────────────────────
-        _TypeChipBar(
-          selected: _localType,
-          onSelect: (v) => setState(() => _localType = v),
-        ),
-
-        // ── List ────────────────────────────────────────────────────────
+        const SizedBox(height: CanopySpace.s4),
+        CanopyChipRail(chips: [
+          for (final t in _typeOptions)
+            CanopyFilterChip(
+              label: t.$2,
+              selected: _type == t.$1,
+              onTap: () => setState(() => _type = t.$1),
+            ),
+        ]),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            // Firestore: activities — real-time stream of open/full upcoming activities
+            key: ValueKey(_retry),
             stream: CommunityService().getActivitiesStream(
-              type: _localType,
+              type: _type,
               includeFull: widget.filter.showFull,
             ),
             builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return _ShimmerList();
-              }
-
               if (snap.hasError) {
-                return _ErrorCard(
-                  message: 'Failed to load activities. Check your connection.',
-                  onRetry: () => setState(() {}),
+                return CanopyErrorState(
+                  title: "Couldn't load activities",
+                  onRetry: () => setState(() => _retry++),
                 );
               }
-
+              if (!snap.hasData) {
+                return ListView(
+                  padding: const EdgeInsets.all(CanopySpace.gutter),
+                  children: const [
+                    ActivityShimmerCard(),
+                    SizedBox(height: CanopySpace.s16),
+                    ActivityShimmerCard(),
+                  ],
+                );
+              }
               final scope = context.watch<LocationProvider>().filter;
-              final allDocs = snap.data?.docs ?? [];
-              final docs = _applyLocation(
-                  _applyTimeframe(_applyStatusAndType(allDocs)), scope);
+              final docs = _filter(snap.data!.docs, scope);
+              final hasFilter = !widget.filter.isDefault || _type != null;
+              final scoped = widget.filter.useLocationScope && !scope.isEverywhere;
 
               if (docs.isEmpty) {
-                return _EmptyState(
-                  hasFilter: !widget.filter.isDefault || _localType != null,
-                  locationLabel: widget.filter.useLocationScope &&
-                          !scope.isEverywhere
-                      ? scope.label
+                if (scoped) {
+                  return CanopyEmptyState(
+                    icon: Icons.location_off_outlined,
+                    title: 'Nothing happening in ${scope.label}',
+                    line: 'Widen your location to see activities nearby.',
+                    actionLabel: 'Show everywhere',
+                    onAction: context.read<LocationProvider>().showEverywhere,
+                  );
+                }
+                return CanopyEmptyState(
+                  icon: hasFilter
+                      ? Icons.filter_list_off_outlined
+                      : Icons.event_note_outlined,
+                  title: hasFilter
+                      ? 'No activities match your filters'
+                      : 'No upcoming activities',
+                  line: hasFilter
+                      ? 'Try another type or time.'
+                      : 'Activities appear here once organisations create them.',
+                  actionLabel: hasFilter && _type != null ? 'Show all types' : null,
+                  onAction: hasFilter && _type != null
+                      ? () => setState(() => _type = null)
                       : null,
-                  onShowEverywhere:
-                      context.read<LocationProvider>().showEverywhere,
                 );
               }
 
-              // The stream arrives newest-first so past events sort correctly;
-              // upcoming ones read better soonest-first.
+              // Stream is newest-first; upcoming reads better soonest-first.
+              Map<String, dynamic> d(QueryDocumentSnapshot x) =>
+                  x.data() as Map<String, dynamic>;
               final upcoming = docs
-                  .where((d) => !CommunityService.hasEnded(
-                      d.data() as Map<String, dynamic>))
+                  .where((x) => !CommunityService.hasEnded(d(x)))
                   .toList()
                   .reversed
                   .toList();
-              final past = docs
-                  .where((d) => CommunityService.hasEnded(
-                      d.data() as Map<String, dynamic>))
-                  .toList();
+              final past =
+                  docs.where((x) => CommunityService.hasEnded(d(x))).toList();
 
               return ListView(
-                padding: const EdgeInsets.only(top: 8, bottom: 100),
+                padding: const EdgeInsets.fromLTRB(CanopySpace.gutter,
+                    CanopySpace.s8, CanopySpace.gutter, 100),
                 children: [
-                  for (final doc in upcoming)
-                    ActivityCard(
-                      activityId: doc.id,
-                      activity: doc.data() as Map<String, dynamic>,
-                    ),
+                  for (final doc in upcoming) ...[
+                    ActivityCard(activityId: doc.id, activity: d(doc)),
+                    const SizedBox(height: CanopySpace.s16),
+                  ],
                   if (past.isNotEmpty) ...[
-                    const _PastHeader(),
-                    for (final doc in past)
-                      Opacity(
-                        opacity: 0.6,
-                        child: ActivityCard(
-                          activityId: doc.id,
-                          activity: doc.data() as Map<String, dynamic>,
-                        ),
-                      ),
+                    const CanopySectionHeader(
+                        title: 'Past', padding: EdgeInsets.zero),
+                    for (final doc in past) ...[
+                      ActivityCard(activityId: doc.id, activity: d(doc)),
+                      const SizedBox(height: CanopySpace.s16),
+                    ],
                   ],
                 ],
               );
@@ -218,356 +192,34 @@ class _ActivitiesListScreenState extends State<ActivitiesListScreen> {
       ],
     );
 
-    if (widget.embedded) return body;
+    if (widget.embedded) return ColoredBox(color: context.canopy.canvas, child: body);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F3EE),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        centerTitle: true,
-        title: const Text('Activities',
-            style: TextStyle(
-                color: AppTheme.darkGreen,
-                fontWeight: FontWeight.w800,
-                fontSize: 18)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-              height: 1, color: AppTheme.lightGreen.withOpacity(0.18)),
-        ),
-      ),
-      floatingActionButton: _OrganizerFab(user: user),
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Activities'),
+      floatingActionButton: OrganizerFab(user: user),
       body: body,
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TYPE CHIP BAR
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _TypeChipBar extends StatelessWidget {
-  final String? selected;
-  final ValueChanged<String?> onSelect;
-
-  const _TypeChipBar({required this.selected, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      child: SizedBox(
-        height: 52,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          children: _typeOptions.map((opt) {
-            final isSelected = selected == opt.value;
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: GestureDetector(
-                onTap: () => onSelect(opt.value),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppTheme.primary
-                        : AppTheme.lightGreen.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: isSelected
-                        ? null
-                        : Border.all(
-                            color: AppTheme.lightGreen.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        opt.icon,
-                        size: 13,
-                        color: isSelected
-                            ? Colors.white
-                            : AppTheme.darkGreen.withOpacity(0.65),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        opt.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? Colors.white
-                              : AppTheme.darkGreen.withOpacity(0.75),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PAST SECTION HEADER
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PastHeader extends StatelessWidget {
-  const _PastHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-      child: Row(
-        children: [
-          Icon(Icons.history_outlined,
-              size: 16, color: AppTheme.darkGreen.withOpacity(0.45)),
-          const SizedBox(width: 8),
-          Text(
-            'PAST EVENTS',
-            style: TextStyle(
-              color: AppTheme.darkGreen.withOpacity(0.45),
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-                height: 1, color: AppTheme.lightGreen.withOpacity(0.25)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SHIMMER LOADING
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ShimmerList extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.only(top: 8),
-      children: const [
-        ActivityShimmerCard(),
-        ActivityShimmerCard(),
-        ActivityShimmerCard(),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ERROR CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ErrorCard extends StatelessWidget {
-  final String message;
-  final VoidCallback? onRetry;
-
-  const _ErrorCard({required this.message, this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.all(24),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.shade100),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.red.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 3)),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.wifi_off_outlined,
-                size: 40, color: Colors.red.shade300),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 13,
-                  color: AppTheme.darkGreen.withOpacity(0.75)),
-            ),
-            if (onRetry != null) ...[
-              const SizedBox(height: 14),
-              FilledButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Retry'),
-                style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primary),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EMPTY STATE
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _EmptyState extends StatelessWidget {
-  final bool hasFilter;
-
-  /// Set when the emptiness is caused by the location scope specifically —
-  /// "nothing in Kiambu" is a different message from "nothing at all", and
-  /// deserves a way out rather than a dead end.
-  final String? locationLabel;
-  final VoidCallback? onShowEverywhere;
-
-  const _EmptyState({
-    required this.hasFilter,
-    this.locationLabel,
-    this.onShowEverywhere,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppTheme.lightGreen.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              hasFilter
-                  ? Icons.filter_list_off_outlined
-                  : Icons.event_note_outlined,
-              size: 32,
-              color: AppTheme.primary.withOpacity(0.55),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            locationLabel != null
-                ? 'Nothing happening in $locationLabel'
-                : hasFilter
-                    ? 'No activities match your filters'
-                    : 'No upcoming activities',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.darkGreen),
-          ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              locationLabel != null
-                  ? 'Widen your location to see activities nearby'
-                  : hasFilter
-                      ? 'Try adjusting the type or time filter'
-                      : 'Activities will appear here once organisers create them',
-              style: TextStyle(
-                  fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.55)),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          if (locationLabel != null && onShowEverywhere != null) ...[
-            const SizedBox(height: 12),
-            TextButton.icon(
-              onPressed: onShowEverywhere,
-              icon: const Icon(Icons.public_rounded, size: 16),
-              label: const Text('Show everywhere'),
-              style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ORGANIZER FAB  (kept from original)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _OrganizerFab extends StatelessWidget {
+/// "New activity" FAB — only for organisers.
+class OrganizerFab extends StatelessWidget {
   final F_User? user;
-  const _OrganizerFab({required this.user});
+  const OrganizerFab({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {
     if (user == null) return const SizedBox.shrink();
-
     return FutureBuilder<String?>(
       future: CommunityService().getUserRole(userId: user!.uid),
-      builder: (context, snapshot) {
-        if (snapshot.data?.toLowerCase() != 'organizer') {
+      builder: (context, snap) {
+        if (snap.data?.toLowerCase() != 'organizer') {
           return const SizedBox.shrink();
         }
-        return Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppTheme.darkGreen, AppTheme.primary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                  color: AppTheme.primary.withOpacity(0.35),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6)),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: () =>
-                  Navigator.pushNamed(context, '/activities/create'),
-              child: const Padding(
-                padding:
-                    EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add_circle_outline,
-                        color: Colors.white, size: 20),
-                    SizedBox(width: 8),
-                    Text('New Activity',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14)),
-                  ],
-                ),
-              ),
-            ),
-          ),
+        return CanopyFab(
+          label: 'New activity',
+          icon: Icons.add,
+          onPressed: () => Navigator.pushNamed(context, '/activities/create'),
         );
       },
     );

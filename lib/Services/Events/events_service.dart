@@ -31,6 +31,11 @@ class CanopyEvent {
   final bool active;
   final String qrToken;
   final DateTime? createdAt;
+  final DateTime? scheduledAt;
+  final String? meetingPoint;
+  final int? spots;
+  final String? coverImageUrl;
+  final DateTime? endedAt;
 
   const CanopyEvent({
     required this.id,
@@ -41,6 +46,11 @@ class CanopyEvent {
     required this.active,
     required this.qrToken,
     required this.createdAt,
+    this.scheduledAt,
+    this.meetingPoint,
+    this.spots,
+    this.coverImageUrl,
+    this.endedAt,
   });
 
   /// The payload encoded into the QR code image.
@@ -60,6 +70,11 @@ class CanopyEvent {
       active: data['active'] as bool? ?? false,
       qrToken: data['qrToken'] as String? ?? '',
       createdAt: ts is Timestamp ? ts.toDate() : null,
+      scheduledAt: (data['scheduledAt'] as Timestamp?)?.toDate(),
+      meetingPoint: data['meetingPoint'] as String?,
+      spots: (data['spots'] as num?)?.toInt(),
+      coverImageUrl: data['coverImageUrl'] as String?,
+      endedAt: (data['endedAt'] as Timestamp?)?.toDate(),
     );
   }
 }
@@ -93,6 +108,10 @@ class EventsService {
     required String orgName,
     required String title,
     int pointsPerCheckin = 10,
+    DateTime? scheduledAt,
+    String? meetingPoint,
+    int? spots,
+    String? coverImageUrl,
   }) async {
     final ref = _events.doc();
     final token = ref.id.substring(0, 8) +
@@ -105,6 +124,10 @@ class EventsService {
       'active': true,
       'qrToken': token,
       'createdAt': FieldValue.serverTimestamp(),
+      if (scheduledAt != null) 'scheduledAt': Timestamp.fromDate(scheduledAt),
+      if (meetingPoint != null && meetingPoint.isNotEmpty) 'meetingPoint': meetingPoint,
+      if (spots != null && spots > 0) 'spots': spots,
+      if (coverImageUrl != null) 'coverImageUrl': coverImageUrl,
     });
     final snap = await ref.get();
     return CanopyEvent.fromDoc(snap);
@@ -116,8 +139,24 @@ class EventsService {
     return _events.doc(eventId).update({
       'active': false,
       'qrToken': 'ended-${DateTime.now().millisecondsSinceEpoch}',
+      'endedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  /// One event, live (organiser's QR screen).
+  Stream<CanopyEvent?> watchEvent(String eventId) => _events
+      .doc(eventId)
+      .snapshots()
+      .map((d) => d.exists ? CanopyEvent.fromDoc(d) : null);
+
+  /// Check-ins for an event, newest first (organiser only — see rules).
+  Stream<List<Map<String, dynamic>>> watchCheckins(String eventId) => _events
+      .doc(eventId)
+      .collection('checkins')
+      .snapshots()
+      .map((s) => s.docs.map((d) => {'id': d.id, ...d.data()}).toList()
+        ..sort((a, b) => ((b['checkedInAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0)
+            .compareTo((a['checkedInAt'] as Timestamp?)?.millisecondsSinceEpoch ?? 0)));
 
   Stream<List<CanopyEvent>> watchOrgEvents(String orgId) {
     return _events

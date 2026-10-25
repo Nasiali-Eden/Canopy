@@ -16,6 +16,8 @@ class CulturalMedia {
   final int? durationSeconds; // For audio files
   final DateTime uploadedAt;
   final String uploadedBy;
+  final String? credit;
+  final bool isPrimary;
 
   CulturalMedia({
     required this.id,
@@ -31,6 +33,8 @@ class CulturalMedia {
     this.durationSeconds,
     required this.uploadedAt,
     required this.uploadedBy,
+    this.credit,
+    this.isPrimary = false,
   });
 
   factory CulturalMedia.fromFirestore(DocumentSnapshot doc) {
@@ -42,15 +46,19 @@ class CulturalMedia {
       attachedEntryIds:
           List<String>.from(data['attached_entry_ids'] as List? ?? []),
       mediaType: data['media_type'] as String? ?? 'image',
-      fileName: data['file_name'] as String? ?? '',
-      fileUrl: data['file_url'] as String? ?? '',
+      // The creator writes storage_url / filename / created_at /
+      // uploaded_by_uid; the file_* keys are the older shape.
+      fileName: (data['filename'] ?? data['file_name']) as String? ?? '',
+      fileUrl: (data['storage_url'] ?? data['file_url']) as String? ?? '',
       caption: data['caption'] as String?,
       languageCode: data['language_code'] as String?,
       mediaRole: data['media_role'] as String? ?? 'hero_image',
       durationSeconds: data['duration_seconds'] as int?,
       uploadedAt:
-          (data['uploaded_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      uploadedBy: data['uploaded_by'] as String? ?? '',
+          ((data['created_at'] ?? data['uploaded_at']) as Timestamp?)?.toDate() ?? DateTime.now(),
+      uploadedBy: (data['uploaded_by_uid'] ?? data['uploaded_by']) as String? ?? '',
+      credit: data['credit'] as String?,
+      isPrimary: data['is_primary'] as bool? ?? false,
     );
   }
 

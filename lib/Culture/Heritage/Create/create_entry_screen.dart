@@ -1,11 +1,22 @@
+// lib/Culture/Heritage/Create/create_entry_screen.dart
+//
+// Create entry (ARCHIVE_HANDOFF §3.2, F). CreatorStepper: Type · Locality ·
+// Name · Knowledge · Media · Visibility, with "Draft saved" in the app bar —
+// the provider autosaves at every step. Leaving asks "Keep this as a draft?"
+// (Keep draft / Discard entry). Success shows the visibility, where the
+// entry lives, next steps, and Add another / Back to archive.
+
 import 'dart:io';
 
+import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../../Shared/theme/app_theme.dart';
-import '../heritage_theme.dart';
+import '../../../Shared/Inputs/pin_picker_screen.dart';
+import '../../../theme/canopy_components.dart';
+import '../../archive_ui.dart';
+import '../Services/heritage_content_types.dart';
 import '../Services/heritage_data_service.dart';
 import 'create_entry_provider.dart';
 import 'heritage_backgrounds_screen.dart';
@@ -13,1647 +24,773 @@ import 'locality_selector_sheet.dart';
 import 'media_upload_item.dart';
 import 'type_data_form_builder.dart';
 
-// ─── Entry point ─────────────────────────────────────────────────────────────
+const _countries = [
+  (id: 'country_kenya', label: 'Kenya', live: true),
+  (id: 'country_uganda', label: 'Uganda', live: false),
+  (id: 'country_nigeria', label: 'Nigeria', live: false),
+  (id: 'country_ghana', label: 'Ghana', live: false),
+  (id: 'country_tanzania', label: 'Tanzania', live: false),
+  (id: 'country_south_africa', label: 'South Africa', live: false),
+  (id: 'country_zambia', label: 'Zambia', live: false),
+];
+
+const _imageRoles = {
+  'cover_image': 'Cover — card thumbnail',
+  'story_background': 'Story background — behind the entry',
+  'community_background': 'Community background',
+  'food_image': 'Food — dish or ingredient',
+  'ceremony_image': 'Ceremony — ritual or event',
+  'documentation_image': 'Documentation — reference image',
+  'process_image': 'Process — a craft step',
+  'artefact_image': 'Artefact — object or tool',
+  'context_image': 'Context — place or setting',
+  'historical_image': 'Historical — archival photograph',
+  'pattern_detail': 'Pattern or texture detail',
+};
 
 class CreateEntryScreen extends StatelessWidget {
   final String orgId;
 
-  const CreateEntryScreen({required this.orgId, super.key});
+  /// Resume an existing draft from the Archive.
+  final String? draftId;
+
+  const CreateEntryScreen({required this.orgId, this.draftId, super.key});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => CreateEntryProvider(orgId: orgId),
-      child: const _CreateEntryView(),
+      create: (_) => CreateEntryProvider(orgId: orgId, draftId: draftId)..loadDraft(),
+      child: const _Creator(),
     );
   }
 }
 
-// ─── Main view ───────────────────────────────────────────────────────────────
-
-class _CreateEntryView extends StatefulWidget {
-  const _CreateEntryView();
+class _Creator extends StatefulWidget {
+  const _Creator();
 
   @override
-  State<_CreateEntryView> createState() => _CreateEntryViewState();
+  State<_Creator> createState() => _CreatorState();
 }
 
-class _CreateEntryViewState extends State<_CreateEntryView> {
-  late final PageController _pageController;
+class _CreatorState extends State<_Creator> {
+  bool _showErrors = false;
+  bool _done = false;
 
-  static const _stepTitles = [
-    'Step 1 of 6 · Content Type',
-    'Step 2 of 6 · Locality',
-    'Step 3 of 6 · Name',
-    'Step 4 of 6 · Knowledge',
-    'Step 5 of 6 · Media',
-    'Step 6 of 6 · Visibility',
-  ];
+  CreateEntryProvider get _p => context.read<CreateEntryProvider>();
 
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController();
+  void _next() {
+    final prov = _p;
+    if (prov.blockerFor(prov.currentStep) != null ||
+        (prov.currentStep == 3 && TypeDataFormBuilder.missingRequired(prov.selectedContentType ?? '', prov.typeData).isNotEmpty)) {
+      setState(() => _showErrors = true);
+      return;
+    }
+    setState(() => _showErrors = false);
+    prov.goToStep(prov.currentStep + 1);
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+  void _back() {
+    final prov = _p;
+    if (prov.currentStep == 0) {
+      _leave();
+    } else {
+      setState(() => _showErrors = false);
+      prov.goToStep(prov.currentStep - 1);
+    }
   }
 
-  void _goToStep(int step, CreateEntryProvider prov) {
-    prov.goToStep(step);
-    _pageController.animateToPage(
-      step,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeInOut,
-    );
+  Future<void> _leave() async {
+    final prov = _p;
+    if (!prov.hasContent) {
+      Navigator.pop(context);
+      return;
+    }
+    final choice = await showCanopySheet<String>(context, builder: (ctx) {
+      return CanopySheetBody(
+        title: 'Keep this as a draft?',
+        caption: 'Drafts stay in your Archive. Only your team can see them.',
+        actions: [
+          CanopyButton(label: 'Keep draft', expand: true, onPressed: () => Navigator.pop(ctx, 'keep')),
+          CanopyButton.quietDanger(label: 'Discard entry', expand: true, onPressed: () => Navigator.pop(ctx, 'discard')),
+        ],
+      );
+    });
+    if (!mounted || choice == null) return;
+    if (choice == 'keep') {
+      await prov.saveDraft();
+      if (mounted) {
+        showCanopySnack(context, prov.saveFailed ? "Couldn't save the draft — check your connection." : 'Draft kept in your Archive.', error: prov.saveFailed);
+        if (!prov.saveFailed) Navigator.pop(context);
+      }
+    } else {
+      final ok = await showCanopyConfirm(context,
+          title: 'Discard this entry?', message: 'Everything you added is deleted. This can\'t be undone.', confirmLabel: 'Discard', danger: true);
+      if (!ok) return;
+      await prov.discardDraft();
+      if (mounted) Navigator.pop(context);
+    }
   }
 
-  Future<void> _submit(CreateEntryProvider prov) async {
+  Future<void> _publish() async {
+    final prov = _p;
     await prov.submit();
     if (!mounted) return;
-    if (prov.submitError == null) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Entry added to archive'),
-          backgroundColor: AppTheme.primary,
-        ),
-      );
+    if (prov.submitError != null) {
+      showCanopySnack(context, prov.submitError!, error: true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(prov.submitError!), backgroundColor: Colors.red[700]),
-      );
+      setState(() => _done = true);
     }
   }
 
-  Future<void> _confirmExit() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Discard entry?'),
-        content: const Text('Your progress will not be saved.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep editing'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) Navigator.pop(context);
+  String? _savedLabel(CreateEntryProvider prov) {
+    if (prov.saveFailed) return 'Not saved';
+    final t = prov.savedAt;
+    if (t == null) return null;
+    final m = DateTime.now().difference(t).inMinutes;
+    return m < 1 ? 'Draft saved' : 'Saved $m min ago';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<CreateEntryProvider>(
-      builder: (context, prov, _) {
-        return Scaffold(
-          backgroundColor: HeritageTheme.heritageBackground,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            surfaceTintColor: Colors.transparent,
-            foregroundColor: AppTheme.darkGreen,
-            centerTitle: true,
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: _confirmExit,
-            ),
-            title: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Add to Archive',
-                  style: TextStyle(
-                    color: AppTheme.darkGreen,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Cormorant Garamond',
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-                Text(
-                  _stepTitles[prov.currentStep],
-                  style: TextStyle(
-                    color: AppTheme.tertiary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          body: Stack(
-            children: [
-              // Elegant patterned backdrop — warm gradient + soft motif.
-              const Positioned.fill(child: _HeritagePatternBackdrop()),
-              Column(
-                children: [
-                  _StepIndicator(currentStep: prov.currentStep),
-                  Expanded(
-                    child: PageView(
-                      controller: _pageController,
-                      physics: const NeverScrollableScrollPhysics(),
-                      children: [
-                        _StepTypeSelector(onGoNext: () => _goToStep(1, prov)),
-                        const _StepLocality(),
-                        const _StepName(),
-                        const _StepKnowledge(),
-                        const _StepMedia(),
-                        _StepVisibility(onSubmit: () => _submit(prov)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          bottomNavigationBar: _BottomBar(
-            currentStep: prov.currentStep,
-            canProceed: prov.canProceedFromStep(prov.currentStep),
-            isSubmitting: prov.isSubmitting,
-            consentChecked: prov.consentChecked,
-            onBack: prov.currentStep > 0 ? () => _goToStep(prov.currentStep - 1, prov) : null,
-            onNext: () => _goToStep(prov.currentStep + 1, prov),
-            onSubmit: () => _submit(prov),
-          ),
-        );
+    final prov = context.watch<CreateEntryProvider>();
+    final p = context.canopy;
+    if (_done) return _Success(prov: prov);
+    if (prov.loadingDraft) return CanopyScaffold(appBar: canopyAppBar(context, title: 'Add to archive'), body: const Center(child: CircularProgressIndicator()));
+    final step = prov.currentStep;
+    final saved = _savedLabel(prov);
+    final blocker = _showErrors
+        ? (prov.blockerFor(step) ??
+            (step == 3
+                ? () {
+                    final missing = TypeDataFormBuilder.missingRequired(prov.selectedContentType ?? '', prov.typeData);
+                    return missing.isEmpty ? null : 'Still needed: ${missing.join(', ')}.';
+                  }()
+                : null))
+        : null;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
       },
-    );
-  }
-}
-
-// ─── Decorative backdrop ─────────────────────────────────────────────────────
-
-class _HeritagePatternBackdrop extends StatelessWidget {
-  const _HeritagePatternBackdrop();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFFF7F0E4), // light parchment
-            Color(0xFFF1E6D4), // warmer toward the bottom
+      child: CanopyScaffold(
+        appBar: canopyAppBar(
+          context,
+          title: 'Add to archive',
+          leading: IconButton(icon: const Icon(Icons.close), tooltip: 'Leave', onPressed: _leave),
+          actions: [
+            if (saved != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(right: CanopySpace.gutter),
+                  child: Text(saved, style: CanopyType.caption.copyWith(color: prov.saveFailed ? p.danger : p.inkMuted)),
+                ),
+              ),
           ],
         ),
-      ),
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _MotifPainter(),
-      ),
-    );
-  }
-}
-
-class _MotifPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Soft colour blooms (gold / green / terracotta) — low opacity.
-    final blooms = [
-      (Offset(size.width * 0.85, size.height * 0.08), 150.0,
-          const Color(0xFFC4A961)), // gold
-      (Offset(size.width * 0.05, size.height * 0.42), 130.0,
-          const Color(0xFF2D7A4F)), // green
-      (Offset(size.width * 0.9, size.height * 0.72), 140.0,
-          const Color(0xFFC0573A)), // terracotta
-    ];
-    for (final (center, radius, color) in blooms) {
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..color = color.withOpacity(0.10)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 60),
-      );
-    }
-
-    // Faint concentric arcs — a subtle archival motif, top-left.
-    final ring = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..color = const Color(0xFFC4A961).withOpacity(0.10);
-    final origin = Offset(size.width * 0.1, size.height * 0.16);
-    for (var r = 40.0; r <= 160; r += 28) {
-      canvas.drawCircle(origin, r, ring);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-// ─── Step indicator ──────────────────────────────────────────────────────────
-
-class _StepIndicator extends StatelessWidget {
-  final int currentStep;
-
-  const _StepIndicator({required this.currentStep});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-      child: Row(
-        children: List.generate(6, (i) {
-          final done = i < currentStep;
-          final active = i == currentStep;
-          return Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              height: 3,
-              decoration: BoxDecoration(
-                color: (done || active)
-                    ? AppTheme.tertiary
-                    : AppTheme.tertiary.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
-// ─── Bottom action bar ───────────────────────────────────────────────────────
-
-class _BottomBar extends StatelessWidget {
-  final int currentStep;
-  final bool canProceed;
-  final bool isSubmitting;
-  final bool consentChecked;
-  final VoidCallback? onBack;
-  final VoidCallback onNext;
-  final VoidCallback onSubmit;
-
-  const _BottomBar({
-    required this.currentStep,
-    required this.canProceed,
-    required this.isSubmitting,
-    required this.consentChecked,
-    required this.onBack,
-    required this.onNext,
-    required this.onSubmit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isLast = currentStep == 5;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.82),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.07),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              if (onBack != null)
-                OutlinedButton(
-                  onPressed: onBack,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.darkGreen,
-                    side: BorderSide(color: AppTheme.darkGreen.withOpacity(0.35)),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    // Override theme's Size.fromHeight(48) which forces infinite width in a Row.
-                    minimumSize: const Size(0, 0),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text('Back'),
-                ),
-              const Spacer(),
-              if (!isLast)
-                FilledButton(
-                  onPressed: canProceed ? onNext : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.tertiary,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    minimumSize: const Size(0, 0),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text('Continue'),
-                )
-              else
-                FilledButton(
-                  onPressed: (consentChecked && !isSubmitting) ? onSubmit : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                    minimumSize: const Size(0, 0),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Text('Add to Archive'),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Step 1: Content type selector ───────────────────────────────────────────
-
-class _StepTypeSelector extends StatelessWidget {
-  final VoidCallback onGoNext;
-
-  const _StepTypeSelector({required this.onGoNext});
-
-  static const _types = [
-    ('oral_tradition', 'Oral Tradition', Icons.menu_book_outlined),
-    ('food_tradition', 'Food Tradition', Icons.restaurant_outlined),
-    ('ingredient', 'Ingredient', Icons.eco_outlined),
-    ('music_tradition', 'Music', Icons.music_note_outlined),
-    ('instrument', 'Instrument', Icons.piano_outlined),
-    ('ceremony', 'Ceremony', Icons.celebration_outlined),
-    ('craft_technique', 'Craft Technique', Icons.handyman_outlined),
-    ('clothing_tradition', 'Clothing', Icons.checkroom_outlined),
-    ('language_entry', 'Language', Icons.translate_outlined),
-    ('place_knowledge', 'Place', Icons.place_outlined),
-    ('medicine_knowledge', 'Medicine', Icons.local_hospital_outlined),
-    ('person', 'Person', Icons.person_outline),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final prov = context.watch<CreateEntryProvider>();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'What kind of knowledge are you archiving?',
-            style: TextStyle(
-              color: AppTheme.darkGreen,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 16),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 2.2,
-            ),
-            itemCount: _types.length,
-            itemBuilder: (context, i) {
-              final (key, label, icon) = _types[i];
-              final selected = prov.selectedContentType == key;
-              return _TypeCard(
-                key: ValueKey(key),
-                typeKey: key,
-                label: label,
-                icon: icon,
-                selected: selected,
-                onTap: () {
-                  context.read<CreateEntryProvider>().setContentType(key);
-                },
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TypeCard extends StatelessWidget {
-  final String typeKey;
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _TypeCard({
-    super.key,
-    required this.typeKey,
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppTheme.tertiary.withOpacity(0.16)
-              : Colors.white.withOpacity(0.66),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.22),
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
           children: [
-            Icon(
-              icon,
-              size: 22,
-              color: selected ? AppTheme.tertiary : AppTheme.darkGreen.withOpacity(0.6),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  color: selected ? AppTheme.tertiary : AppTheme.darkGreen,
-                ),
-                maxLines: 2,
+            CanopyStepper(step: step + 1, total: 6, label: CanopyArchive.creatorSteps[step], stepLabels: CanopyArchive.creatorSteps),
+            const SizedBox(height: CanopySpace.section),
+            ...switch (step) {
+              0 => _type(prov, p),
+              1 => _locality(prov, p),
+              2 => [_NameStep(prov: prov)],
+              3 => [_KnowledgeStep(prov: prov)],
+              4 => _media(prov, p),
+              _ => _visibility(prov, p),
+            },
+            if (blocker != null)
+              Padding(
+                padding: const EdgeInsets.only(top: CanopySpace.s16),
+                child: Text(blocker, style: CanopyType.body.copyWith(color: p.danger)),
               ),
-            ),
-            if (selected)
-              Icon(Icons.check_circle, size: 16, color: AppTheme.tertiary),
           ],
         ),
+        sticky: StickyActionBar(children: [
+          Row(children: [
+            if (step > 0) ...[
+              CanopyButton.quiet(label: 'Back', onPressed: _back),
+              const SizedBox(width: CanopySpace.s8),
+            ],
+            Expanded(
+              child: CanopyButton(
+                label: step == 5 ? 'Add to archive' : 'Continue to ${CanopyArchive.creatorSteps[step + 1 > 5 ? 5 : step + 1]}',
+                expand: true,
+                loading: prov.isSubmitting,
+                onPressed: step == 5 ? _publish : _next,
+              ),
+            ),
+          ]),
+        ]),
       ),
     );
   }
-}
 
-// ─── Step 2: Locality ────────────────────────────────────────────────────────
+  // ── 1 · Type ──────────────────────────────────────────────────────────────
 
-// Supported countries — Kenya is live; others show "coming soon" in community picker
-const _kSupportedCountries = [
-  (id: 'country_kenya',        label: 'Kenya',        flag: '🇰🇪', live: true),
-  (id: 'country_uganda',       label: 'Uganda',       flag: '🇺🇬', live: false),
-  (id: 'country_nigeria',      label: 'Nigeria',      flag: '🇳🇬', live: false),
-  (id: 'country_ghana',        label: 'Ghana',        flag: '🇬🇭', live: false),
-  (id: 'country_tanzania',     label: 'Tanzania',     flag: '🇹🇿', live: false),
-  (id: 'country_south_africa', label: 'South Africa', flag: '🇿🇦', live: false),
-  (id: 'country_zambia',       label: 'Zambia',       flag: '🇿🇲', live: false),
-];
+  List<Widget> _type(CreateEntryProvider prov, CanopyPalette p) => [
+        Text('What kind of knowledge is this?', style: CanopyType.title.copyWith(color: p.ink)),
+        const SizedBox(height: CanopySpace.s16),
+        GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: CanopySpace.s8,
+          crossAxisSpacing: CanopySpace.s8,
+          childAspectRatio: 1,
+          children: [
+            for (final t in HeritageContentTypes.ordered)
+              Semantics(
+                selected: prov.selectedContentType == t.key,
+                button: true,
+                label: t.label,
+                child: Material(
+                  color: p.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                    side: BorderSide(color: prov.selectedContentType == t.key ? p.ink : p.outline, width: prov.selectedContentType == t.key ? 2 : 1),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                    onTap: () => prov.setContentType(t.key),
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(t.icon, color: contentTypeColor(context, t.key), size: 28),
+                      const SizedBox(height: CanopySpace.s8),
+                      Text(t.label, textAlign: TextAlign.center, maxLines: 2, style: CanopyType.label.copyWith(color: p.ink)),
+                    ]),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ];
 
-class _StepLocality extends StatelessWidget {
-  const _StepLocality();
+  // ── 2 · Locality ──────────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    final prov = context.watch<CreateEntryProvider>();
+  List<Widget> _locality(CreateEntryProvider prov, CanopyPalette p) {
     final loc = prov.locality;
+    final country = _countries.firstWhere((c) => c.id == loc.countryId, orElse: () => _countries.first);
+    return [
+      Text('Where does this knowledge belong?', style: CanopyType.title.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s16),
+      CanopyPickerField(
+        label: 'Country',
+        value: country.label,
+        placeholder: 'Choose',
+        icon: Icons.public,
+        onTap: () async {
+          final picked = await showCanopySheet<String>(context, builder: (ctx) {
+            return CanopySheetBody(title: 'Country', children: [
+              CanopyListGroup(children: [
+                for (final c in _countries)
+                  CanopyListRow(
+                    title: c.label,
+                    subtitle: c.live ? null : 'Opening soon',
+                    titleColor: c.live ? null : ctx.canopy.inkMuted,
+                    chevron: false,
+                    trailing: c.id == loc.countryId ? Icon(Icons.check, color: ctx.canopy.ink) : null,
+                    onTap: c.live ? () => Navigator.pop(ctx, c.id) : null,
+                  ),
+              ]),
+            ]);
+          });
+          if (picked != null) prov.setCountryId(picked);
+        },
+      ),
+      _CountryImagesGate(countryId: country.id, countryLabel: country.label, orgId: prov.orgId),
+      const SizedBox(height: CanopySpace.s16),
+      CanopyPickerField(
+        label: 'Community',
+        value: loc.communityUnknown ? 'Not sure which community' : loc.communityName,
+        placeholder: 'Choose community',
+        icon: Icons.groups_outlined,
+        onTap: () async {
+          final r = await showCanopySheet<CommunitySelection>(context, tall: true, builder: (_) => const LocalitySelectorSheet());
+          if (r == null) return;
+          r.isUnknown ? prov.setCommunityUnknown(true) : prov.setCommunity(r.id, r.name);
+        },
+      ),
+      const SizedBox(height: CanopySpace.s16),
+      CanopyPickerField(
+        label: 'Location on the map (required)',
+        value: prov.mapPoint == null ? null : '${prov.mapPoint!.lat.toStringAsFixed(5)}, ${prov.mapPoint!.lng.toStringAsFixed(5)}',
+        placeholder: 'Pin it on the map',
+        icon: Icons.push_pin_outlined,
+        onTap: () async {
+          final mp = prov.mapPoint;
+          final at = await pickPin(context, initial: mp == null ? null : LatLng(mp.lat, mp.lng), title: 'Where is this?');
+          if (at != null) prov.setMapPoint(at.latitude, at.longitude);
+        },
+      ),
+      const SizedBox(height: CanopySpace.s16),
+      _NotesField(initial: loc.localityNotes ?? '', onChanged: prov.setLocalityNotes),
+    ];
+  }
 
-    final selectedCountry = _kSupportedCountries.firstWhere(
-      (c) => c.id == loc.countryId,
-      orElse: () => _kSupportedCountries.first,
-    );
-    final isKenyaSelected = selectedCountry.live;
+  // ── 5 · Media ─────────────────────────────────────────────────────────────
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  List<Widget> _media(CreateEntryProvider prov, CanopyPalette p) {
+    final images = prov.mediaFiles.where((m) => m.mediaType == 'image').toList();
+    final uncredited = prov.uncredited.length;
+    return [
+      Text('Photos', style: CanopyType.title.copyWith(color: p.ink)),
+      Text('The cover shows on cards. Tap a photo to set its role, caption and credit.', style: CanopyType.body.copyWith(color: p.inkMuted)),
+      if (uncredited > 0) ...[
+        const SizedBox(height: CanopySpace.s12),
+        CanopyCallout(
+          kind: CalloutKind.warning,
+          text: '$uncredited ${uncredited == 1 ? 'photo has' : 'photos have'} no credit. Credit is required before publishing.',
+        ),
+      ],
+      const SizedBox(height: CanopySpace.s16),
+      GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: CanopySpace.s8,
+        crossAxisSpacing: CanopySpace.s8,
         children: [
-          Text(
-            'Where does this knowledge belong?',
-            style: TextStyle(
-              color: AppTheme.darkGreen,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
+          for (final m in images) _MediaTile(item: m, onTap: () => _editMedia(prov, m), onRetry: () => prov.retryUpload(m.localId)),
+          Material(
+            color: p.surfaceMuted,
+            borderRadius: BorderRadius.circular(CanopyRadius.sm),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(CanopyRadius.sm),
+              onTap: () async {
+                final xs = await ImagePicker().pickMultiImage(imageQuality: 90);
+                for (final x in xs) {
+                  prov.addMediaFile(File(x.path), 'image', prov.mediaFiles.any((m) => m.mediaType == 'image') ? 'documentation_image' : 'cover_image');
+                }
+              },
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.add_photo_alternate_outlined, color: p.inkMuted),
+                Text('Add photos', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+              ]),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Select the country and community. Be as specific as possible.',
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
-
-          // ── Country selector ────────────────────────────────────────────
-          Text(
-            'COUNTRY',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.tertiary,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.66),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: loc.countryId,
-                isExpanded: true,
-                items: _kSupportedCountries.map((c) {
-                  return DropdownMenuItem<String>(
-                    value: c.id,
-                    child: Row(
-                      children: [
-                        Text(c.flag, style: const TextStyle(fontSize: 18)),
-                        const SizedBox(width: 10),
-                        Text(
-                          c.label,
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w500),
-                        ),
-                        if (!c.live) ...[
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 7, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'Soon',
-                              style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.grey[500],
-                                  fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (v) {
-                  if (v != null) {
-                    context.read<CreateEntryProvider>().setCountryId(v);
-                  }
-                },
-              ),
-            ),
-          ),
-
-          // ── Country must have images before content is added for it ───────
-          _CountryImagesGate(
-            countryId: loc.countryId,
-            countryLabel: selectedCountry.label,
-            orgId: prov.orgId,
-          ),
-
-          // ── Coming-soon banner for non-Kenya countries ───────────────────
-          if (!isKenyaSelected) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF8E1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFFE082)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('🗺️', style: TextStyle(fontSize: 20)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${selectedCountry.label} community data coming soon',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF7B5800),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Cultural community data for ${selectedCountry.label} is being documented by knowledge holders and partner organisations. You can still add locality notes below.',
-                          style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF9C6E00),
-                              height: 1.5),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 20),
-
-          // ── Community selector (Kenya only) ──────────────────────────────
-          if (isKenyaSelected) ...[
-            Text(
-              'COMMUNITY',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.tertiary,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: loc.communityUnknown
-                  ? null
-                  : () async {
-                      final result =
-                          await showModalBottomSheet<CommunitySelection?>(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => const LocalitySelectorSheet(),
-                      );
-                      if (result != null && context.mounted) {
-                        context
-                            .read<CreateEntryProvider>()
-                            .setCommunity(result.id, result.name);
-                      } else if (result == null && context.mounted) {
-                        context
-                            .read<CreateEntryProvider>()
-                            .setCommunityUnknown(true);
-                      }
-                    },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: loc.communityUnknown ? Colors.grey[100] : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: loc.communityId != null
-                        ? AppTheme.tertiary
-                        : Colors.grey[300]!,
-                    width: loc.communityId != null ? 1.5 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.people_outline,
-                      size: 20,
-                      color: loc.communityId != null
-                          ? AppTheme.tertiary
-                          : Colors.grey[500],
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        loc.communityId != null
-                            ? (loc.communityName ?? loc.communityId!)
-                            : 'Select community…',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: loc.communityId != null
-                              ? AppTheme.darkGreen
-                              : Colors.grey[500],
-                        ),
-                      ),
-                    ),
-                    if (!loc.communityUnknown)
-                      Icon(Icons.chevron_right, color: Colors.grey[400]),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Community unknown toggle
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
-                color: Colors.white.withOpacity(0.66),
-              ),
-              child: SwitchListTile(
-                title: const Text(
-                  'Community unknown',
-                  style:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                subtitle: Text(
-                  "I can't identify which community this belongs to",
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-                value: loc.communityUnknown,
-                activeColor: AppTheme.tertiary,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12),
-                onChanged: (v) => context
-                    .read<CreateEntryProvider>()
-                    .setCommunityUnknown(v),
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-
-          // ── Locality notes ───────────────────────────────────────────────
-          Text(
-            'LOCALITY NOTES',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.tertiary,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            decoration: InputDecoration(
-              hintText:
-                  'e.g. Practiced in the Kibera Luo diaspora, not the Nyanza homeland',
-              border: const OutlineInputBorder(),
-              alignLabelWithHint: true,
-            ),
-            maxLines: 3,
-            onChanged: (v) =>
-                context.read<CreateEntryProvider>().setLocalityNotes(v),
           ),
         ],
       ),
-    );
+      const SizedBox(height: CanopySpace.section),
+      const CanopyComingSoon(
+        boxed: true,
+        icon: Icons.graphic_eq,
+        label: 'Not built yet',
+        title: 'Audio recordings',
+        line: 'Recording songs and stories in the app is coming. For now, describe them in the Knowledge step.',
+      ),
+    ];
+  }
+
+  Future<void> _editMedia(CreateEntryProvider prov, MediaUploadItem m) async {
+    await showCanopySheet(context, builder: (_) => ChangeNotifierProvider.value(value: prov, child: _MediaSheet(localId: m.localId)));
+  }
+
+  // ── 6 · Visibility ────────────────────────────────────────────────────────
+
+  List<Widget> _visibility(CreateEntryProvider prov, CanopyPalette p) {
+    final restrictedHint = prov.typeData['is_restricted'] == true || (prov.typeData['restriction_note'] as String?)?.isNotEmpty == true;
+    final v = visibilityFrom(prov.visibility) ?? ArchiveVisibility.public;
+    return [
+      Text('Who can see it?', style: CanopyType.title.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s16),
+      VisibilitySelector(
+        value: v,
+        suggested: restrictedHint ? ArchiveVisibility.restricted : null,
+        onChanged: (nv) => prov.setVisibility(visibilityKey(nv)),
+      ),
+      if (v == ArchiveVisibility.restricted || v == ArchiveVisibility.sealed) ...[
+        const SizedBox(height: CanopySpace.s8),
+        _NotesField(
+          label: 'Why (for your team)',
+          hint: 'e.g. Sacred — elders asked it not be shown widely',
+          initial: prov.visibilityReason ?? '',
+          onChanged: prov.setVisibilityReason,
+        ),
+      ],
+      const SizedBox(height: CanopySpace.s16),
+      CanopyButton.secondary(
+        label: 'Preview as a member',
+        expand: true,
+        onPressed: () async {
+          await prov.saveDraft();
+          if (!mounted || prov.draftId == null) return;
+          openEntryPreview(context, prov.draftId!);
+        },
+      ),
+    ];
   }
 }
 
-// ─── Step 3: Name & language ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _StepName extends StatefulWidget {
-  const _StepName();
+class _NotesField extends StatefulWidget {
+  final String initial;
+  final ValueChanged<String> onChanged;
+  final String label;
+  final String hint;
+  const _NotesField({
+    required this.initial,
+    required this.onChanged,
+    this.label = 'Locality notes (optional)',
+    this.hint = 'e.g. Practised by the Luo community in Kibera, not only in Nyanza',
+  });
 
   @override
-  State<_StepName> createState() => _StepNameState();
+  State<_NotesField> createState() => _NotesFieldState();
 }
 
-class _StepNameState extends State<_StepName> with AutomaticKeepAliveClientMixin {
-  late final TextEditingController _title;
-  late final TextEditingController _titleSw;
-  late final TextEditingController _titleEn;
-  late final TextEditingController _lang;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    final p = context.read<CreateEntryProvider>();
-    _title = TextEditingController(text: p.title)
-      ..addListener(() => context.read<CreateEntryProvider>().setTitle(_title.text));
-    _titleSw = TextEditingController(text: p.titleSwahili)
-      ..addListener(() => context.read<CreateEntryProvider>().setTitleSwahili(_titleSw.text));
-    _titleEn = TextEditingController(text: p.titleEnglish)
-      ..addListener(() => context.read<CreateEntryProvider>().setTitleEnglish(_titleEn.text));
-    _lang = TextEditingController(text: p.primaryLanguage)
-      ..addListener(() => context.read<CreateEntryProvider>().setPrimaryLanguage(_lang.text));
-  }
+class _NotesFieldState extends State<_NotesField> {
+  late final _c = TextEditingController(text: widget.initial);
 
   @override
   void dispose() {
-    _title.dispose();
-    _titleSw.dispose();
-    _titleEn.dispose();
-    _lang.dispose();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      CanopyTextField(label: widget.label, hint: widget.hint, controller: _c, minLines: 2, maxLines: 4, onChanged: widget.onChanged);
+}
+
+class _NameStep extends StatefulWidget {
+  final CreateEntryProvider prov;
+  const _NameStep({required this.prov});
+
+  @override
+  State<_NameStep> createState() => _NameStepState();
+}
+
+class _NameStepState extends State<_NameStep> {
+  late final _title = TextEditingController(text: widget.prov.title);
+  late final _en = TextEditingController(text: widget.prov.titleEnglish);
+  late final _sw = TextEditingController(text: widget.prov.titleSwahili);
+  late final _lang = TextEditingController(text: widget.prov.primaryLanguage);
+
+  @override
+  void dispose() {
+    for (final c in [_title, _en, _sw, _lang]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Name this entry',
-            style: TextStyle(color: AppTheme.darkGreen, fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'The title in the original language is required. Translations are optional but help with discovery.',
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _title,
-            decoration: const InputDecoration(
-              labelText: 'Title *',
-              hintText: 'In the original language',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _titleSw,
-            decoration: const InputDecoration(
-              labelText: 'Title (Swahili)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _titleEn,
-            decoration: const InputDecoration(
-              labelText: 'Title (English)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _lang,
-            decoration: const InputDecoration(
-              labelText: 'Primary language',
-              hintText: 'e.g. Luhya, Dholuo, or ISO 639-3 code (luy, luo)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ],
+    final p = context.canopy;
+    final prov = widget.prov;
+    const gap = SizedBox(height: CanopySpace.s16);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('What is it called?', style: CanopyType.title.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s4),
+      Text('Use the name the community uses.', style: CanopyType.body.copyWith(color: p.inkMuted)),
+      gap,
+      CanopyTextField(label: 'Name', controller: _title, autofocus: prov.title.isEmpty, maxLength: 120, onChanged: prov.setTitle),
+      gap,
+      CanopyTextField(label: 'English translation (optional)', controller: _en, onChanged: prov.setTitleEnglish),
+      gap,
+      CanopyTextField(label: 'Kiswahili (optional)', controller: _sw, onChanged: prov.setTitleSwahili),
+      gap,
+      CanopyTextField(label: 'Language it is known in (optional)', hint: 'e.g. Dholuo', controller: _lang, onChanged: prov.setPrimaryLanguage),
+      gap,
+      CanopySwitchRow(
+        title: 'Seeking contributors',
+        caption: 'Invite members who know more to add to it',
+        value: prov.isSeekingContributors,
+        onChanged: prov.setIsSeekingContributors,
       ),
-    );
+    ]);
   }
 }
 
-// ─── Step 4: Knowledge & type-specific fields ─────────────────────────────────
-
-class _StepKnowledge extends StatefulWidget {
-  const _StepKnowledge();
+class _KnowledgeStep extends StatefulWidget {
+  final CreateEntryProvider prov;
+  const _KnowledgeStep({required this.prov});
 
   @override
-  State<_StepKnowledge> createState() => _StepKnowledgeState();
+  State<_KnowledgeStep> createState() => _KnowledgeStepState();
 }
 
-class _StepKnowledgeState extends State<_StepKnowledge> with AutomaticKeepAliveClientMixin {
-  late final TextEditingController _desc;
-  late final TextEditingController _descSw;
-  late final TextEditingController _descEn;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    final p = context.read<CreateEntryProvider>();
-    _desc = TextEditingController(text: p.description)
-      ..addListener(() => context.read<CreateEntryProvider>().setDescription(_desc.text));
-    _descSw = TextEditingController(text: p.descriptionSwahili)
-      ..addListener(() => context.read<CreateEntryProvider>().setDescriptionSwahili(_descSw.text));
-    _descEn = TextEditingController(text: p.descriptionEnglish)
-      ..addListener(() => context.read<CreateEntryProvider>().setDescriptionEnglish(_descEn.text));
-  }
+class _KnowledgeStepState extends State<_KnowledgeStep> {
+  late final _desc = TextEditingController(text: widget.prov.description);
 
   @override
   void dispose() {
     _desc.dispose();
-    _descSw.dispose();
-    _descEn.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    final prov = context.watch<CreateEntryProvider>();
-    final descLen = prov.description.trim().length;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Describe the knowledge',
-            style: TextStyle(color: AppTheme.darkGreen, fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'The main description in the original language. Minimum 50 characters. Translations are optional.',
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
-
-          // Description
-          TextField(
-            controller: _desc,
-            decoration: InputDecoration(
-              labelText: 'Description *',
-              hintText: 'Write in the original language',
-              border: const OutlineInputBorder(),
-              alignLabelWithHint: true,
-              helperText: descLen < 50 ? '${50 - descLen} more characters needed' : null,
-              helperStyle: const TextStyle(color: Colors.orange),
-            ),
-            maxLines: 7,
-            minLines: 4,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _descSw,
-            decoration: const InputDecoration(
-              labelText: 'Description (Swahili)',
-              border: OutlineInputBorder(),
-              alignLabelWithHint: true,
-            ),
-            maxLines: 5,
-            minLines: 3,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _descEn,
-            decoration: const InputDecoration(
-              labelText: 'Description (English)',
-              border: OutlineInputBorder(),
-              alignLabelWithHint: true,
-            ),
-            maxLines: 5,
-            minLines: 3,
-          ),
-
-          if (prov.selectedContentType != null) ...[
-            const SizedBox(height: 28),
-            const Divider(),
-            const SizedBox(height: 20),
-            Text(
-              'Type-specific details',
-              style: TextStyle(color: AppTheme.darkGreen, fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            TypeDataFormBuilder(
-              contentType: prov.selectedContentType!,
-              typeData: prov.typeData,
-              onChanged: (key, value) =>
-                  context.read<CreateEntryProvider>().setTypeDataField(key, value),
-            ),
-          ],
-        ],
+    final p = context.canopy;
+    final prov = widget.prov;
+    final n = _desc.text.trim().length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('What should people know?', style: CanopyType.title.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s16),
+      CanopyTextField(
+        label: 'Description',
+        hint: 'What it is, where it comes from and why it matters',
+        controller: _desc,
+        minLines: 4,
+        maxLines: 12,
+        helper: n < 50 ? '${50 - n} more characters' : null,
+        onChanged: (v) {
+          prov.setDescription(v);
+          setState(() {});
+        },
       ),
-    );
+      const SizedBox(height: CanopySpace.section),
+      TypeDataFormBuilder(
+        key: ValueKey(prov.selectedContentType),
+        contentType: prov.selectedContentType ?? '',
+        typeData: prov.typeData,
+        onChanged: prov.setTypeDataField,
+      ),
+      if (prov.isPersonType)
+        CanopyCheckRow(
+          label: 'They agreed to be documented and named',
+          caption: 'Or their family did, if they have passed',
+          value: prov.consentChecked,
+          onChanged: prov.setConsentChecked,
+        ),
+    ]);
   }
 }
 
-// ─── Step 5: Media ────────────────────────────────────────────────────────────
-
-class _StepMedia extends StatelessWidget {
-  const _StepMedia();
-
-  static final _picker = ImagePicker();
-
-  // Image roles — the role describes how/where the image is used.
-  // story_background / community_background are stored against the entry but
-  // can be promoted to the hierarchy node (country/community) by the admin.
-  static const _imageRoles = [
-    'cover_image',
-    'story_background',
-    'community_background',
-    'food_image',
-    'ceremony_image',
-    'documentation_image',
-    'process_image',
-    'artefact_image',
-    'context_image',
-    'historical_image',
-    'pattern_detail',
-  ];
-
-  static const _imageRoleLabels = {
-    'cover_image':           'Cover — card thumbnail',
-    'story_background':      'Story background — full-bleed when reading entry',
-    'community_background':  'Community background — tribe/community page hero',
-    'food_image':            'Food — dish or ingredient photo',
-    'ceremony_image':        'Ceremony — ritual or event photo',
-    'documentation_image':   'Documentation — reference or archival image',
-    'process_image':         'Process — craft or technique step',
-    'artefact_image':        'Artefact — object or tool photo',
-    'context_image':         'Context — location or setting',
-    'historical_image':      'Historical — archival or old photograph',
-    'pattern_detail':        'Pattern / texture detail',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final prov = context.watch<CreateEntryProvider>();
-    final images = prov.mediaFiles.where((m) => m.mediaType == 'image').toList();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Add media',
-            style: TextStyle(color: AppTheme.darkGreen, fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Images help tell the story. The first image you add becomes the cover. All media is optional.',
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
-
-          // Image section
-          Row(
-            children: [
-              Text(
-                'Images',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.darkGreen,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: () => _pickImage(context, prov),
-                icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-                label: const Text('Add image'),
-                style: TextButton.styleFrom(foregroundColor: AppTheme.tertiary),
-              ),
-            ],
-          ),
-
-          if (images.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 28),
-              decoration: BoxDecoration(
-                color: HeritageTheme.heritageCardBackground.withOpacity(0.74),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: AppTheme.tertiary.withOpacity(0.22),
-                  style: BorderStyle.solid,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Icon(Icons.photo_library_outlined, size: 36, color: Colors.grey[400]),
-                  const SizedBox(height: 8),
-                  Text('No images added yet', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-                ],
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: images.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, i) => _MediaCard(
-                item: images[i],
-                roles: _imageRoles,
-                onRemove: () => context.read<CreateEntryProvider>().removeMediaFile(images[i].localId),
-                onSetPrimary: () => context.read<CreateEntryProvider>().setMediaPrimary(images[i].localId),
-                onSetRole: (r) => context.read<CreateEntryProvider>().setMediaRole(images[i].localId, r),
-                onSetCaption: (c) => context.read<CreateEntryProvider>().setMediaCaption(images[i].localId, c),
-              ),
-            ),
-
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 12),
-
-          // Audio section (placeholder — requires file_picker package)
-          Row(
-            children: [
-              Text(
-                'Audio',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.darkGreen,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const Spacer(),
-              Tooltip(
-                message: 'Audio upload coming soon',
-                child: TextButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.audio_file_outlined, size: 18),
-                  label: const Text('Add audio'),
-                  style: TextButton.styleFrom(foregroundColor: Colors.grey),
-                ),
-              ),
-            ],
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
-            ),
-            child: Text(
-              'Audio upload requires additional package configuration',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[400], fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _pickImage(BuildContext context, CreateEntryProvider prov) async {
-    final xFile = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 90,
-    );
-    if (xFile == null || !context.mounted) return;
-    await prov.addMediaFile(
-      File(xFile.path),
-      'image',
-      prov.mediaFiles.where((m) => m.mediaType == 'image').isEmpty
-          ? 'cover_image'
-          : 'documentation_image',
-    );
-  }
-}
-
-class _MediaCard extends StatelessWidget {
+class _MediaTile extends StatelessWidget {
   final MediaUploadItem item;
-  final List<String> roles;
-  final VoidCallback onRemove;
-  final VoidCallback onSetPrimary;
-  final void Function(String role) onSetRole;
-  final void Function(String caption) onSetCaption;
-
-  const _MediaCard({
-    required this.item,
-    required this.roles,
-    required this.onRemove,
-    required this.onSetPrimary,
-    required this.onSetRole,
-    required this.onSetCaption,
-  });
+  final VoidCallback onTap;
+  final VoidCallback onRetry;
+  const _MediaTile({required this.item, required this.onTap, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.66),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: item.isPrimary ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.22),
-          width: item.isPrimary ? 1.5 : 1,
+    final p = context.canopy;
+    final cover = item.isPrimary;
+    return Semantics(
+      button: true,
+      label: '${cover ? 'Cover photo' : 'Photo'}${(item.credit ?? '').isEmpty ? ', no credit' : ''}',
+      child: GestureDetector(
+        onTap: item.uploadState == MediaUploadState.failed ? onRetry : onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(CanopyRadius.sm),
+            border: cover ? Border.all(color: p.ink, width: CanopyArchive.coverRing) : null,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(CanopyRadius.sm - (cover ? 2 : 0)),
+            child: Stack(fit: StackFit.expand, children: [
+              if (item.file != null) Image.file(item.file!, fit: BoxFit.cover) else CanopyImage(url: item.storageUrl),
+              if (item.uploadState == MediaUploadState.uploading)
+                Container(
+                  color: const Color(0x99000000),
+                  child: Center(
+                    child: Text('${(item.progress * 100).round()}%', style: CanopyType.label.copyWith(color: const Color(0xFFFFFFFF))),
+                  ),
+                ),
+              if (item.uploadState == MediaUploadState.failed)
+                Container(
+                  color: p.danger.withValues(alpha: .78),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    const Icon(Icons.refresh, color: Color(0xFFFFFFFF)),
+                    Text('Retry', style: CanopyType.label.copyWith(color: const Color(0xFFFFFFFF))),
+                  ]),
+                ),
+              if (item.uploadState == MediaUploadState.uploaded && (item.credit ?? '').trim().isEmpty)
+                Positioned(
+                  left: 4,
+                  bottom: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: p.warning, borderRadius: BorderRadius.circular(4)),
+                    child: Text('No credit', style: CanopyType.caption.copyWith(color: const Color(0xFF000000), fontSize: 10)),
+                  ),
+                ),
+              if (cover)
+                Positioned(
+                  left: 4,
+                  top: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: p.ink, borderRadius: BorderRadius.circular(4)),
+                    child: Text('Cover', style: CanopyType.caption.copyWith(color: p.canvas, fontSize: 10)),
+                  ),
+                ),
+            ]),
+          ),
         ),
       ),
-      child: Column(
-        children: [
-          // Preview + status
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
-            child: Stack(
-              children: [
-                SizedBox(
-                  height: 120,
-                  width: double.infinity,
-                  child: item.uploadState == MediaUploadState.uploaded
-                      ? Image.file(item.file, fit: BoxFit.cover)
-                      : Container(
-                          color: Colors.grey[100],
-                          child: Center(
-                            child: item.uploadState == MediaUploadState.uploading
-                                ? const CircularProgressIndicator(strokeWidth: 2)
-                                : Icon(Icons.error_outline, color: Colors.red[300]),
-                          ),
-                        ),
-                ),
-                if (item.isPrimary)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppTheme.tertiary,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'Cover',
-                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.black54,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.all(4),
-                    ),
-                    onPressed: onRemove,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Controls
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: roles.contains(item.mediaRole) ? item.mediaRole : null,
-                        decoration: const InputDecoration(
-                          labelText: 'Role',
-                          isDense: true,
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        ),
-                        items: roles.map((r) {
-                          final label = _StepMedia._imageRoleLabels[r] ?? r.replaceAll('_', ' ');
-                          return DropdownMenuItem(
-                            value: r,
-                            child: Text(label, style: const TextStyle(fontSize: 13)),
-                          );
-                        }).toList(),
-                        onChanged: (r) { if (r != null) onSetRole(r); },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (!item.isPrimary)
-                      TextButton(
-                        onPressed: onSetPrimary,
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppTheme.tertiary,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        ),
-                        child: const Text('Set cover', style: TextStyle(fontSize: 12)),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Caption',
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  ),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: onSetCaption,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
 
-// ─── Step 6: Visibility & submit ──────────────────────────────────────────────
+class _MediaSheet extends StatefulWidget {
+  final String localId;
+  const _MediaSheet({required this.localId});
 
-class _StepVisibility extends StatelessWidget {
-  final VoidCallback onSubmit;
+  @override
+  State<_MediaSheet> createState() => _MediaSheetState();
+}
 
-  const _StepVisibility({required this.onSubmit});
+class _MediaSheetState extends State<_MediaSheet> {
+  late final CreateEntryProvider _prov = context.read<CreateEntryProvider>();
+  late final MediaUploadItem _m = _prov.mediaFiles.firstWhere((x) => x.localId == widget.localId);
+  late final _caption = TextEditingController(text: _m.caption ?? '');
+  late final _credit = TextEditingController(text: _m.credit ?? '');
 
-  static const _visibilityOptions = [
-    ('public', 'Public', 'Visible to anyone in the Canopy network', Icons.public),
-    ('community_only', 'Community only', 'Only visible to members of the associated community', Icons.group),
-    ('restricted', 'Restricted', 'Only visible to verified org members', Icons.lock_outline),
-    ('sealed', 'Sealed', 'Hidden — existence recorded, content not shown', Icons.lock),
-  ];
+  @override
+  void dispose() {
+    _caption.dispose();
+    _credit.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<CreateEntryProvider>();
-    final needsReason = prov.visibility == 'restricted' || prov.visibility == 'sealed';
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Who can see this entry?',
-            style: TextStyle(color: AppTheme.darkGreen, fontSize: 15, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 16),
-
-          // Visibility options
-          ...(_visibilityOptions.map((opt) {
-            final (key, label, desc, icon) = opt;
-            final selected = prov.visibility == key;
-            return GestureDetector(
-              onTap: () => context.read<CreateEntryProvider>().setVisibility(key),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: selected ? AppTheme.tertiary.withOpacity(0.08) : Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: selected ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.22),
-                    width: selected ? 1.5 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(icon, size: 20, color: selected ? AppTheme.tertiary : Colors.grey[500]),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            label,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: selected ? AppTheme.darkGreen : AppTheme.darkGreen.withOpacity(0.8),
-                            ),
-                          ),
-                          Text(
-                            desc,
-                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
+    final m = prov.mediaFiles.where((x) => x.localId == widget.localId).firstOrNull;
+    if (m == null) return const SizedBox.shrink();
+    return CanopySheetBody(
+      title: m.isPrimary ? 'Cover photo' : 'Photo',
+      children: [
+        CanopyTextField(
+          label: 'Credit',
+          hint: 'Who took it — e.g. Photo: Achieng Otieno',
+          controller: _credit,
+          error: _credit.text.trim().isEmpty ? 'Required before publishing.' : null,
+          onChanged: (v) {
+            prov.setMediaCredit(m.localId, v);
+            setState(() {});
+          },
+        ),
+        const SizedBox(height: CanopySpace.s16),
+        CanopyTextField(label: 'Caption (optional)', controller: _caption, onChanged: (v) => prov.setMediaCaption(m.localId, v)),
+        const SizedBox(height: CanopySpace.s16),
+        CanopyPickerField(
+          label: 'Role',
+          value: _imageRoles[m.mediaRole] ?? m.mediaRole,
+          placeholder: 'Choose',
+          onTap: () async {
+            final r = await showCanopySheet<String>(context, builder: (ctx) {
+              return CanopySheetBody(title: 'Role', children: [
+                CanopyListGroup(children: [
+                  for (final e in _imageRoles.entries)
+                    CanopyListRow(
+                      title: e.value,
+                      chevron: false,
+                      trailing: e.key == m.mediaRole ? Icon(Icons.check, color: ctx.canopy.ink) : null,
+                      onTap: () => Navigator.pop(ctx, e.key),
                     ),
-                    if (selected)
-                      Icon(Icons.check_circle, size: 18, color: AppTheme.tertiary),
-                  ],
-                ),
-              ),
-            );
-          })),
-
-          if (needsReason) ...[
-            const SizedBox(height: 8),
-            TextField(
-              decoration: const InputDecoration(
-                labelText: 'Visibility reason *',
-                hintText: 'Explain why this content is restricted',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-              onChanged: (v) => context.read<CreateEntryProvider>().setVisibilityReason(v),
-            ),
-          ],
-
-          const SizedBox(height: 20),
-
-          // Seeking contributors toggle
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
-              color: Colors.white.withOpacity(0.66),
-            ),
-            child: SwitchListTile(
-              title: const Text('Seeking contributors', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-              subtitle: Text(
-                'Others can add their knowledge and perspectives to this entry',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-              value: prov.isSeekingContributors,
-              activeColor: AppTheme.tertiary,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              onChanged: (v) => context.read<CreateEntryProvider>().setIsSeekingContributors(v),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
-
-          // Review summary
-          _ReviewSummary(prov: prov),
-
-          const SizedBox(height: 20),
-
-          // Consent
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-            ),
-            child: CheckboxListTile(
-              title: const Text(
-                'I confirm this knowledge is shared with the consent of the community or individual it belongs to, and I take responsibility for its accuracy.',
-                style: TextStyle(fontSize: 13),
-              ),
-              value: prov.consentChecked,
-              activeColor: AppTheme.primary,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              controlAffinity: ListTileControlAffinity.leading,
-              onChanged: (v) => context.read<CreateEntryProvider>().setConsentChecked(v ?? false),
-            ),
-          ),
-        ],
-      ),
+                ]),
+              ]);
+            });
+            if (r != null) prov.setMediaRole(m.localId, r);
+          },
+        ),
+      ],
+      actions: [
+        if (!m.isPrimary) CanopyButton.secondary(label: 'Make cover', expand: true, onPressed: () => prov.setMediaPrimary(m.localId)),
+        CanopyButton.quietDanger(
+          label: 'Remove photo',
+          expand: true,
+          onPressed: () {
+            prov.removeMediaFile(m.localId);
+            Navigator.pop(context);
+          },
+        ),
+      ],
     );
   }
 }
 
-class _ReviewSummary extends StatelessWidget {
-  final CreateEntryProvider prov;
-
-  const _ReviewSummary({required this.prov});
-
-  @override
-  Widget build(BuildContext context) {
-    final mediaCount = prov.mediaFiles.where((m) => m.uploadState == MediaUploadState.uploaded).length;
-    final typeDisplay = prov.selectedContentType?.replaceAll('_', ' ') ?? '—';
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: HeritageTheme.heritageCardBackground.withOpacity(0.74),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Review',
-            style: TextStyle(
-              color: AppTheme.darkGreen,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _ReviewRow('Type', '${typeDisplay[0].toUpperCase()}${typeDisplay.substring(1)}'),
-          _ReviewRow('Title', prov.title.isEmpty ? '—' : prov.title),
-          _ReviewRow(
-            'Community',
-            prov.locality.communityUnknown
-                ? 'Unknown'
-                : (prov.locality.communityName ?? 'Not specified'),
-          ),
-          _ReviewRow('Description', '${prov.description.trim().length} characters'),
-          _ReviewRow('Media', '$mediaCount file${mediaCount == 1 ? '' : 's'} uploaded'),
-          _ReviewRow('Visibility', prov.visibility.replaceAll('_', ' ')),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _ReviewRow(this.label, this.value);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Country images gate ──────────────────────────────────────────────────────
-// Content for a country needs that country's images first. Shows a clear notice
-// + CTA on the locality step when the selected country has no banner image yet.
 class _CountryImagesGate extends StatelessWidget {
   final String countryId;
   final String countryLabel;
   final String orgId;
-
-  const _CountryImagesGate({
-    required this.countryId,
-    required this.countryLabel,
-    required this.orgId,
-  });
+  const _CountryImagesGate({required this.countryId, required this.countryLabel, required this.orgId});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<({String? bg, String? card})>(
       stream: HeritageDataService().streamNodeImages(countryId),
       builder: (context, snap) {
-        // Until the doc resolves, don't show the warning (avoids a flash).
-        if (!snap.hasData) return const SizedBox.shrink();
-        final hasBanner = (snap.data!.bg ?? '').isNotEmpty;
-        if (hasBanner) return const SizedBox.shrink();
-        return Container(
-          margin: const EdgeInsets.only(top: 16),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF3E0),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFFFCC80)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.image_not_supported_outlined,
-                      size: 18, color: Colors.orange.shade800),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Set $countryLabel\'s images first',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.orange.shade900),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Add $countryLabel\'s banner and card images so this content '
-                'displays properly on the country and Heritage screens.',
-                style: TextStyle(
-                    fontSize: 12, height: 1.5, color: Colors.orange.shade900),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => HeritageBackgroundsScreen(orgId: orgId),
-                    ),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.orange.shade800,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.image_outlined, size: 18),
-                  label: const Text('Set country images',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
+        if (!snap.hasData || (snap.data!.bg ?? '').isNotEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: CanopySpace.s12),
+          child: CanopyCallout(
+            kind: CalloutKind.warning,
+            title: "$countryLabel's page has no images yet",
+            text: 'Add a banner and card so this entry displays properly on the country page and the Heritage tab.',
+            action: CanopyButton.secondary(
+              label: 'Set country images',
+              size: CanopyButtonSize.compact,
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HeritageBackgroundsScreen(orgId: orgId))),
+            ),
           ),
         );
       },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUCCESS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Success extends StatelessWidget {
+  final CreateEntryProvider prov;
+  const _Success({required this.prov});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    final v = visibilityFrom(prov.visibility);
+    final where = [
+      prov.locality.communityName,
+      _countries.firstWhere((c) => c.id == prov.locality.countryId, orElse: () => _countries.first).label,
+    ].whereType<String>().where((s) => s.isNotEmpty).join(', ');
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: '', showBack: false),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          VisibilityLabel(v),
+          const SizedBox(height: CanopySpace.s8),
+          Text('Entry added to the archive', style: CanopyType.display.copyWith(color: p.ink)),
+          const SizedBox(height: CanopySpace.s8),
+          Text(
+            '"${prov.title.trim()}" is in your Archive${where.isEmpty ? '' : ' under $where'}.'
+            '${v == ArchiveVisibility.public ? ' Members can find it on Heritage.' : ''}',
+            style: CanopyType.body.copyWith(fontSize: 16, height: 1.5, color: p.ink),
+          ),
+          const CanopySectionHeader(title: 'Next', padding: EdgeInsets.only(top: CanopySpace.section)),
+          CanopyListGroup(children: [
+            if (prov.draftId != null)
+              CanopyListRow(
+                icon: Icons.visibility_outlined,
+                title: 'See it as members do',
+                onTap: () => openEntryPreview(context, prov.draftId!, published: true),
+              ),
+            CanopyListRow(
+              icon: Icons.landscape_outlined,
+              title: 'Add a community background',
+              subtitle: 'So the community page looks right',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HeritageBackgroundsScreen(orgId: prov.orgId))),
+            ),
+          ]),
+        ],
+      ),
+      sticky: StickyActionBar(children: [
+        CanopyButton(
+          label: 'Add another',
+          expand: true,
+          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => CreateEntryScreen(orgId: prov.orgId))),
+        ),
+        CanopyButton.quiet(label: 'Back to archive', expand: true, onPressed: () => Navigator.pop(context)),
+      ]),
     );
   }
 }

@@ -1,25 +1,37 @@
-import 'package:cached_network_image/cached_network_image.dart';
+// lib/Community/Profile/profile_screen.dart
+//
+// Profile hub (DESIGN_HANDOFF.md §3). Gradient identity header (avatar, name,
+// place, points · contributions · rank) → RoleSwitcher card (only for people
+// with more than one context) → Recognition (rank row, badges, check-ins this
+// month) → Account (edit profile, settings, password & security) → Stay
+// updated → Help (contact support, community guidelines, about, privacy) →
+// Sign out (confirm). "Help Center" is gone per the design decisions.
+//
+// Points/rank/badges read the same server-authoritative Users.impact_points
+// field (with the rankingVersion gate) the Leaderboard and Impact screens use.
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../Culture/culture_home.dart';
 import '../../EnvironmentalOps/env_ops_shell.dart';
-import '../../Features/marketplace/marketplace_seller_stub.dart';
 import '../../MarketPlace/market_home.dart';
-import '../../Organization/Home/org_home.dart';
+import '../../Models/badge.dart' as recognition;
+import '../../Models/contribution.dart';
 import '../../Models/user.dart';
-import '../../Organization/Home/Profile/org_profile.dart';
+import '../../Organization/Home/org_home.dart';
 import '../../Services/Authentication/auth.dart';
-import '../../Services/Authentication/community_auth.dart';
+import '../../Services/Events/events_service.dart';
 import '../../Services/Impact/impact_service.dart';
 import '../../Services/Profile/profile_service.dart';
+import '../../Services/Rank/leaderboard_service.dart';
+import '../../Services/Recognition/recognition_service.dart';
 import '../../Shared/Pages/login.dart';
-import '../../Shared/theme/app_theme.dart';
-import '../../Shared/theme/canopy_ui.dart';
 import '../../Shared/widgets/role_context_switcher.dart';
+import '../../theme/canopy_components.dart';
+import '../Events/log_work_event_screen.dart';
+import 'support_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -29,796 +41,418 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final AuthService _authService = AuthService();
-  late Future<Map<String, dynamic>?> _userDataFuture;
+  final _auth = AuthService();
+  String? _uid;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _userDoc;
+  Stream<ProfileData>? _profile;
+  Future<PersonalRank>? _rank;
+  Future<Map<String, dynamic>?>? _org;
+  String? _orgFor;
 
-  @override
-  void initState() {
-    super.initState();
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      _userDataFuture = _fetchUserData(currentUser.uid);
-    }
+  void _bind(String uid) {
+    if (_uid == uid) return;
+    _uid = uid;
+    _userDoc = FirebaseFirestore.instance.collection('Users').doc(uid).snapshots();
+    _profile = ProfileService().watchProfile(userId: uid);
+    _rank = LeaderboardService().getPersonalRank(uid);
   }
 
-  Future<Map<String, dynamic>?> _fetchUserData(String uid) async {
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final userDoc = await firestore.collection('Users').doc(uid).get();
-      if (userDoc.exists) {
-        return userDoc.data() as Map<String, dynamic>?;
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error fetching user data: $e');
-      return null;
+  Future<Map<String, dynamic>?> _orgData(String orgId) {
+    if (_orgFor != orgId) {
+      _orgFor = orgId;
+      _org = FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .get()
+          .then((d) => d.data())
+          .catchError((_) => null);
     }
+    return _org!;
   }
 
-  Future<Map<String, dynamic>?> _fetchOrgData(String orgId) async {
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final orgDoc =
-          await firestore.collection('organizations').doc(orgId).get();
-      if (orgDoc.exists) {
-        return orgDoc.data() as Map<String, dynamic>?;
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error fetching org data: $e');
-      return null;
-    }
-  }
-
-  String _getInitials(String? name) {
-    if (name == null || name.trim().isEmpty) return '';
-    final trimmed = name.trim();
-    final words = trimmed.split(' ');
-    if (words.length == 1) {
-      return words[0][0].toUpperCase();
-    }
-    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  Future<void> _signOut() async {
+    // Capture the root navigator before the async gap: signing out tears
+    // this subtree down via the global auth listener.
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final ok = await showCanopyConfirm(
+      context,
+      title: 'Sign out?',
+      message: "You'll need your email and password to sign back in.",
+      confirmLabel: 'Sign out',
+    );
+    if (!ok) return;
+    await _auth.signOut();
+    navigator.pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
   }
 
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<F_User?>(context);
-
-    // Guard against null user during sign-out (auth stream fires null
-    // before the Navigator.pushReplacement completes).
+    // Null briefly during sign-out, before the replacement route lands.
     if (user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return CanopyScaffold(body: const Center(child: CircularProgressIndicator()));
     }
+    _bind(user.uid);
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _userDataFuture,
-      builder: (context, userSnapshot) {
-        final userData = userSnapshot.data;
-        final userRole = userData?['role'] as String?;
-        final isOrgRep = userRole == 'Org Rep';
-        final orgId = userData?['orgId'] as String?;
-
-        return StreamBuilder<ProfileData>(
-          stream: ProfileService().watchProfile(userId: user.uid),
-          builder: (context, snapshot) {
-            final profile = snapshot.data;
-
-            return Scaffold(
-              backgroundColor: CanopyUi.canvas,
-              // Flat white bar that blends into the page (no elevation/divider)
-              // so it flows straight into the profile header below.
-              appBar: AppBar(
-                backgroundColor: CanopyUi.canvas,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                surfaceTintColor: Colors.transparent,
-                systemOverlayStyle: SystemUiOverlayStyle.dark,
-                toolbarHeight: 62,
-                centerTitle: true,
-                title: const Text(
-                  'Profile',
-                  style: TextStyle(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                  ),
-                ),
-                actions: [
-                  IconButton(
-                    tooltip: 'Settings',
-                    onPressed: () => Navigator.pushNamed(context, '/settings'),
-                    icon: Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: AppTheme.lightGreen.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.settings_outlined,
-                          color: AppTheme.darkGreen, size: 20),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-              ),
-              body: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 8),
-                    _buildHeader(context, profile),
-                    const SizedBox(height: 24),
-                    // ── Role Context Switcher (only for org rep) ────
-                    if (isOrgRep && orgId != null)
-                      FutureBuilder<Map<String, dynamic>?>(
-                        future: _fetchOrgData(orgId),
-                        builder: (context, orgSnapshot) {
-                          final orgData = orgSnapshot.data;
-                          final hasMarketplace =
-                              orgData?['marketplaceStatus'] == 'approved';
-                          final hasEnvOps =
-                              orgData?['envOpsStatus'] == 'approved';
-                          final hasCultural =
-                              orgData?['culturalStatus'] == 'approved';
-
-                          return Column(
-                            children: [
-                              _buildMemberRoleContextSwitcher(
-                                context,
-                                hasMarketplace: hasMarketplace,
-                                hasEnvOps: hasEnvOps,
-                                hasCultural: hasCultural,
-                                orgId: orgId,
-                              ),
-                              const SizedBox(height: 24),
-                            ],
-                          );
-                        },
-                      ),
-                    _buildImpactStats(context, user.uid),
-                    const SizedBox(height: 24),
-                    _buildPersonalInfo(context, profile),
-                    const SizedBox(height: 24),
-                    _buildAccountSection(context),
-                    const SizedBox(height: 16),
-                    _buildNotificationsSection(context),
-                    const SizedBox(height: 16),
-                    _buildImpactSection(context, user.uid),
-                    const SizedBox(height: 16),
-                    _buildRecognitionSection(context),
-                    const SizedBox(height: 16),
-                    _buildSupportSection(context),
-                    const SizedBox(height: 24),
-                    _buildSignOutButton(context),
-                    const SizedBox(height: 100),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildMemberRoleContextSwitcher(
-    BuildContext context, {
-    required bool hasMarketplace,
-    required bool hasEnvOps,
-    required bool hasCultural,
-    required String orgId,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: RoleContextSwitcher(
-        activeContext: 'member',
-        hasMarketplace: hasMarketplace,
-        hasEnvOps: hasEnvOps,
-        hasCultural: hasCultural,
-        onOrgTap: () {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const OrganizationHome()),
-            (route) => false,
-          );
-        },
-        onMemberTap: () {},
-        onMarketplaceTap: () {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const SellerHomeScreen()),
-            (route) => false,
-          );
-        },
-        onEnvOpsTap: () {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (_) => EnvOpsShell(
-                hasMarketplace: hasMarketplace,
-                hasCultural: hasCultural,
-                orgContextBuilder: (_) => const OrganizationHome(),
-                memberContextBuilder: (_) => const ProfileScreen(),
-                marketplaceContextBuilder:
-                    hasMarketplace ? (_) => const SellerHomeScreen() : null,
-                culturalContextBuilder: hasCultural
-                    ? (_) => CultureHomeScreen(
-                          orgId: orgId,
-                          memberContextBuilder: (_) => const ProfileScreen(),
-                        )
-                    : null,
-              ),
-            ),
-            (route) => false,
-          );
-        },
-        onCulturalTap: () {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CultureHomeScreen(
-                orgId: orgId,
-                memberContextBuilder: (_) => const ProfileScreen(),
-              ),
-            ),
-            (route) => false,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context, ProfileData? profile) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppTheme.primary, AppTheme.secondary],
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primary.withOpacity(0.3),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child:
-                (profile?.photoUrl == null || (profile?.photoUrl ?? '').isEmpty)
-                    ? Center(
-                        child: Text(
-                          _getInitials(profile?.name),
-                          style: const TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(50),
-                        child: CachedNetworkImage(
-                          imageUrl: profile!.photoUrl!,
-                          fit: BoxFit.cover,
-                          errorWidget: (context, url, error) => const Icon(
-                            Icons.person,
-                            size: 50,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            (profile?.name ?? '').isEmpty ? 'Community Member' : profile!.name,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: AppTheme.darkGreen,
-                  fontWeight: FontWeight.w700,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.verified_user, color: AppTheme.primary, size: 16),
-                const SizedBox(width: 6),
-                Text(
-                  'Active Member',
-                  style: TextStyle(
-                    color: AppTheme.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImpactStats(BuildContext context, String userId) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .snapshots(),
-      builder: (context, snap) {
-        final d = snap.data?.data() as Map<String, dynamic>? ?? {};
-        final points = (d['totalPoints'] ?? 0).toString();
-        final contributions = (d['contributions'] ?? 0).toString();
-        final rank = (d['rank'] ?? '-').toString();
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Profile', showBack: false, actions: [
+        CanopyIconButton(
+          icon: Icons.settings_outlined,
+          tooltip: 'Settings',
+          onPressed: () => Navigator.pushNamed(context, '/settings'),
+        ),
+      ]),
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: _userDoc,
+        builder: (context, userSnap) {
+          final data = userSnap.data?.data() ?? const <String, dynamic>{};
+          final isOrgRep = data['role'] == 'Org Rep';
+          final orgId = data['orgId'] as String?;
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(
+                CanopySpace.gutter, CanopySpace.s4, CanopySpace.gutter, CanopySpace.s32),
             children: [
-              Expanded(
-                child: _ImpactTile(
-                  label: 'Impact Points',
-                  value: points,
-                  icon: Icons.bolt_outlined,
-                  color: AppTheme.tertiary,
+              StreamBuilder<ProfileData>(
+                stream: _profile,
+                builder: (context, snap) => _Header(
+                  profile: snap.data,
+                  userData: data,
+                  rank: _rank!,
+                  loading: !snap.hasData && !userSnap.hasData,
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ImpactTile(
-                  label: 'Contributions',
-                  value: contributions,
-                  icon: Icons.volunteer_activism_outlined,
-                  color: AppTheme.primary,
+              if (isOrgRep && orgId != null)
+                FutureBuilder<Map<String, dynamic>?>(
+                  future: _orgData(orgId),
+                  builder: (context, snap) {
+                    if (!snap.hasData) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: CanopySpace.s16),
+                      child: _switcher(context, snap.data!, orgId),
+                    );
+                  },
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ImpactTile(
-                  label: 'Rank',
-                  value: rank == '-' ? '-' : '#$rank',
-                  icon: Icons.emoji_events_outlined,
-                  color: AppTheme.accent,
+              const SizedBox(height: CanopySpace.section),
+              _Recognition(userId: user.uid, rank: _rank!),
+              const SizedBox(height: CanopySpace.section),
+              CanopyListGroup(header: 'Account', children: [
+                CanopyListRow(
+                  icon: Icons.person_outline,
+                  title: 'Edit profile',
+                  onTap: () => Navigator.pushNamed(context, '/profile/edit'),
                 ),
-              ),
+                CanopyListRow(
+                  icon: Icons.settings_outlined,
+                  title: 'Settings',
+                  onTap: () => Navigator.pushNamed(context, '/settings'),
+                ),
+                CanopyListRow(
+                  icon: Icons.lock_outline,
+                  title: 'Password & security',
+                  onTap: () => Navigator.pushNamed(context, '/security'),
+                ),
+              ]),
+              const SizedBox(height: CanopySpace.section),
+              CanopyListGroup(header: 'Stay updated', children: [
+                CanopyListRow(
+                  icon: Icons.campaign_outlined,
+                  title: 'Announcements',
+                  onTap: () => Navigator.pushNamed(context, '/announcements'),
+                ),
+                CanopyListRow(
+                  icon: Icons.notifications_none_outlined,
+                  title: 'Notifications',
+                  onTap: () => Navigator.pushNamed(context, '/notifications'),
+                ),
+              ]),
+              const SizedBox(height: CanopySpace.section),
+              CanopyListGroup(header: 'Help', children: [
+                CanopyListRow(
+                  icon: Icons.support_agent_outlined,
+                  title: 'Contact support',
+                  subtitle: 'Send a message to the Canopy team',
+                  onTap: () => showSupportSheet(context),
+                ),
+                CanopyListRow(
+                  icon: Icons.menu_book_outlined,
+                  title: 'Community guidelines',
+                  onTap: () => Navigator.pushNamed(context, '/guidelines'),
+                ),
+                CanopyListRow(
+                  icon: Icons.info_outline,
+                  title: 'About Canopy',
+                  onTap: () => Navigator.pushNamed(context, '/about'),
+                ),
+                CanopyListRow(
+                  icon: Icons.privacy_tip_outlined,
+                  title: 'Privacy policy',
+                  onTap: () => Navigator.pushNamed(context, '/privacy'),
+                ),
+              ]),
+              const SizedBox(height: CanopySpace.s16),
+              CanopyButton.quietDanger(label: 'Sign out', expand: true, onPressed: _signOut),
             ],
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildPersonalInfo(BuildContext context, ProfileData? profile) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primary.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _switcher(BuildContext context, Map<String, dynamic> org, String orgId) {
+    final hasMarketplace = org['marketplaceStatus'] == 'approved';
+    final hasEnvOps = org['envOpsStatus'] == 'approved';
+    final hasCultural = org['culturalStatus'] == 'approved';
+    void go(Widget screen) => Navigator.pushAndRemoveUntil(
+        context, MaterialPageRoute(builder: (_) => screen), (_) => false);
+    return RoleContextSwitcher(
+      activeContext: 'member',
+      hasMarketplace: hasMarketplace,
+      hasEnvOps: hasEnvOps,
+      hasCultural: hasCultural,
+      onMemberTap: () {},
+      onOrgTap: () => go(const OrganizationHome()),
+      onMarketplaceTap: () => go(const SellerHomeScreen()),
+      onEnvOpsTap: () => go(EnvOpsShell(
+        hasMarketplace: hasMarketplace,
+        hasCultural: hasCultural,
+        orgContextBuilder: (_) => const OrganizationHome(),
+        memberContextBuilder: (_) => const ProfileScreen(),
+        marketplaceContextBuilder: hasMarketplace ? (_) => const SellerHomeScreen() : null,
+        culturalContextBuilder: hasCultural
+            ? (_) => CultureHomeScreen(
+                orgId: orgId, memberContextBuilder: (_) => const ProfileScreen())
+            : null,
+      )),
+      onCulturalTap: () => go(CultureHomeScreen(
+          orgId: orgId, memberContextBuilder: (_) => const ProfileScreen())),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HEADER
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Header extends StatelessWidget {
+  final ProfileData? profile;
+  final Map<String, dynamic> userData;
+  final Future<PersonalRank> rank;
+  final bool loading;
+  const _Header(
+      {required this.profile, required this.userData, required this.rank, required this.loading});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (profile?.name ?? '').trim();
+    final place = (profile?.location ?? '').trim();
+    final points = userData['rankingVersion'] == 1
+        ? (userData['impact_points'] as num?)?.toInt() ?? 0
+        : 0;
+    final contributions = (userData['verifiedContributions'] as num?)?.toInt() ?? 0;
+    final role = userData['role'] == 'Org Rep' ? 'Organisation rep' : 'Member';
+
+    Widget stat(String value, String label, VoidCallback onTap, {bool gold = false}) =>
+        Expanded(
+          child: CanopyHeroTap(
+            label: '$label $value',
+            onTap: onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Personal Details',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppTheme.darkGreen,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/settings');
-                  },
-                  icon: Icon(Icons.edit, color: AppTheme.primary, size: 20),
-                ),
+                Text(value,
+                    style: CanopyType.title.copyWith(
+                        color: gold ? CanopyPalette.onHeroPoints : CanopyPalette.onHero,
+                        fontFeatures: const [FontFeature.tabularFigures()])),
+                Text(label,
+                    style: CanopyType.caption.copyWith(color: CanopyPalette.onHeroMuted)),
               ],
             ),
-            const SizedBox(height: 16),
-            _InfoRow(
-              icon: Icons.person,
-              label: 'Name',
-              value: (profile?.name ?? '').isEmpty ? 'Not set' : profile!.name,
-            ),
-            const SizedBox(height: 12),
-            _InfoRow(
-              icon: Icons.location_on,
-              label: 'Location',
-              value: (profile?.location ?? '').isEmpty
-                  ? 'Location not set'
-                  : profile!.location,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+          ),
+        );
 
-  Widget _buildAccountSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+    return CanopyHero(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Account Management',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                icon: Icons.account_circle,
-                title: 'Account Details',
-                onTap: () {
-                  Navigator.pushNamed(context, '/settings');
-                },
+          Row(
+            children: [
+              CanopyAvatar(
+                url: profile?.photoUrl,
+                name: name,
+                size: 72,
+                ring: CanopyPalette.onHero.withAlpha(0x66),
               ),
-              _SettingsItem(
-                icon: Icons.lock,
-                title: 'Password and Security',
-                onTap: () {
-                  Navigator.pushNamed(context, '/security');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.notifications,
-                title: 'Notification Settings',
-                onTap: () {
-                  Navigator.pushNamed(context, '/notifications');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotificationsSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Stay Updated',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                icon: Icons.campaign_outlined,
-                title: 'Announcements',
-                onTap: () {
-                  Navigator.pushNamed(context, '/announcements');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.notifications_outlined,
-                title: 'Notifications',
-                onTap: () {
-                  Navigator.pushNamed(context, '/notifications');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImpactSection(BuildContext context, String userId) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Your Impact',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                icon: Icons.bolt_outlined,
-                title: 'Impact Points',
-                onTap: () {
-                  Navigator.pushNamed(context, '/impact');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.leaderboard_outlined,
-                title: 'Leaderboard',
-                onTap: () {
-                  Navigator.pushNamed(context, '/leaderboard');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.emoji_events_outlined,
-                title: 'Badges',
-                onTap: () {
-                  Navigator.pushNamed(context, '/recognition/badges');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.favorite_outline,
-                title: 'Acknowledgements',
-                onTap: () {
-                  Navigator.pushNamed(context, '/recognition/acknowledgements');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecognitionSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Recognition',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                icon: Icons.star_outline,
-                title: 'My Achievements',
-                onTap: () {
-                  Navigator.pushNamed(context, '/achievements');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSupportSection(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              'Support & Information',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          _SettingsCard(
-            items: [
-              _SettingsItem(
-                icon: Icons.help_outline,
-                title: 'Help Center',
-                onTap: () {
-                  Navigator.pushNamed(context, '/help');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.info_outline,
-                title: 'About Canopy',
-                onTap: () {
-                  Navigator.pushNamed(context, '/about');
-                },
-              ),
-              _SettingsItem(
-                icon: Icons.privacy_tip_outlined,
-                title: 'Privacy Policy',
-                onTap: () {
-                  Navigator.pushNamed(context, '/privacy');
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSignOutButton(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.red.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () async {
-              // Capture the root navigator BEFORE any async gap. Signing out
-              // triggers the global auth listener, which tears down this
-              // ProfileScreen subtree — leaving the local `context` defunct
-              // (its State becomes null) by the time we'd navigate.
-              final navigator = Navigator.of(context, rootNavigator: true);
-              final shouldSignOut = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  backgroundColor: Colors.white,
-                  title: Text(
-                    'Sign Out',
-                    style: TextStyle(
-                      color: AppTheme.darkGreen,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  content: Text(
-                    'Are you sure you want to sign out?',
-                    style: TextStyle(color: AppTheme.darkGreen),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(color: AppTheme.darkGreen),
-                      ),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.red,
-                      ),
-                      child: const Text('Sign Out'),
-                    ),
+              const SizedBox(width: CanopySpace.s16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(loading ? ' ' : (name.isEmpty ? 'Community member' : name),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: CanopyType.title.copyWith(color: CanopyPalette.onHero)),
+                    const SizedBox(height: CanopySpace.s2),
+                    Text([role, if (place.isNotEmpty) place].join(' · '),
+                        style: CanopyType.caption
+                            .copyWith(color: CanopyPalette.onHeroMuted)),
                   ],
                 ),
-              );
-
-              if (shouldSignOut == true) {
-                await _authService.signOut();
-                navigator.pushReplacement(
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                );
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.logout, color: Colors.red, size: 20),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Sign Out',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: Colors.red,
-                          ),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, color: Colors.red),
-                ],
               ),
+            ],
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          Container(height: 1, color: CanopyPalette.onHero.withAlpha(0x29)),
+          const SizedBox(height: CanopySpace.s12),
+          FutureBuilder<PersonalRank>(
+            future: rank,
+            builder: (context, snap) => Row(
+              children: [
+                stat('$points', 'points', () => Navigator.pushNamed(context, '/impact'),
+                    gold: true),
+                stat('$contributions', 'verified',
+                    () => Navigator.pushNamed(context, '/impact')),
+                stat(snap.data?.rank == null ? '—' : '#${snap.data!.rank}', 'rank',
+                    () => Navigator.pushNamed(context, '/leaderboard')),
+              ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
+// ─────────────────────────────────────────────────────────────────────────────
+// RECOGNITION
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+class _Recognition extends StatelessWidget {
+  final String userId;
+  final Future<PersonalRank> rank;
+  const _Recognition({required this.userId, required this.rank});
+
+  static const _badgeIcons = {
+    'welcome': Icons.celebration_outlined,
+    'first_contribution': Icons.eco_outlined,
+    'contributor_5': Icons.military_tech_outlined,
+    'impact_100': Icons.bolt_outlined,
+    'impact_500': Icons.bolt_outlined,
+    'impact_1000': Icons.workspace_premium_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final p = context.canopy;
+    final impact = ImpactService();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppTheme.lightGreen.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: AppTheme.primary, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.darkGreen.withOpacity(0.6),
+        const CanopySectionHeader(title: 'Recognition', padding: EdgeInsets.zero),
+        StreamBuilder<int>(
+          stream: impact.watchUserImpactPoints(userId: userId),
+          builder: (context, pointsSnap) => StreamBuilder<List<Contribution>>(
+            stream: impact.watchUserContributions(userId: userId),
+            builder: (context, snap) {
+              final points = pointsSnap.data ?? 0;
+              final contribs = snap.data ?? const <Contribution>[];
+              final verified = contribs.where((c) => c.isVerified).length;
+              final badges = RecognitionService()
+                  .computeBadges(impactPoints: points, contributionsCount: verified);
+              final earned = badges.where((b) => b.earned).length;
+              final shown = <recognition.Badge>[
+                ...badges.where((b) => b.earned).take(3),
+                ...badges.where((b) => !b.earned).take(4),
+              ].take(4).toList();
+              // Same four milestones AcknowledgementsScreen shows.
+              final milestones = [
+                true,
+                contribs.isNotEmpty,
+                contribs.length >= 5,
+                contribs.length >= 10
+              ].where((m) => m).length;
+
+              return CanopyListGroup(children: [
+                FutureBuilder<PersonalRank>(
+                  future: rank,
+                  builder: (context, r) {
+                    final pr = r.data;
+                    return CanopyListRow(
+                      icon: Icons.leaderboard_outlined,
+                      title: pr?.rank == null ? 'Not ranked yet' : 'Rank #${pr!.rank}',
+                      subtitle: pr?.rank == null
+                          ? 'Your first verified contribution earns a place'
+                          : pr!.pointsToNext == null
+                              ? 'You share the top score'
+                              : '${pr.pointsToNext} pts to move up',
+                      onTap: () => Navigator.pushNamed(context, '/leaderboard'),
+                    );
+                  },
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.darkGreen,
+                InkWell(
+                  onTap: () => Navigator.pushNamed(context, '/recognition/badges'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(CanopySpace.s16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text('Badges',
+                                  style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+                            ),
+                            Text('$earned of ${badges.length}',
+                                style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                            Icon(Icons.chevron_right,
+                                size: CanopyIconSize.s18, color: p.inkFaint),
+                          ],
+                        ),
+                        const SizedBox(height: CanopySpace.s12),
+                        Row(
+                          children: [
+                            for (final b in shown)
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    CanopyBadge(
+                                      icon: _badgeIcons[b.id] ?? Icons.emoji_events_outlined,
+                                      earned: b.earned,
+                                      progress: b.earned
+                                          ? null
+                                          : b.requiredPoints != null
+                                              ? points / b.requiredPoints!
+                                              : b.requiredContributions != null
+                                                  ? verified / b.requiredContributions!
+                                                  : null,
+                                      size: 52,
+                                    ),
+                                    const SizedBox(height: CanopySpace.s4),
+                                    Text(b.title,
+                                        maxLines: 2,
+                                        textAlign: TextAlign.center,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: CanopyType.micro.copyWith(
+                                            color: b.earned ? p.ink : p.inkMuted)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                  ),
+                ),
+                CanopyListRow(
+                  icon: Icons.favorite_outline,
+                  title: 'Acknowledgements',
+                  trailing: Text('$milestones of 4',
+                      style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                  onTap: () =>
+                      Navigator.pushNamed(context, '/recognition/acknowledgements'),
+                ),
+                _CheckinsRow(userId: userId),
+              ]);
+            },
           ),
         ),
       ],
@@ -826,157 +460,33 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-class _SettingsCard extends StatelessWidget {
-  final List<_SettingsItem> items;
-
-  const _SettingsCard({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: items.asMap().entries.map((entry) {
-          return Column(
-            children: [
-              if (entry.key > 0)
-                Divider(
-                  height: 1,
-                  indent: 56,
-                  color: AppTheme.darkGreen.withOpacity(0.08),
-                ),
-              _SettingsItemContent(item: entry.value),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _SettingsItem {
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-
-  const _SettingsItem({
-    required this.icon,
-    required this.title,
-    required this.onTap,
-  });
-}
-
-class _SettingsItemContent extends StatelessWidget {
-  final _SettingsItem item;
-
-  const _SettingsItemContent({required this.item});
+class _CheckinsRow extends StatelessWidget {
+  final String userId;
+  const _CheckinsRow({required this.userId});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: item.onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(item.icon, color: AppTheme.primary, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  item.title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.darkGreen,
-                      ),
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: AppTheme.darkGreen.withOpacity(0.4),
-                size: 22,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ImpactTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _ImpactTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 16, color: color),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.darkGreen.withOpacity(0.65),
-            ),
-          ),
-        ],
-      ),
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: EventsService().watchMyCheckins(userId),
+      builder: (context, snap) {
+        final now = DateTime.now();
+        final month = (snap.data ?? const []).where((c) {
+          final ts = c['checkedInAt'];
+          return ts is Timestamp &&
+              ts.toDate().year == now.year &&
+              ts.toDate().month == now.month;
+        }).toList();
+        final pts = month.fold<int>(
+            0, (t, c) => t + ((c['pointsAwarded'] as num?)?.toInt() ?? 0));
+        return CanopyListRow(
+          icon: Icons.qr_code_scanner_outlined,
+          title: 'Check-ins this month',
+          subtitle: '${month.length} check-in${month.length == 1 ? '' : 's'}',
+          trailing: pts > 0 ? PointsLabel(pts) : null,
+          onTap: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const LogWorkEventScreen())),
+        );
+      },
     );
   }
 }

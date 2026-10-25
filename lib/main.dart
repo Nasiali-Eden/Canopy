@@ -15,10 +15,11 @@ import 'Community/Contributions/log_contribution.dart';
 import 'Community/Home/community_home.dart';
 import 'Community/Incidents/incidents_feed_screen.dart';
 import 'Community/Impact/impact_dashboard.dart';
-import 'Community/Profile/community_info.dart';
+import 'Community/Profile/security_screen.dart';
 import 'Community/Profile/edit_profile.dart';
 import 'Community/Profile/roadmap_screen.dart';
 import 'Community/Profile/settings_screen.dart';
+import 'Community/Recognition/acknowledgements.dart';
 import 'Community/Recognition/badges_screen.dart';
 import 'Community/Recognition/leaderboard_screen.dart';
 import 'Models/user.dart';
@@ -232,22 +233,24 @@ final Map<String, WidgetBuilder> _appRoutes = {
   '/incidents': (_) => const IncidentsFeedScreen(),
   '/settings': (_) => const SettingsScreen(),
   '/profile/edit': (_) => const EditProfileScreen(),
-  '/community/info': (_) => const CommunityInfoScreen(),
   '/announcements': (_) => const AnnouncementsListScreen(),
   '/roadmap': (_) => const RoadmapScreen(),
   '/recognition/badges': (_) => const BadgesScreen(),
+  '/recognition/acknowledgements': (_) => const AcknowledgementsScreen(),
   // Phase 2.1 dead-screen audit (Minimal Release Roadmap) — these three
   // screens already existed but were never wired into the route table, so
   // every push landed on _RouteNotFoundScreen. See
   // IMPLEMENTATION_NOTES_PHASE2_AUDIT.md for the full pass/fail list —
   // several other pushed routes ('/security', '/about', '/privacy', etc.)
-  // point at screens that genuinely don't exist yet and are NOT fixed here.
+  // point at screens that genuinely don't exist yet.
   '/notifications': (_) => const NotificationCenterScreen(),
-  '/guidelines': (_) => const CommunityGuidelinesScreen(),
+  '/guidelines': (_) => const CommunityGuidelinesScreen(readOnly: true),
   '/activities/create': (_) => const CreateActivityScreen(),
   '/about': (_) => const AboutScreen(),
   '/privacy': (_) => const PrivacyPolicyScreen(),
   '/leaderboard': (_) => const LeaderboardScreen(),
+
+  '/security': (_) => const SecurityScreen(),
 };
 
 /// `/announcements/{id}` is pushed with the id baked into the path

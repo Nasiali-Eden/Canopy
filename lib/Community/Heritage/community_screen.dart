@@ -1,210 +1,143 @@
 // lib/Community/Heritage/community_screen.dart
 //
-// Phase 3 — the "Communities" destination for a country. Lists the communities
-// that actually have public entries (parity-safe; derived from entries by
-// HeritageDataService), each opening a community-filtered browse. No hardcoded
-// tribe list.
+// Communities list (T) + Community detail (F) — HERITAGE_HANDOFF §3.4.
+//   List: rows 88 with 120 media, name, "[N] entries"; sorted by count then
+//     name. Only communities that actually have public entries.
+//   Detail: backdrop community photo → falls back to the country photo →
+//     dark radial from the communities accent + grain + giant initial at 5%.
+//     Then category chips + sections as in the hub.
 
 import 'package:flutter/material.dart';
 
 import '../../Culture/Heritage/Services/heritage_content_types.dart';
 import '../../Culture/Heritage/Services/heritage_data_service.dart';
-import '../../Shared/theme/glass.dart';
+import '../../theme/canopy_components.dart';
 import 'category_browse_screen.dart';
 import 'heritage_item_screen.dart';
-import 'heritage_widgets.dart';
+import 'heritage_ui.dart';
 
-class CommunitiesListScreen extends StatelessWidget {
+class CommunitiesListScreen extends StatefulWidget {
   final String countryId;
   final String countryName;
+  const CommunitiesListScreen({super.key, required this.countryId, required this.countryName});
 
-  const CommunitiesListScreen({
-    super.key,
-    required this.countryId,
-    required this.countryName,
-  });
+  @override
+  State<CommunitiesListScreen> createState() => _CommunitiesListScreenState();
+}
 
-  static const Color _accent = HeritageContentTypes.communitiesAccent;
+class _CommunitiesListScreenState extends State<CommunitiesListScreen> {
+  final _service = HeritageDataService();
+  late Stream<List<CommunitySummary>> _stream =
+      _service.streamCommunitiesForCountry(widget.countryId);
 
   @override
   Widget build(BuildContext context) {
-    final service = HeritageDataService();
-    final topPad = MediaQuery.of(context).padding.top;
-    final bottomPad = MediaQuery.of(context).padding.bottom;
-
-    return Scaffold(
-      backgroundColor: GlassPalette.base,
-      body: Stack(
-        children: [
-          StreamBuilder<String?>(
-            stream: service.streamNodeBg(countryId),
-            builder: (_, snap) =>
-                GlassBackground(imageUrl: snap.data, tint: _accent),
-          ),
-          SafeArea(
-            bottom: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return HeritagePlainPage(
+      title: 'Communities · ${widget.countryName}',
+      body: StreamBuilder<List<CommunitySummary>>(
+        stream: _stream,
+        builder: (context, snap) {
+          final h = context.heritage;
+          if (snap.hasError) {
+            return CanopyErrorState(
+                title: "Couldn't load communities",
+                onRetry: () => setState(
+                    () => _stream = _service.streamCommunitiesForCountry(widget.countryId)));
+          }
+          if (!snap.hasData) {
+            return ListView(
+              padding: const EdgeInsets.all(CanopySpace.gutter),
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 60, 20, 14),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(9),
-                        decoration: BoxDecoration(
-                          color: _accent.withOpacity(0.22),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _accent.withOpacity(0.4)),
-                        ),
-                        child: const Icon(Icons.groups_outlined,
-                            size: 18, color: Colors.white),
+                for (var i = 0; i < 4; i++) ...[
+                  const CanopySkeleton(height: 88, radius: HeritageCardSize.radius),
+                  const SizedBox(height: CanopySpace.s12),
+                ],
+              ],
+            );
+          }
+          final list = [...snap.data!]..sort((a, b) {
+              final c = b.entryCount.compareTo(a.entryCount);
+              return c != 0 ? c : a.name.compareTo(b.name);
+            });
+          if (list.isEmpty) {
+            return CheckBackLater(
+                line: 'No community in ${widget.countryName} has published entries yet.');
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(
+                CanopySpace.gutter, CanopySpace.s4, CanopySpace.gutter, CanopySpace.s32),
+            itemCount: list.length,
+            separatorBuilder: (_, __) => const SizedBox(height: CanopySpace.s12),
+            itemBuilder: (_, i) {
+              final c = list[i];
+              return Semantics(
+                button: true,
+                label: '${c.name}, ${c.entryCount} entries',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CommunityDetailScreen(
+                        countryId: widget.countryId,
+                        countryName: widget.countryName,
+                        communityId: c.id,
+                        communityName: c.name,
                       ),
-                      const SizedBox(width: 12),
+                    ),
+                  ),
+                  child: Container(
+                    height: 88,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: h.raised,
+                      borderRadius: BorderRadius.circular(HeritageCardSize.radius),
+                    ),
+                    child: Row(children: [
+                      SizedBox(
+                        width: 120,
+                        child: StreamBuilder<({String? bg, String? card})>(
+                          stream: _service.streamNodeImages(HeritageDataService.communityNodeId(c.id)),
+                          builder: (_, img) {
+                            final url = img.data?.card ?? img.data?.bg;
+                            return url == null
+                                ? HeritageFallback(
+                                    category: HeritageCategory.communities,
+                                    initial: c.name.isEmpty ? null : c.name.characters.first.toUpperCase())
+                                : HeritageMedia(url: url, category: HeritageCategory.communities);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: CanopySpace.s16),
                       Expanded(
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Communities',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.4)),
-                            Text(countryName,
-                                style: TextStyle(
-                                    color: Colors.white.withOpacity(0.6),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500)),
+                            Text(c.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: CanopyType.heritageCardTitle.copyWith(color: h.ink)),
+                            Text('${c.entryCount} ${c.entryCount == 1 ? 'entry' : 'entries'}',
+                                style: CanopyType.caption.copyWith(color: h.inkMuted)),
                           ],
                         ),
                       ),
-                    ],
+                      Icon(Icons.chevron_right, color: h.inkFaint),
+                      const SizedBox(width: CanopySpace.s8),
+                    ]),
                   ),
                 ),
-                Expanded(
-                  child: StreamBuilder<List<CommunitySummary>>(
-                    stream: service.streamCommunitiesForCountry(countryId),
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting &&
-                          !snap.hasData) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                              color: Colors.white70, strokeWidth: 2),
-                        );
-                      }
-                      final communities =
-                          snap.data ?? const <CommunitySummary>[];
-                      if (communities.isEmpty) {
-                        return const GlassEmptyState(
-                          icon: Icons.groups_outlined,
-                          title: 'No communities yet',
-                          message:
-                              'Community entries will appear here as soon as they\'re added.',
-                        );
-                      }
-                      return ListView.separated(
-                        padding:
-                            EdgeInsets.fromLTRB(16, 4, 16, bottomPad + 24),
-                        itemCount: communities.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) =>
-                            _CommunityRow(c: communities[i], onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => CommunityDetailScreen(
-                                countryId: countryId,
-                                countryName: countryName,
-                                communityId: communities[i].id,
-                                communityName: communities[i].name,
-                              ),
-                            ),
-                          );
-                        }),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            top: topPad + 8,
-            left: 16,
-            child: CircleGlassButton(
-              icon: Icons.arrow_back_ios_new_rounded,
-              onTap: () => Navigator.pop(context),
-            ),
-          ),
-        ],
+              );
+            },
+          );
+        },
       ),
     );
   }
 }
 
-class _CommunityRow extends StatelessWidget {
-  final CommunitySummary c;
-  final VoidCallback onTap;
-  const _CommunityRow({required this.c, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.all(14),
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: CommunitiesListScreen._accent.withOpacity(0.18),
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: CommunitiesListScreen._accent.withOpacity(0.4)),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(c.name,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(
-                  '${c.entryCount} ${c.entryCount == 1 ? 'entry' : 'entries'}',
-                  style: TextStyle(
-                      color: Colors.white.withOpacity(0.55), fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right,
-              color: Colors.white.withOpacity(0.5), size: 22),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COMMUNITY DETAIL — hero header over the community background + its entries
-// ─────────────────────────────────────────────────────────────────────────────
-
-class CommunityDetailScreen extends StatelessWidget {
+class CommunityDetailScreen extends StatefulWidget {
   final String countryId;
   final String countryName;
   final String communityId;
@@ -218,207 +151,125 @@ class CommunityDetailScreen extends StatelessWidget {
     required this.communityName,
   });
 
-  static const Color _accent = HeritageContentTypes.communitiesAccent;
+  @override
+  State<CommunityDetailScreen> createState() => _CommunityDetailScreenState();
+}
+
+class _CommunityDetailScreenState extends State<CommunityDetailScreen> {
+  final _service = HeritageDataService();
+  late Stream<List<HeritageItem>> _items = _service.streamItems(
+      countryId: widget.countryId, communityId: widget.communityId);
+  String? _type;
+
+  void _open(HeritageItem it) =>
+      Navigator.push(context, MaterialPageRoute(builder: (_) => HeritageItemScreen(item: it)));
 
   @override
   Widget build(BuildContext context) {
-    final service = HeritageDataService();
-    final topPad = MediaQuery.of(context).padding.top;
-    final bottomPad = MediaQuery.of(context).padding.bottom;
-
-    return Scaffold(
-      backgroundColor: GlassPalette.base,
-      body: Stack(
-        children: [
-          // Backdrop: community background, falling back to the country's.
-          StreamBuilder<String?>(
-            stream: service
-                .streamNodeBg(HeritageDataService.communityNodeId(communityId)),
-            builder: (_, commSnap) {
-              final commBg = commSnap.data;
-              if (commBg != null && commBg.isNotEmpty) {
-                return GlassBackground(imageUrl: commBg, tint: _accent);
-              }
-              return StreamBuilder<String?>(
-                stream: service.streamNodeBg(countryId),
-                builder: (_, cSnap) =>
-                    GlassBackground(imageUrl: cSnap.data, tint: _accent),
+    final initial =
+        widget.communityName.isEmpty ? null : widget.communityName.characters.first.toUpperCase();
+    return StreamBuilder<({String? bg, String? card})>(
+      stream: _service.streamNodeImages(HeritageDataService.communityNodeId(widget.communityId)),
+      builder: (context, own) => StreamBuilder<String?>(
+        stream: _service.streamNodeBg(widget.countryId),
+        builder: (context, country) {
+          final url = own.data?.bg ?? own.data?.card ?? country.data;
+          final backdrop = url == null
+              ? HeritageFallback(category: HeritageCategory.communities, initial: initial)
+              : HeritageMedia(url: url, category: HeritageCategory.communities);
+          return StreamBuilder<List<HeritageItem>>(
+            stream: _items,
+            builder: (context, snap) {
+              final items = snap.data ?? const <HeritageItem>[];
+              final types = [
+                for (final t in HeritageContentTypes.ordered)
+                  if (items.any((i) => i.contentType == t.key)) t,
+              ];
+              final shownTypes = _type == null ? types : types.where((t) => t.key == _type).toList();
+              return HeritageBackdropPage(
+                backdropHeight: 440,
+                backdrop: backdrop,
+                titleBlock: Builder(builder: (context) {
+                  final h = context.heritage;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('COMMUNITY · ${widget.countryName.toUpperCase()}',
+                          style: CanopyType.heritageFieldLabel.copyWith(color: h.inkMuted)),
+                      const SizedBox(height: CanopySpace.s4),
+                      Text(widget.communityName,
+                          style: CanopyType.heritageTitle.copyWith(color: h.ink)),
+                      if (snap.hasData)
+                        Text('${items.length} ${items.length == 1 ? 'entry' : 'entries'}',
+                            style: CanopyType.body.copyWith(color: h.inkMuted)),
+                    ],
+                  );
+                }),
+                sheetChildren: [
+                  if (snap.hasError)
+                    Padding(
+                      padding: const EdgeInsets.all(CanopySpace.gutter),
+                      child: CanopyErrorState(
+                        inline: true,
+                        title: "Couldn't load this community.",
+                        onRetry: () => setState(() => _items = _service.streamItems(
+                            countryId: widget.countryId, communityId: widget.communityId)),
+                      ),
+                    )
+                  else if (!snap.hasData)
+                    HeritageSkeletonRail(
+                        shape: HeritageCardShape.tile, category: HeritageCategory.communities)
+                  else if (items.isEmpty)
+                    CheckBackLater(line: 'No public entries from ${widget.communityName} yet.')
+                  else ...[
+                    if (types.length > 1) ...[
+                      const SizedBox(height: CanopySpace.s12),
+                      CanopyChipRail(chips: [
+                        CanopyFilterChip(
+                            label: 'All',
+                            selected: _type == null,
+                            onTap: () => setState(() => _type = null)),
+                        for (final t in types)
+                          CanopyFilterChip(
+                            label: t.label,
+                            count: items.where((i) => i.contentType == t.key).length,
+                            selected: _type == t.key,
+                            onTap: () => setState(() => _type = t.key),
+                          ),
+                      ]),
+                    ],
+                    for (final t in shownTypes) ...[
+                      HeritageSectionHeader(
+                        title: t.label,
+                        accent: t.category.fill,
+                        count: items.where((i) => i.contentType == t.key).length,
+                        onShowAll: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => HeritageBrowseScreen(
+                              countryId: widget.countryId,
+                              countryName: widget.countryName,
+                              contentType: t.key,
+                              communityId: widget.communityId,
+                              communityName: widget.communityName,
+                              title: t.label,
+                            ),
+                          ),
+                        ),
+                      ),
+                      HeritageRail(
+                        items: items.where((i) => i.contentType == t.key).toList(),
+                        shape: t.shape,
+                        onOpen: _open,
+                      ),
+                    ],
+                  ],
+                ],
               );
             },
-          ),
-          SafeArea(
-            bottom: false,
-            child: StreamBuilder<List<HeritageItem>>(
-              stream: service.streamItems(
-                  countryId: countryId, communityId: communityId),
-              builder: (context, snap) {
-                final items = snap.data ?? const <HeritageItem>[];
-                return CustomScrollView(
-                  slivers: [
-                    SliverToBoxAdapter(child: _hero(items.length)),
-                    ..._sections(context, items),
-                    SliverToBoxAdapter(child: SizedBox(height: bottomPad + 28)),
-                  ],
-                );
-              },
-            ),
-          ),
-          Positioned(
-            top: topPad + 8,
-            left: 16,
-            child: CircleGlassButton(
-              icon: Icons.arrow_back_ios_new_rounded,
-              onTap: () => Navigator.pop(context),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _hero(int count) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 60, 20, 10),
-      child: Row(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: _accent.withOpacity(0.2),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              communityName.isNotEmpty ? communityName[0].toUpperCase() : '?',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  communityName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    height: 1.1,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  count > 0
-                      ? '$count ${count == 1 ? 'entry' : 'entries'} · in $countryName'
-                      : 'Community in $countryName',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.65),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // One rail per content type present in this community (real cards, ≤4, +
-  // "Show all"); placeholder rails for absent types so the design reads.
-  List<Widget> _sections(BuildContext context, List<HeritageItem> items) {
-    final byType = <String, List<HeritageItem>>{};
-    for (final it in items) {
-      byType.putIfAbsent(it.contentType, () => []).add(it);
-    }
-    final widgets = <Widget>[];
-    for (final type in HeritageContentTypes.ordered) {
-      final list = byType[type.key] ?? const <HeritageItem>[];
-      widgets.add(SliverToBoxAdapter(
-        child: GlassSectionTitle(
-          icon: type.icon,
-          title: type.label,
-          count: list.isEmpty ? null : '${list.length}',
-          accent: type.accent,
-          onSeeAll: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => HeritageBrowseScreen(
-                countryId: countryId,
-                contentType: type.key,
-                communityId: communityId,
-                title: '${type.label} · $communityName',
-                subtitle: 'in $countryName',
-                accent: type.accent,
-                icon: type.icon,
-              ),
-            ),
-          ),
-        ),
-      ));
-      widgets.add(SliverToBoxAdapter(child: _itemRail(context, type, list)));
-    }
-    return widgets;
-  }
-
-  Widget _itemRail(
-      BuildContext context, HeritageContentType type, List<HeritageItem> all) {
-    final has = all.isNotEmpty;
-    final list = all.take(4).toList();
-    double w, h;
-    var compact = false;
-    switch (type.shape) {
-      case HeritageCardShape.poster:
-        w = 150;
-        h = 210;
-        break;
-      case HeritageCardShape.banner:
-        w = 280;
-        h = 160;
-        break;
-      case HeritageCardShape.row:
-        w = 240;
-        h = 72;
-        compact = true;
-        break;
-      case HeritageCardShape.tile:
-        w = 150;
-        h = 162;
-        break;
-    }
-    return SizedBox(
-      height: h,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: has ? list.length : 3,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => SizedBox(
-          width: w,
-          child: has
-              ? HeritageItemCard(
-                  item: list[i],
-                  compact: compact,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => HeritageItemScreen(item: list[i]),
-                    ),
-                  ),
-                )
-              : HeritagePlaceholderCard(
-                  icon: type.icon, accent: type.accent, compact: compact),
-        ),
+          );
+        },
       ),
     );
   }
 }
-

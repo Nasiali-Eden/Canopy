@@ -1,23 +1,23 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+// lib/Culture/culture_home.dart
+//
+// Cultural Archive shell (ARCHIVE_HANDOFF). Standard workspace — the
+// parchment theme is retired. Tabs Archive · Add entry · Feedback · Profile;
+// "Add entry" opens the creator and is shown only to the organisation's
+// representative (uploads are org-only). Others get a read-only archive.
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../Shared/theme/app_theme.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../Shared/widgets/canopy_bottom_bar.dart';
+import '../theme/canopy_components.dart';
 import 'Heritage/Archive/heritage_archive_screen.dart';
 import 'Heritage/Create/create_entry_screen.dart';
 import 'Heritage/Feedback/heritage_feedback_screen.dart';
 import 'Heritage/Profile/cultural_org_profile_page.dart';
-import 'Heritage/heritage_theme.dart';
 import 'Heritage/Services/heritage_providers.dart';
 
-/// CultureHomeScreen — Layer 4 Cultural Archive
-///
-/// Tabs: Archive | (Add Entry) | Feedback | Profile.
-/// The "Add Entry" tab — the only upload entry point — is shown ONLY to the
-/// organisation's representative (Q3: uploads are org-only). Regular viewers
-/// see a read-only 3-tab shell. Org-rep status is resolved from the org doc's
-/// `org_rep_uid` against the signed-in uid.
 class CultureHomeScreen extends StatefulWidget {
   final String orgId;
   final WidgetBuilder? orgContextBuilder;
@@ -31,164 +31,91 @@ class CultureHomeScreen extends StatefulWidget {
     this.memberContextBuilder,
     this.envOpsContextBuilder,
     this.hasEnvOps = false,
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   State<CultureHomeScreen> createState() => _CultureHomeScreenState();
 }
 
 class _CultureHomeScreenState extends State<CultureHomeScreen> {
-  // Selected tab tracked by stable key, since the available tabs depend on
-  // whether the current user may upload.
-  String _selectedKey = 'archive';
-
-  // null = still resolving; gates the Add Entry tab.
-  bool? _isOrgRep;
+  String _tab = 'archive';
+  bool? _isRep;
 
   @override
   void initState() {
     super.initState();
-    _resolveOrgRep();
+    _resolveRep();
   }
 
-  Future<void> _resolveOrgRep() async {
-    bool isRep = false;
+  Future<void> _resolveRep() async {
+    var rep = false;
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
-        final doc = await FirebaseFirestore.instance
-            .collection('organizations')
-            .doc(widget.orgId)
-            .get();
-        final repUid = doc.data()?['org_rep_uid'] as String?;
-        isRep = repUid != null && repUid == uid;
+        final o = (await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).get()).data();
+        final u = (await FirebaseFirestore.instance.collection('Users').doc(uid).get()).data();
+        rep = o?['org_rep_uid'] == uid || u?['orgId'] == widget.orgId;
       }
-    } catch (e) {
-      debugPrint('CultureHome org-rep resolve error: $e');
-    }
-    if (mounted) setState(() => _isOrgRep = isRep);
+    } catch (_) {}
+    if (mounted) setState(() => _isRep = rep);
   }
 
-  /// Keys present in the bottom bar, in display order.
-  List<String> get _navKeys =>
-      (_isOrgRep ?? false)
-          ? const ['archive', 'add', 'feedback', 'profile']
-          : const ['archive', 'feedback', 'profile'];
+  List<String> get _keys => (_isRep ?? false) ? const ['archive', 'add', 'feedback', 'profile'] : const ['archive', 'feedback', 'profile'];
 
-  void _handleNavTap(int navIndex) {
-    final key = _navKeys[navIndex];
-    if (key == 'add') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CreateEntryScreen(orgId: widget.orgId),
-        ),
-      );
+  void _tap(int i, BuildContext ctx) {
+    final k = _keys[i];
+    if (k == 'add') {
+      Navigator.of(ctx).push(MaterialPageRoute(
+        builder: (_) => CreateEntryScreen(orgId: widget.orgId),
+      ));
       return;
     }
-    setState(() => _selectedKey = key);
-  }
-
-  Widget _buildCurrentPage() {
-    switch (_selectedKey) {
-      case 'feedback':
-        return HeritageFeedbackScreen(orgId: widget.orgId);
-      case 'profile':
-        return CulturalOrgProfilePage(
-          orgId: widget.orgId,
-          orgContextBuilder: widget.orgContextBuilder,
-          memberContextBuilder: widget.memberContextBuilder,
-          envOpsContextBuilder: widget.envOpsContextBuilder,
-          hasEnvOps: widget.hasEnvOps,
-        );
-      default:
-        return HeritageArchiveScreen(orgId: widget.orgId);
-    }
-  }
-
-  CanopyNavDestination _destFor(String key) {
-    switch (key) {
-      case 'add':
-        return const CanopyNavDestination(
-            icon: Icons.add_circle_outline,
-            activeIcon: Icons.add_circle,
-            label: 'Add Entry');
-      case 'feedback':
-        return const CanopyNavDestination(
-            icon: Icons.forum_outlined,
-            activeIcon: Icons.forum,
-            label: 'Feedback');
-      case 'profile':
-        return const CanopyNavDestination(
-            icon: Icons.person_outline,
-            activeIcon: Icons.person,
-            label: 'Profile');
-      case 'archive':
-      default:
-        return const CanopyNavDestination(
-            icon: Icons.archive_outlined,
-            activeIcon: Icons.archive,
-            label: 'Archive');
-    }
+    setState(() => _tab = k);
   }
 
   @override
   Widget build(BuildContext context) {
-    final keys = _navKeys;
-    // 'add' is an action, never a "current" page, so map selection onto the
-    // nearest content tab for the highlight.
-    final currentIndex = keys.indexOf(_selectedKey).clamp(0, keys.length - 1);
-
+    final keys = _keys;
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => HeritageEntriesProvider()),
-        ChangeNotifierProvider(create: (_) => HeritageCommentsProvider()),
-        ChangeNotifierProvider(create: (_) => HeritageCommentsListProvider()),
-        ChangeNotifierProvider(create: (_) => HeritageRelationsProvider()),
-        ChangeNotifierProvider(create: (_) => HeritageMediaProvider()),
-        ChangeNotifierProvider(create: (_) => OrgEntryIdsProvider()),
+        ChangeNotifierProvider(create: (_) => HeritageEntriesProvider()..fetchEntries(widget.orgId)),
       ],
-      child: Scaffold(
-        backgroundColor: HeritageTheme.heritageBackground,
-        appBar: AppBar(
-          backgroundColor: HeritageTheme.heritageBackground,
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          foregroundColor: AppTheme.darkGreen,
-          centerTitle: true,
-          title: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Cultural Archive',
-                style: TextStyle(
-                  color: AppTheme.darkGreen,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Cormorant Garamond',
-                  fontStyle: FontStyle.italic,
+      child: Builder(builder: (context) {
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && _tab != 'archive') setState(() => _tab = 'archive');
+          },
+          child: CanopyScaffold(
+            appBar: canopyAppBar(context, title: switch (_tab) { 'feedback' => 'Feedback', 'profile' => 'Profile', _ => 'Cultural Archive' }, showBack: false),
+            body: switch (_tab) {
+              'feedback' => HeritageFeedbackScreen(orgId: widget.orgId),
+              'profile' => CulturalOrgProfilePage(
+                  orgId: widget.orgId,
+                  orgContextBuilder: widget.orgContextBuilder,
+                  memberContextBuilder: widget.memberContextBuilder,
+                  envOpsContextBuilder: widget.envOpsContextBuilder,
+                  hasEnvOps: widget.hasEnvOps,
                 ),
-              ),
-              Text(
-                'Layer 4 · Heritage',
-                style: TextStyle(
-                  color: AppTheme.tertiary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
+              _ => HeritageArchiveScreen(orgId: widget.orgId, canEdit: _isRep ?? false),
+            },
+            bottomNavigationBar: CanopyBottomBar(
+              currentIndex: keys.indexOf(_tab).clamp(0, keys.length - 1),
+              onTap: (i) => _tap(i, context),
+              destinations: [
+                for (final k in keys)
+                  switch (k) {
+                    'add' => const CanopyNavDestination(icon: Icons.add_circle_outline, activeIcon: Icons.add_circle, label: 'Add entry'),
+                    'feedback' => const CanopyNavDestination(icon: Icons.forum_outlined, activeIcon: Icons.forum, label: 'Feedback'),
+                    'profile' => const CanopyNavDestination(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Profile'),
+                    _ => const CanopyNavDestination(icon: Icons.inventory_2_outlined, activeIcon: Icons.inventory_2, label: 'Archive'),
+                  },
+              ],
+            ),
           ),
-        ),
-        body: _buildCurrentPage(),
-        bottomNavigationBar: CanopyBottomBar(
-          currentIndex: currentIndex,
-          onTap: _handleNavTap,
-          destinations: keys.map(_destFor).toList(),
-        ),
-      ),
+        );
+      }),
     );
   }
 }

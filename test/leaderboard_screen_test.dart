@@ -28,7 +28,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.tap(find.byTooltip('How points work'));
     await tester.pumpAndSettle();
-    expect(find.text('How Impact Points work'), findsOneWidget);
+    expect(find.text('How impact points work'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
   testWidgets('network failures offer retry instead of claiming no activity', (tester) async {

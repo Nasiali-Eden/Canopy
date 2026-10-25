@@ -1,108 +1,50 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../../../Shared/theme/app_theme.dart';
+// lib/Organization/Home/People/org_people.dart
+//
+// People (ORG_HANDOFF §3.4). Underline tabs Members / Teams.
+//   Members: counts (total · active · pending/invited), role filter chips,
+//     dense rows (avatar · name + role/team · membership label · ⋯), sticky
+//     "Invite people" → invite sheet (Phone / Email, contact chips, role,
+//     team, "Send N invites"). Invites are real OrgMembers docs with status
+//     'invited' (the old sheet was a TODO that only showed a snackbar).
+//   Teams: capacity bar (ink), lead, Manage (name, description, capacity,
+//     lead, members; delete confirmed).
+// Empty: "Invite people to join your organisation".
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MODELS
-// ─────────────────────────────────────────────────────────────────────────────
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+import '../../../theme/canopy_components.dart';
+import '../../org_ui.dart';
+import '../org_home.dart';
 
 enum MemberRole { admin, coordinator, member, observer }
 
-enum MemberStatus { active, inactive, pending }
-
 extension MemberRoleX on MemberRole {
-  String get label {
-    switch (this) {
-      case MemberRole.admin:
-        return 'Admin';
-      case MemberRole.coordinator:
-        return 'Coordinator';
-      case MemberRole.member:
-        return 'Member';
-      case MemberRole.observer:
-        return 'Observer';
-    }
-  }
-
-  Color get color {
-    switch (this) {
-      case MemberRole.admin:
-        return AppTheme.darkGreen;
-      case MemberRole.coordinator:
-        return AppTheme.primary;
-      case MemberRole.member:
-        return AppTheme.accent;
-      case MemberRole.observer:
-        return AppTheme.lightGreen;
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case MemberRole.admin:
-        return Icons.shield_outlined;
-      case MemberRole.coordinator:
-        return Icons.manage_accounts_outlined;
-      case MemberRole.member:
-        return Icons.person_outlined;
-      case MemberRole.observer:
-        return Icons.visibility_outlined;
-    }
-  }
+  String get label => switch (this) {
+        MemberRole.admin => 'Admin',
+        MemberRole.coordinator => 'Coordinator',
+        MemberRole.member => 'Member',
+        MemberRole.observer => 'Observer',
+      };
+  String get caption => switch (this) {
+        MemberRole.admin => 'Manages the organisation and its people',
+        MemberRole.coordinator => 'Runs events and teams',
+        MemberRole.member => 'Takes part in activities',
+        MemberRole.observer => 'Can view, not edit',
+      };
 }
 
-extension MemberStatusX on MemberStatus {
-  String get label {
-    switch (this) {
-      case MemberStatus.active:
-        return 'Active';
-      case MemberStatus.inactive:
-        return 'Inactive';
-      case MemberStatus.pending:
-        return 'Pending';
-    }
-  }
+MemberRole _role(String? s) =>
+    MemberRole.values.firstWhere((r) => r.name == s, orElse: () => MemberRole.member);
 
-  Color get color {
-    switch (this) {
-      case MemberStatus.active:
-        return const Color(0xFF2E7D32);
-      case MemberStatus.inactive:
-        return Colors.grey;
-      case MemberStatus.pending:
-        return const Color(0xFFE65100);
-    }
-  }
-}
-
-MemberRole _roleFromString(String? s) {
-  switch (s) {
-    case 'admin':
-      return MemberRole.admin;
-    case 'coordinator':
-      return MemberRole.coordinator;
-    case 'observer':
-      return MemberRole.observer;
-    default:
-      return MemberRole.member;
-  }
-}
-
-MemberStatus _statusFromString(String? s) {
-  switch (s) {
-    case 'inactive':
-      return MemberStatus.inactive;
-    case 'pending':
-      return MemberStatus.pending;
-    default:
-      return MemberStatus.active;
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
+MembershipStatus _membership(String? s) => switch (s) {
+      'inactive' => MembershipStatus.inactive,
+      'pending' => MembershipStatus.pending,
+      'invited' => MembershipStatus.invited,
+      _ => MembershipStatus.active,
+    };
 
 class OrgPeopleScreen extends StatefulWidget {
   const OrgPeopleScreen({super.key});
@@ -111,631 +53,547 @@ class OrgPeopleScreen extends StatefulWidget {
   State<OrgPeopleScreen> createState() => _OrgPeopleScreenState();
 }
 
-class _OrgPeopleScreenState extends State<OrgPeopleScreen>
-    with SingleTickerProviderStateMixin {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
+class _OrgPeopleScreenState extends State<OrgPeopleScreen> {
+  final _db = FirebaseFirestore.instance;
   String? _orgId;
-  bool _orgIdLoaded = false;
-
-  late final TabController _tabController;
+  bool _loaded = false;
+  int _tab = 0;
+  MemberRole? _roleFilter;
+  ValueNotifier<String?>? _sub;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _loadOrgId();
+    _loadOrg();
   }
 
-  Future<void> _loadOrgId() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (mounted) setState(() => _orgIdLoaded = true);
-        return;
-      }
-      final doc = await FirebaseFirestore.instance
-          .collection('Users')
-          .doc(user.uid)
-          .get();
-      if (!mounted) return;
-      final orgId = doc.exists
-          ? (doc.data() as Map<String, dynamic>)['orgId'] as String?
-          : null;
-      setState(() {
-        _orgId = orgId;
-        _orgIdLoaded = true;
-      });
-    } catch (e) {
-      debugPrint('OrgPeople._loadOrgId error: $e');
-      if (mounted) setState(() => _orgIdLoaded = true);
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final sub = OrgShellScope.of(context)?.subTab;
+    if (sub != _sub) {
+      _sub?.removeListener(_onSub);
+      _sub = sub?..addListener(_onSub);
     }
+  }
+
+  void _onSub() {
+    final v = _sub?.value;
+    if (v == 'teams') setState(() => _tab = 1);
+    if (v == 'members') setState(() => _tab = 0);
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _sub?.removeListener(_onSub);
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (!_orgIdLoaded) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (_orgId == null) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: Text('No organisation linked to this account.')),
-      );
-    }
-    final orgId = _orgId!;
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        toolbarHeight: 68,
-        centerTitle: true,
-        title: Text(
-          'Canopy',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.darkGreen,
-                fontWeight: FontWeight.w700,
-                fontSize: 22,
-              ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.person_add_outlined, color: AppTheme.primary),
-            tooltip: 'Invite member',
-            onPressed: () => _showInviteMemberSheet(context),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildPageHeader(context),
-          _buildCapacityCard(context, orgId),
-          const SizedBox(height: 16),
-          _buildTabBar(context),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _TeamsTab(orgId: orgId, firestore: _firestore),
-                _MembersTab(orgId: orgId, firestore: _firestore),
-              ],
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 90),
-        child: AnimatedBuilder(
-          animation: _tabController,
-          builder: (context, _) {
-            final isTeamsTab = _tabController.index == 0;
-            return FloatingActionButton.extended(
-              onPressed: isTeamsTab
-                  ? () => _showCreateTeamSheet(context)
-                  : () => _showInviteMemberSheet(context),
-              backgroundColor: AppTheme.primary,
-              icon: Icon(
-                isTeamsTab ? Icons.add : Icons.person_add_outlined,
-                color: Colors.white,
-              ),
-              label: Text(
-                isTeamsTab ? 'New Team' : 'Invite',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600),
-              ),
-            );
-          },
-        ),
-      ),
-    );
+  Future<void> _loadOrg() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final d = await _db.collection('Users').doc(uid).get();
+        _orgId = d.data()?['orgId'] as String?;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _loaded = true);
   }
-
-  // ── Page header ──────────────────────────────
-
-  Widget _buildPageHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'People',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: AppTheme.darkGreen,
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Manage your teams, members, and roles',
-            style: TextStyle(
-              color: AppTheme.darkGreen.withOpacity(0.55),
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Capacity card ────────────────────────────
-
-  Widget _buildCapacityCard(BuildContext context, String orgId) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _firestore.collection('organizations').doc(orgId).snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-        final total = data['totalMembers'] as int? ?? 0;
-        final active = data['activeMembers'] as int? ?? 0;
-        final pending = data['pendingMembers'] as int? ?? 0;
-        final inactive = (total - active - pending).clamp(0, total);
-        final pct = total > 0 ? active / total : 0.0;
-
-        return Container(
-          margin: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppTheme.darkGreen, AppTheme.primary],
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.darkGreen.withOpacity(0.3),
-                blurRadius: 14,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _CapacityStat(
-                        icon: Icons.people_rounded,
-                        value: total.toString(),
-                        label: 'Total'),
-                  ),
-                  _vDivider(),
-                  Expanded(
-                    child: _CapacityStat(
-                        icon: Icons.check_circle_outline,
-                        value: active.toString(),
-                        label: 'Active'),
-                  ),
-                  _vDivider(),
-                  Expanded(
-                    child: _CapacityStat(
-                        icon: Icons.schedule_outlined,
-                        value: pending.toString(),
-                        label: 'Pending',
-                        valueColor: AppTheme.tertiary),
-                  ),
-                  _vDivider(),
-                  Expanded(
-                    child: _CapacityStat(
-                        icon: Icons.person_off_outlined,
-                        value: inactive.toString(),
-                        label: 'Inactive',
-                        valueColor: Colors.white54),
-                  ),
-                  const SizedBox(width: 4),
-                  GestureDetector(
-                    onTap: () => _showUpdateCapacityDialog(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.edit_outlined,
-                          color: Colors.white70, size: 18),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: pct.toDouble(),
-                      backgroundColor: Colors.white.withOpacity(0.2),
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(AppTheme.tertiary),
-                      minHeight: 6,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${(pct * 100).toStringAsFixed(0)}% of capacity active',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.75),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _vDivider() => Container(
-        width: 1,
-        height: 36,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        color: Colors.white.withOpacity(0.2),
-      );
-
-  // ── Custom tab bar ───────────────────────────
-
-  Widget _buildTabBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        height: 42,
-        decoration: BoxDecoration(
-          color: AppTheme.lightGreen.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: TabBar(
-          controller: _tabController,
-          indicator: BoxDecoration(
-            color: AppTheme.primary,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primary.withOpacity(0.3),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          indicatorSize: TabBarIndicatorSize.tab,
-          dividerColor: Colors.transparent,
-          splashFactory: NoSplash.splashFactory,
-          overlayColor: MaterialStateProperty.all(Colors.transparent),
-          labelColor: Colors.white,
-          unselectedLabelColor: AppTheme.darkGreen.withOpacity(0.55),
-          labelStyle:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          unselectedLabelStyle:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-          tabs: const [
-            Tab(text: 'Teams'),
-            Tab(text: 'Members'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Dialogs / sheets ────────────────────────
-
-  void _showCreateTeamSheet(BuildContext context) {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 32,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SheetHandle(),
-            const SizedBox(height: 16),
-            Text('Create Team',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppTheme.darkGreen, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
-            _StyledTextField(
-              controller: nameController,
-              label: 'Team name',
-              hint: 'e.g. Cleanup Crew North',
-              icon: Icons.groups_outlined,
-            ),
-            const SizedBox(height: 14),
-            _StyledTextField(
-              controller: descController,
-              label: 'Description (optional)',
-              hint: 'What does this team do?',
-              icon: Icons.notes_outlined,
-              maxLines: 2,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  if (nameController.text.trim().isNotEmpty) {
-                    _firestore.collection('Teams').add({
-                      'orgId': _orgId ?? '',
-                      'name': nameController.text.trim(),
-                      'description': descController.text.trim(),
-                      'memberCount': 0,
-                      'memberIds': [],
-                      'createdAt': FieldValue.serverTimestamp(),
-                    });
-                    Navigator.pop(ctx);
-                  }
-                },
-                style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12))),
-                child: const Text('Create Team',
-                    style:
-                        TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showInviteMemberSheet(BuildContext context) {
-    final emailController = TextEditingController();
-    MemberRole selectedRole = MemberRole.member;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 32,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SheetHandle(),
-              const SizedBox(height: 16),
-              Text('Invite Member',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: AppTheme.darkGreen, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              Text('They\'ll receive a Canopy app notification.',
-                  style: TextStyle(
-                      color: AppTheme.darkGreen.withOpacity(0.55),
-                      fontSize: 13)),
-              const SizedBox(height: 20),
-              _StyledTextField(
-                controller: emailController,
-                label: 'Email or phone number',
-                hint: '+254 7xx xxx xxx',
-                icon: Icons.person_search_outlined,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-              Text('Role',
-                  style: TextStyle(
-                      color: AppTheme.darkGreen,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13)),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                children: MemberRole.values.map((role) {
-                  final selected = role == selectedRole;
-                  return GestureDetector(
-                    onTap: () => setSheetState(() => selectedRole = role),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? role.color.withOpacity(0.15)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: selected
-                              ? role.color
-                              : AppTheme.lightGreen.withOpacity(0.4),
-                          width: selected ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(role.icon,
-                              size: 14,
-                              color: selected
-                                  ? role.color
-                                  : AppTheme.darkGreen.withOpacity(0.5)),
-                          const SizedBox(width: 5),
-                          Text(role.label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: selected
-                                    ? role.color
-                                    : AppTheme.darkGreen.withOpacity(0.6),
-                              )),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () {
-                    // TODO: Send invite via Firebase + notification
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: const Text('Invitation sent'),
-                      backgroundColor: AppTheme.primary,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ));
-                  },
-                  style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12))),
-                  child: const Text('Send Invitation',
-                      style:
-                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showUpdateCapacityDialog(BuildContext context) {
-    final totalController = TextEditingController();
-    final activeController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Update Capacity',
-            style: TextStyle(
-                color: AppTheme.darkGreen, fontWeight: FontWeight.w700)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _StyledTextField(
-              controller: totalController,
-              label: 'Total members',
-              icon: Icons.people_outline,
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 14),
-            _StyledTextField(
-              controller: activeController,
-              label: 'Active members',
-              icon: Icons.check_circle_outline,
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: AppTheme.darkGreen)),
-          ),
-          FilledButton(
-            onPressed: () {
-              final total = int.tryParse(totalController.text) ?? 0;
-              final active = int.tryParse(activeController.text) ?? 0;
-              _firestore.collection('organizations').doc(_orgId ?? '').set(
-                  {'totalMembers': total, 'activeMembers': active},
-                  SetOptions(merge: true));
-              Navigator.pop(ctx);
-            },
-            style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10))),
-            child: const Text('Update'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TEAMS TAB
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _TeamsTab extends StatelessWidget {
-  final String orgId;
-  final FirebaseFirestore firestore;
-
-  const _TeamsTab({required this.orgId, required this.firestore});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: firestore
-          .collection('Teams')
-          .where('orgId', isEqualTo: orgId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(
-              child: CircularProgressIndicator(color: AppTheme.primary));
+    if (!_loaded) {
+      return CanopyScaffold(appBar: canopyAppBar(context, title: 'People', showBack: false),
+          body: const Center(child: CircularProgressIndicator()));
+    }
+    final orgId = _orgId;
+    if (orgId == null) {
+      return CanopyScaffold(
+          appBar: canopyAppBar(context, title: 'People', showBack: false),
+          body: const CanopyEmptyState(
+              icon: Icons.apartment_outlined, title: 'No organisation is linked to this account'));
+    }
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'People', showBack: false),
+      body: Column(children: [
+        CanopyUnderlineTabs(
+            tabs: const ['Members', 'Teams'], index: _tab, onChanged: (i) => setState(() => _tab = i)),
+        Expanded(
+          child: _tab == 0
+              ? _members(orgId)
+              : _Teams(orgId: orgId),
+        ),
+      ]),
+      sticky: StickyActionBar(children: [
+        _tab == 0
+            ? CanopyButton(
+                label: 'Invite people',
+                expand: true,
+                onPressed: () => showCanopySheet(context, tall: true, builder: (_) => _InviteSheet(orgId: orgId)))
+            : CanopyButton(
+                label: 'New team',
+                expand: true,
+                onPressed: () => showCanopySheet(context, builder: (_) => _TeamSheet(orgId: orgId))),
+      ]),
+    );
+  }
+
+  Widget _members(String orgId) {
+    final p = context.canopy;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _db.collection('OrgMembers').where('orgId', isEqualTo: orgId).snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) return const CanopyErrorState(title: "Couldn't load members");
+        if (!snap.hasData) {
+          return ListView(
+              padding: const EdgeInsets.all(CanopySpace.gutter),
+              children: const [CanopyListSkeleton(rows: 5)]);
         }
+        final all = snap.data!.docs.where((d) => d.data()['status'] != 'removed').toList();
+        final active = all.where((d) => _membership(d.data()['status'] as String?) == MembershipStatus.active).length;
+        final waiting = all.where((d) {
+          final s = _membership(d.data()['status'] as String?);
+          return s == MembershipStatus.pending || s == MembershipStatus.invited;
+        }).length;
+        final shown = _roleFilter == null ? all : all.where((d) => _role(d.data()['role'] as String?) == _roleFilter).toList()
+          ..sort((a, b) => ((a.data()['name'] ?? a.data()['contact'] ?? '') as String)
+              .toLowerCase()
+              .compareTo(((b.data()['name'] ?? b.data()['contact'] ?? '') as String).toLowerCase()));
 
-        final teams = snapshot.data?.docs ?? [];
-
-        if (teams.isEmpty) {
-          return _EmptyState(
-            icon: Icons.groups_2_outlined,
-            title: 'No teams yet',
-            subtitle: 'Create teams to organise your members and assign roles.',
+        if (all.isEmpty) {
+          return const CanopyEmptyState(
+            icon: Icons.group_add_outlined,
+            title: 'Invite people to join your organisation',
+            line: 'Add the people who run things with you, then organise them into teams.',
           );
         }
+        return ListView(
+          padding: const EdgeInsets.only(bottom: CanopySpace.s32),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, 0),
+              child: Row(children: [
+                Expanded(child: MetricTile(value: '${all.length}', label: 'Total')),
+                const SizedBox(width: CanopySpace.s16),
+                Expanded(child: MetricTile(value: '$active', label: 'Active')),
+                const SizedBox(width: CanopySpace.s16),
+                Expanded(child: MetricTile(value: '$waiting', label: 'Pending')),
+              ]),
+            ),
+            const SizedBox(height: CanopySpace.s8),
+            CanopyChipRail(chips: [
+              CanopyFilterChip(label: 'All', selected: _roleFilter == null, onTap: () => setState(() => _roleFilter = null)),
+              for (final r in MemberRole.values)
+                CanopyFilterChip(
+                  label: r.label,
+                  count: all.where((d) => _role(d.data()['role'] as String?) == r).length,
+                  selected: _roleFilter == r,
+                  onTap: () => setState(() => _roleFilter = _roleFilter == r ? null : r),
+                ),
+            ]),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: CanopySpace.gutter),
+              child: shown.isEmpty
+                  ? CanopyEmptyState(boxed: true, icon: Icons.person_outline, title: 'No ${_roleFilter!.label.toLowerCase()}s yet')
+                  : CanopyListGroup(children: [
+                      for (final d in shown) _MemberRow(id: d.id, data: d.data()),
+                    ]),
+            ),
+            if (waiting > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s12, CanopySpace.gutter, 0),
+                child: Text('Invited people appear as Active once they join.',
+                    style: CanopyType.caption.copyWith(color: p.inkMuted)),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
 
+class _MemberRow extends StatelessWidget {
+  final String id;
+  final Map<String, dynamic> data;
+  const _MemberRow({required this.id, required this.data});
+
+  Future<void> _approve(BuildContext context) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('OrgMembers')
+          .doc(id)
+          .update({'status': 'active', 'joinedAt': FieldValue.serverTimestamp()});
+    } catch (_) {
+      if (context.mounted) showCanopySnack(context, "Couldn't approve. Try again.", error: true);
+    }
+  }
+
+  Future<void> _actions(BuildContext context) async {
+    final db = FirebaseFirestore.instance;
+    final status = _membership(data['status'] as String?);
+    final name = (data['name'] ?? data['contact'] ?? 'this person') as String;
+    final action = await showCanopySheet<String>(
+      context,
+      builder: (ctx) => CanopySheetBody(
+        title: name,
+        children: [
+          CanopyListGroup(header: 'Role', children: [
+            for (final r in MemberRole.values)
+              CanopyListRow(
+                title: r.label,
+                subtitle: r.caption,
+                chevron: false,
+                trailing: _role(data['role'] as String?) == r ? Icon(Icons.check, color: ctx.canopy.ink) : null,
+                onTap: () => Navigator.pop(ctx, 'role:${r.name}'),
+              ),
+          ]),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyListGroup(children: [
+            if (status == MembershipStatus.pending)
+              CanopyListRow(icon: Icons.how_to_reg_outlined, title: 'Approve request', onTap: () => Navigator.pop(ctx, 'active')),
+            if (status == MembershipStatus.active)
+              CanopyListRow(icon: Icons.pause_circle_outline, title: 'Mark inactive', onTap: () => Navigator.pop(ctx, 'inactive')),
+            if (status == MembershipStatus.inactive)
+              CanopyListRow(icon: Icons.play_circle_outline, title: 'Mark active', onTap: () => Navigator.pop(ctx, 'active')),
+            CanopyListRow(
+              icon: Icons.person_remove_outlined,
+              title: switch (status) {
+                MembershipStatus.invited => 'Cancel invite',
+                MembershipStatus.pending => 'Decline request',
+                _ => 'Remove from organisation',
+              },
+              titleColor: ctx.canopy.danger,
+              onTap: () => Navigator.pop(ctx, 'remove'),
+            ),
+          ]),
+        ],
+      ),
+    );
+    if (action == null || !context.mounted) return;
+    try {
+      if (action.startsWith('role:')) {
+        await db.collection('OrgMembers').doc(id).update({'role': action.substring(5)});
+      } else if (action == 'remove') {
+        final ok = await showCanopyConfirm(context,
+            title: status == MembershipStatus.invited ? 'Cancel this invite?' : 'Remove $name?',
+            message: status == MembershipStatus.invited
+                ? 'The invite is withdrawn.'
+                : "They lose access to your organisation's workspace.",
+            confirmLabel: status == MembershipStatus.invited ? 'Cancel invite' : 'Remove',
+            danger: true);
+        if (ok) {
+          if (data['grantsAccess'] == true) {
+            // Access lives on their account, so only the server can take it away.
+            await FirebaseFunctions.instance.httpsCallable('removeOrgAccess').call({'memberId': id});
+          } else {
+            await db.collection('OrgMembers').doc(id).delete();
+          }
+        }
+      } else {
+        await db.collection('OrgMembers').doc(id).update({'status': action});
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (context.mounted) showCanopySnack(context, e.message ?? "Couldn't update. Try again.", error: true);
+    } catch (_) {
+      if (context.mounted) showCanopySnack(context, "Couldn't update. Try again.", error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (data['name'] ?? data['contact'] ?? 'Unknown') as String;
+    final role = _role(data['role'] as String?);
+    final status = _membership(data['status'] as String?);
+    final sub = [
+      if (data['grantsAccess'] == true) (data['accessRole'] == 'admin' ? 'Admin access' : 'Editor access') else role.label,
+      if ((data['teamName'] as String?)?.isNotEmpty ?? false) data['teamName'] as String,
+      if ((data['area'] as String?)?.isNotEmpty ?? false) data['area'] as String,
+    ].join(' · ');
+    return DenseRow(
+      leading: CanopyAvatar(url: data['avatarUrl'] as String?, name: name, size: 40),
+      title: name,
+      subtitle: sub,
+      status: MembershipLabel(status),
+      trailing: status == MembershipStatus.pending
+          ? CanopyButton.secondary(label: 'Approve', size: CanopyButtonSize.compact, onPressed: () => _approve(context))
+          : CanopyIconButton(icon: Icons.more_horiz, tooltip: 'Manage $name', onPressed: () => _actions(context)),
+      onTap: () => _actions(context),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVITE
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InviteSheet extends StatefulWidget {
+  final String orgId;
+  const _InviteSheet({required this.orgId});
+
+  @override
+  State<_InviteSheet> createState() => _InviteSheetState();
+}
+
+class _InviteSheetState extends State<_InviteSheet> {
+  bool _byPhone = true;
+  final _input = TextEditingController();
+  final List<String> _contacts = [];
+  MemberRole _role = MemberRole.member;
+  bool _access = false; // email only: can run the organisation
+  String _accessRole = 'editor';
+  String? _teamId, _teamName;
+  bool _sending = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  String? _normalise(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return null;
+    if (_byPhone) {
+      var d = t.replaceAll(RegExp(r'\D'), '');
+      if (d.startsWith('254')) d = d.substring(3);
+      if (d.startsWith('0')) d = d.substring(1);
+      return d.length == 9 ? '+254$d' : null;
+    }
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t) ? t.toLowerCase() : null;
+  }
+
+  void _add() {
+    final n = _normalise(_input.text);
+    if (n == null) {
+      setState(() => _error = _byPhone ? 'Enter a Kenyan mobile number.' : 'Enter a valid email.');
+      return;
+    }
+    setState(() {
+      if (!_contacts.contains(n)) _contacts.add(n);
+      _input.clear();
+      _error = null;
+    });
+  }
+
+  Future<void> _pickTeam() async {
+    final snap = await FirebaseFirestore.instance.collection('Teams').where('orgId', isEqualTo: widget.orgId).get();
+    if (!mounted) return;
+    final picked = await showCanopySheet<(String?, String?)>(
+      context,
+      builder: (ctx) => CanopySheetBody(title: 'Team', children: [
+        CanopyListGroup(children: [
+          CanopyListRow(title: 'No team', chevron: false, onTap: () => Navigator.pop(ctx, (null, null))),
+          for (final d in snap.docs)
+            CanopyListRow(
+                title: (d.data()['name'] as String?) ?? 'Team',
+                chevron: false,
+                onTap: () => Navigator.pop(ctx, (d.id, d.data()['name'] as String?))),
+        ]),
+      ]),
+    );
+    if (picked != null) {
+      setState(() {
+        _teamId = picked.$1;
+        _teamName = picked.$2;
+      });
+    }
+  }
+
+  Future<void> _send() async {
+    if (_input.text.trim().isNotEmpty) _add();
+    if (_contacts.isEmpty) {
+      setState(() => _error ??= 'Add at least one ${_byPhone ? 'number' : 'email'}.');
+      return;
+    }
+    setState(() => _sending = true);
+    try {
+      if (!_byPhone && _access) {
+        // Giving someone access to run the organisation is done on the server.
+        final call = FirebaseFunctions.instance.httpsCallable('inviteOrgRep');
+        for (final c in _contacts) {
+          await call.call({'email': c, 'accessRole': _accessRole, 'teamId': _teamId, 'teamName': _teamName});
+        }
+        if (!mounted) return;
+        Navigator.pop(context);
+        showCanopySnack(context, '${_contacts.length} invite${_contacts.length == 1 ? '' : 's'} sent. They accept it when they sign in with that email.');
+        return;
+      }
+      final db = FirebaseFirestore.instance;
+      final batch = db.batch();
+      for (final c in _contacts) {
+        batch.set(db.collection('OrgMembers').doc(), {
+          'orgId': widget.orgId,
+          'contact': c,
+          'contactType': _byPhone ? 'phone' : 'email',
+          'name': null,
+          'role': _role.name,
+          'status': 'invited',
+          if (_teamId != null) 'teamId': _teamId,
+          if (_teamName != null) 'teamName': _teamName,
+          'invitedBy': FirebaseAuth.instance.currentUser?.uid,
+          'invitedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      if (!mounted) return;
+      Navigator.pop(context);
+      showCanopySnack(context, '${_contacts.length} invite${_contacts.length == 1 ? '' : 's'} added to your members.');
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) setState(() => _error = e.message ?? "Invites didn't save. Try again.");
+    } catch (_) {
+      if (mounted) setState(() => _error = "Invites didn't save. Try again.");
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    return CanopySheetBody(
+      title: 'Invite people',
+      caption: 'They appear in your members as Invited until they join.',
+      children: [
+        CanopySegmented<bool>(
+          options: const [(true, 'Phone'), (false, 'Email')],
+          value: _byPhone,
+          onChanged: (v) => setState(() {
+            _byPhone = v;
+            _error = null;
+          }),
+        ),
+        const SizedBox(height: CanopySpace.s12),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: _byPhone
+                ? CanopyTextField.phone(
+                    label: 'Mobile number', controller: _input, error: _error, onSubmitted: (_) => _add())
+                : CanopyTextField(
+                    label: 'Email',
+                    controller: _input,
+                    keyboardType: TextInputType.emailAddress,
+                    textCapitalization: TextCapitalization.none,
+                    error: _error,
+                    onSubmitted: (_) => _add()),
+          ),
+          const SizedBox(width: CanopySpace.s8),
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: CanopyButton.secondary(label: 'Add', size: CanopyButtonSize.compact, onPressed: _add),
+          ),
+        ]),
+        if (_contacts.isNotEmpty) ...[
+          const SizedBox(height: CanopySpace.s8),
+          Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s4, children: [
+            for (final c in _contacts) CanopyRemovableChip(label: c, onRemove: () => setState(() => _contacts.remove(c))),
+          ]),
+        ],
+        const SizedBox(height: CanopySpace.s16),
+        if (!_byPhone) ...[
+          CanopyListRow(
+            title: 'Can run the organisation',
+            subtitle: 'They sign in with this email and get your organisation workspace.',
+            chevron: false,
+            trailing: Switch(value: _access, onChanged: (v) => setState(() => _access = v)),
+          ),
+          const SizedBox(height: CanopySpace.s8),
+        ],
+        if (!_byPhone && _access) ...[
+          Text('Access', style: CanopyType.label.copyWith(color: p.ink)),
+          Wrap(spacing: CanopySpace.s8, children: [
+            CanopyFilterChip(label: 'Admin', selected: _accessRole == 'admin', onTap: () => setState(() => _accessRole = 'admin')),
+            CanopyFilterChip(label: 'Editor', selected: _accessRole == 'editor', onTap: () => setState(() => _accessRole = 'editor')),
+          ]),
+          Text(
+              _accessRole == 'admin'
+                  ? 'Everything an editor can do, and can invite or remove people.'
+                  : 'Runs events, articles and the archive. Cannot manage who has access.',
+              style: CanopyType.caption.copyWith(color: p.inkMuted)),
+        ] else ...[
+          Text('Role', style: CanopyType.label.copyWith(color: p.ink)),
+          Wrap(spacing: CanopySpace.s8, children: [
+            for (final r in MemberRole.values)
+              CanopyFilterChip(label: r.label, selected: _role == r, onTap: () => setState(() => _role = r)),
+          ]),
+          Text(_role.caption, style: CanopyType.caption.copyWith(color: p.inkMuted)),
+        ],
+        const SizedBox(height: CanopySpace.s12),
+        CanopyPickerField(label: 'Team (optional)', value: _teamName, placeholder: 'No team', onTap: _pickTeam),
+      ],
+      actions: [
+        CanopyButton(
+          label: _contacts.isEmpty ? 'Send invites' : 'Send ${_contacts.length} invite${_contacts.length == 1 ? '' : 's'}',
+          expand: true,
+          loading: _sending,
+          onPressed: _send,
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEAMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Teams extends StatelessWidget {
+  final String orgId;
+  const _Teams({required this.orgId});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('Teams').where('orgId', isEqualTo: orgId).snapshots(),
+      builder: (context, snap) {
+        if (snap.hasError) return const CanopyErrorState(title: "Couldn't load teams");
+        if (!snap.hasData) {
+          return ListView(padding: const EdgeInsets.all(CanopySpace.gutter), children: const [CanopyListSkeleton(rows: 3)]);
+        }
+        final teams = snap.data!.docs;
+        if (teams.isEmpty) {
+          return const CanopyEmptyState(
+            icon: Icons.groups_2_outlined,
+            title: 'No teams yet',
+            line: 'Group people into teams to give them a lead and a size.',
+          );
+        }
         return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+          padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s32),
           itemCount: teams.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, i) {
-            final data = teams[i].data() as Map<String, dynamic>;
-            return _TeamCard(
-              teamId: teams[i].id,
-              data: data,
-              firestore: firestore,
+          separatorBuilder: (_, __) => const SizedBox(height: CanopySpace.s12),
+          itemBuilder: (_, i) {
+            final d = teams[i].data();
+            final members = (d['memberIds'] as List?)?.length ?? (d['memberCount'] as int? ?? 0);
+            final capacity = (d['capacity'] as num?)?.toInt();
+            return CanopyCard(
+              padding: const EdgeInsets.all(CanopyWorkspace.cardPadding),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Expanded(child: Text((d['name'] as String?) ?? 'Team', style: CanopyType.subhead.copyWith(color: p.ink))),
+                  CanopyButton.quiet(
+                    label: 'Manage',
+                    size: CanopyButtonSize.compact,
+                    onPressed: () => showCanopySheet(context,
+                        tall: true, builder: (_) => _TeamSheet(orgId: orgId, teamId: teams[i].id, data: d)),
+                  ),
+                ]),
+                if ((d['description'] as String?)?.isNotEmpty ?? false)
+                  Text(d['description'] as String, style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                const SizedBox(height: CanopySpace.s8),
+                if (capacity != null && capacity > 0) ...[
+                  CanopyProgressBar(value: members / capacity, ink: true),
+                  const SizedBox(height: CanopySpace.s4),
+                ],
+                Text(
+                  [
+                    capacity != null && capacity > 0 ? '$members of $capacity people' : '$members ${members == 1 ? 'person' : 'people'}',
+                    if ((d['leadName'] as String?)?.isNotEmpty ?? false) 'Lead: ${d['leadName']}',
+                  ].join(' · '),
+                  style: CanopyType.caption.copyWith(color: p.inkMuted),
+                ),
+              ]),
             );
           },
         );
@@ -744,892 +602,148 @@ class _TeamsTab extends StatelessWidget {
   }
 }
 
-class _TeamCard extends StatelessWidget {
-  final String teamId;
-  final Map<String, dynamic> data;
-  final FirebaseFirestore firestore;
-
-  const _TeamCard({
-    required this.teamId,
-    required this.data,
-    required this.firestore,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final name = data['name'] as String? ?? 'Team';
-    final description = data['description'] as String? ?? '';
-    final memberCount = data['memberCount'] as int? ?? 0;
-    final memberIds = (data['memberIds'] as List?)?.cast<String>() ?? [];
-
-    // Show up to 4 avatar slots
-    final previewIds = memberIds.take(4).toList();
-    final overflow = memberCount - previewIds.length;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _showTeamDetail(context),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.groups_rounded,
-                          color: AppTheme.primary, size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(name,
-                              style: TextStyle(
-                                color: AppTheme.darkGreen,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              )),
-                          if (description.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(description,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: AppTheme.darkGreen.withOpacity(0.5),
-                                  fontSize: 12,
-                                )),
-                          ],
-                        ],
-                      ),
-                    ),
-                    PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert,
-                          color: AppTheme.darkGreen.withOpacity(0.5)),
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      onSelected: (v) {
-                        if (v == 'edit')
-                          _showEditTeamSheet(context);
-                        else if (v == 'delete') _confirmDelete(context);
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: Row(children: [
-                            Icon(Icons.edit_outlined,
-                                size: 16, color: AppTheme.primary),
-                            const SizedBox(width: 10),
-                            const Text('Edit team'),
-                          ]),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Row(children: [
-                            const Icon(Icons.delete_outline,
-                                size: 16, color: Colors.red),
-                            const SizedBox(width: 10),
-                            const Text('Delete',
-                                style: TextStyle(color: Colors.red)),
-                          ]),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                if (memberCount > 0) ...[
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      // Stacked avatar previews
-                      SizedBox(
-                        width: previewIds.length * 22.0 +
-                            (previewIds.isEmpty ? 0 : 10),
-                        height: 28,
-                        child: Stack(
-                          children: [
-                            for (int i = 0; i < previewIds.length; i++)
-                              Positioned(
-                                left: i * 22.0,
-                                child: _MiniAvatar(userId: previewIds[i]),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        overflow > 0
-                            ? '$memberCount members (+$overflow more)'
-                            : '$memberCount ${memberCount == 1 ? 'member' : 'members'}',
-                        style: TextStyle(
-                          color: AppTheme.darkGreen.withOpacity(0.6),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: () => _showAddMemberToTeamSheet(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.person_add_outlined,
-                                  size: 13, color: AppTheme.primary),
-                              const SizedBox(width: 4),
-                              Text('Add',
-                                  style: TextStyle(
-                                    color: AppTheme.primary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  )),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showTeamDetail(BuildContext context) {
-    // TODO: Navigate to team detail screen
-  }
-
-  void _showEditTeamSheet(BuildContext context) {
-    final nameController =
-        TextEditingController(text: data['name'] as String? ?? '');
-    final descController =
-        TextEditingController(text: data['description'] as String? ?? '');
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 32,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SheetHandle(),
-            const SizedBox(height: 16),
-            Text('Edit Team',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppTheme.darkGreen, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
-            _StyledTextField(
-              controller: nameController,
-              label: 'Team name',
-              icon: Icons.groups_outlined,
-            ),
-            const SizedBox(height: 14),
-            _StyledTextField(
-              controller: descController,
-              label: 'Description',
-              icon: Icons.notes_outlined,
-              maxLines: 2,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  firestore.collection('Teams').doc(teamId).update({
-                    'name': nameController.text.trim(),
-                    'description': descController.text.trim(),
-                  });
-                  Navigator.pop(ctx);
-                },
-                style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12))),
-                child: const Text('Save Changes',
-                    style:
-                        TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showAddMemberToTeamSheet(BuildContext context) {
-    // TODO: Show member picker to add to this team
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete Team',
-            style: TextStyle(
-                color: AppTheme.darkGreen, fontWeight: FontWeight.w700)),
-        content: Text('This will permanently delete "${data['name']}". '
-            'Members won\'t be removed from the organisation.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: AppTheme.darkGreen)),
-          ),
-          FilledButton(
-            onPressed: () {
-              firestore.collection('Teams').doc(teamId).delete();
-              Navigator.pop(ctx);
-            },
-            style: FilledButton.styleFrom(
-                backgroundColor: Colors.red,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10))),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MEMBERS TAB
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _MembersTab extends StatefulWidget {
+class _TeamSheet extends StatefulWidget {
   final String orgId;
-  final FirebaseFirestore firestore;
-
-  const _MembersTab({required this.orgId, required this.firestore});
+  final String? teamId;
+  final Map<String, dynamic>? data;
+  const _TeamSheet({required this.orgId, this.teamId, this.data});
 
   @override
-  State<_MembersTab> createState() => _MembersTabState();
+  State<_TeamSheet> createState() => _TeamSheetState();
 }
 
-class _MembersTabState extends State<_MembersTab> {
-  MemberRole? _filterRole;
+class _TeamSheetState extends State<_TeamSheet> {
+  late final _name = TextEditingController(text: widget.data?['name'] as String?);
+  late final _desc = TextEditingController(text: widget.data?['description'] as String?);
+  late final _cap = TextEditingController(text: (widget.data?['capacity'] as num?)?.toString());
+  late final Set<String> _memberIds = {...?(widget.data?['memberIds'] as List?)?.cast<String>()};
+  late String? _leadId = widget.data?['leadId'] as String?;
+  late String? _leadName = widget.data?['leadName'] as String?;
+  bool _saving = false;
+  bool _showErrors = false;
+
+  late final Future<QuerySnapshot<Map<String, dynamic>>> _members =
+      FirebaseFirestore.instance.collection('OrgMembers').where('orgId', isEqualTo: widget.orgId).get();
 
   @override
-  Widget build(BuildContext context) {
-    Query query = widget.firestore
-        .collection('OrgMembers')
-        .where('orgId', isEqualTo: widget.orgId);
+  void dispose() {
+    _name.dispose();
+    _desc.dispose();
+    _cap.dispose();
+    super.dispose();
+  }
 
-    if (_filterRole != null) {
-      query = query.where('role', isEqualTo: _filterRole!.name);
+  Future<void> _save() async {
+    setState(() => _showErrors = true);
+    if (_name.text.trim().isEmpty) return;
+    setState(() => _saving = true);
+    final db = FirebaseFirestore.instance;
+    final data = {
+      'orgId': widget.orgId,
+      'name': _name.text.trim(),
+      'description': _desc.text.trim(),
+      'capacity': int.tryParse(_cap.text.trim()),
+      'memberIds': _memberIds.toList(),
+      'memberCount': _memberIds.length,
+      'leadId': _leadId,
+      'leadName': _leadName,
+    };
+    try {
+      if (widget.teamId == null) {
+        await db.collection('Teams').add({...data, 'createdAt': FieldValue.serverTimestamp()});
+      } else {
+        await db.collection('Teams').doc(widget.teamId).update(data);
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't save the team.", error: true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Role filter chips
-        SizedBox(
-          height: 44,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-            children: [
-              _FilterChip(
-                label: 'All',
-                selected: _filterRole == null,
-                onTap: () => setState(() => _filterRole = null),
-              ),
-              const SizedBox(width: 8),
-              ...MemberRole.values.map((role) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _FilterChip(
-                      label: role.label,
-                      selected: _filterRole == role,
-                      color: role.color,
-                      onTap: () => setState(() =>
-                          _filterRole = _filterRole == role ? null : role),
-                    ),
-                  )),
-            ],
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: query.snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                    child: CircularProgressIndicator(color: AppTheme.primary));
-              }
-
-              final members = snapshot.data?.docs ?? [];
-
-              if (members.isEmpty) {
-                return _EmptyState(
-                  icon: Icons.person_outlined,
-                  title: _filterRole != null
-                      ? 'No ${_filterRole!.label.toLowerCase()}s yet'
-                      : 'No members yet',
-                  subtitle: 'Invite people to join your organisation.',
-                );
-              }
-
-              return ListView.separated(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-                itemCount: members.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (context, i) {
-                  final data = members[i].data() as Map<String, dynamic>;
-                  return _MemberCard(
-                    memberId: members[i].id,
-                    data: data,
-                    firestore: widget.firestore,
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
   }
-}
 
-class _MemberCard extends StatelessWidget {
-  final String memberId;
-  final Map<String, dynamic> data;
-  final FirebaseFirestore firestore;
-
-  const _MemberCard({
-    required this.memberId,
-    required this.data,
-    required this.firestore,
-  });
-
-  String _getInitials(String? name) {
-    if (name == null || name.trim().isEmpty) return '?';
-    final words = name.trim().split(' ');
-    if (words.length == 1) return words[0][0].toUpperCase();
-    return (words[0][0] + words.last[0]).toUpperCase();
+  Future<void> _delete() async {
+    final ok = await showCanopyConfirm(context,
+        title: 'Delete ${widget.data?['name'] ?? 'this team'}?',
+        message: 'People stay in your organisation; only the team goes.',
+        confirmLabel: 'Delete team',
+        danger: true);
+    if (!ok) return;
+    try {
+      await FirebaseFirestore.instance.collection('Teams').doc(widget.teamId).delete();
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't delete the team.", error: true);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = data['name'] as String? ?? 'Unknown';
-    final role = _roleFromString(data['role'] as String?);
-    final status = _statusFromString(data['status'] as String?);
-    final area = data['area'] as String? ?? '';
-    final joinDate = data['joinedAt'] as Timestamp?;
-    final avatarUrl = data['avatarUrl'] as String?;
-    final eventsAttended = data['eventsAttended'] as int? ?? 0;
-
-    final initials = _getInitials(name);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.25)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () {
-            // TODO: Navigate to member profile
+    final p = context.canopy;
+    return CanopySheetBody(
+      title: widget.teamId == null ? 'New team' : 'Manage team',
+      children: [
+        CanopyTextField(
+            label: 'Name',
+            hint: 'Clean-up crew North',
+            controller: _name,
+            error: _showErrors && _name.text.trim().isEmpty ? 'Name the team.' : null,
+            onChanged: (_) => setState(() {})),
+        const SizedBox(height: CanopySpace.s12),
+        CanopyTextField(label: 'What does it do? (optional)', controller: _desc, minLines: 2, maxLines: 4),
+        const SizedBox(height: CanopySpace.s12),
+        CanopyTextField(label: 'Size limit (optional)', hint: 'No limit', controller: _cap, keyboardType: TextInputType.number),
+        const SizedBox(height: CanopySpace.s16),
+        FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          future: _members,
+          builder: (context, snap) {
+            if (!snap.hasData) return const CanopyListSkeleton(rows: 2);
+            final people = snap.data!.docs
+                .where((d) => _membership(d.data()['status'] as String?) != MembershipStatus.invited)
+                .toList();
+            if (people.isEmpty) {
+              return Text('Invite people first, then add them to teams.',
+                  style: CanopyType.caption.copyWith(color: p.inkMuted));
+            }
+            return CanopyListGroup(header: 'People', children: [
+              for (final d in people)
+                CanopyListRow(
+                  leading: CanopyAvatar(name: (d.data()['name'] as String?) ?? '', size: 32),
+                  title: (d.data()['name'] as String?) ?? 'Member',
+                  subtitle: _leadId == d.id ? 'Lead' : null,
+                  chevron: false,
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (_memberIds.contains(d.id))
+                      CanopyButton.quiet(
+                        label: _leadId == d.id ? 'Lead' : 'Make lead',
+                        size: CanopyButtonSize.compact,
+                        onPressed: () => setState(() {
+                          _leadId = d.id;
+                          _leadName = d.data()['name'] as String?;
+                        }),
+                      ),
+                    Checkbox(
+                      value: _memberIds.contains(d.id),
+                      activeColor: p.ink,
+                      checkColor: p.canvas,
+                      onChanged: (v) => setState(() {
+                        v == true ? _memberIds.add(d.id) : _memberIds.remove(d.id);
+                        if (v != true && _leadId == d.id) {
+                          _leadId = null;
+                          _leadName = null;
+                        }
+                      }),
+                    ),
+                  ]),
+                ),
+            ]);
           },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              children: [
-                // Avatar
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: role.color.withOpacity(0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: avatarUrl != null
-                      ? ClipOval(
-                          child: Image.network(avatarUrl, fit: BoxFit.cover))
-                      : Center(
-                          child: Text(initials,
-                              style: TextStyle(
-                                color: role.color,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ))),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(name,
-                                style: TextStyle(
-                                  color: AppTheme.darkGreen,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                )),
-                          ),
-                          const SizedBox(width: 6),
-                          _RoleBadge(role: role),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          // Status dot
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: status.color,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          Text(status.label,
-                              style: TextStyle(
-                                color: status.color,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              )),
-                          if (area.isNotEmpty) ...[
-                            Text(' · ',
-                                style: TextStyle(
-                                    color:
-                                        AppTheme.darkGreen.withOpacity(0.3))),
-                            Text(area,
-                                style: TextStyle(
-                                  color: AppTheme.darkGreen.withOpacity(0.5),
-                                  fontSize: 11,
-                                )),
-                          ],
-                          if (eventsAttended > 0) ...[
-                            const Spacer(),
-                            Icon(Icons.event_available,
-                                size: 12,
-                                color: AppTheme.darkGreen.withOpacity(0.4)),
-                            const SizedBox(width: 3),
-                            Text('$eventsAttended events',
-                                style: TextStyle(
-                                  color: AppTheme.darkGreen.withOpacity(0.5),
-                                  fontSize: 11,
-                                )),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 4),
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_vert,
-                      color: AppTheme.darkGreen.withOpacity(0.4), size: 20),
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  onSelected: (v) {
-                    if (v == 'change_role')
-                      _showChangeRoleSheet(context, role);
-                    else if (v == 'remove') _confirmRemove(context, name);
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                      value: 'change_role',
-                      child: Row(children: [
-                        Icon(Icons.manage_accounts_outlined,
-                            size: 16, color: AppTheme.primary),
-                        const SizedBox(width: 10),
-                        const Text('Change role'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'remove',
-                      child: Row(children: [
-                        const Icon(Icons.person_remove_outlined,
-                            size: 16, color: Colors.red),
-                        const SizedBox(width: 10),
-                        const Text('Remove',
-                            style: TextStyle(color: Colors.red)),
-                      ]),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
         ),
-      ),
-    );
-  }
-
-  void _showChangeRoleSheet(BuildContext context, MemberRole current) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SheetHandle(),
-            const SizedBox(height: 16),
-            Text('Change Role',
-                style: TextStyle(
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18)),
-            const SizedBox(height: 16),
-            ...MemberRole.values.map((role) {
-              final isCurrent = role == current;
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: role.color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(role.icon, color: role.color, size: 20),
-                ),
-                title: Text(role.label,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.darkGreen)),
-                trailing: isCurrent
-                    ? Icon(Icons.check_circle, color: AppTheme.primary)
-                    : null,
-                onTap: () {
-                  firestore
-                      .collection('OrgMembers')
-                      .doc(memberId)
-                      .update({'role': role.name});
-                  Navigator.pop(ctx);
-                },
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _confirmRemove(BuildContext context, String name) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Remove Member',
-            style: TextStyle(
-                color: AppTheme.darkGreen, fontWeight: FontWeight.w700)),
-        content: Text(
-            'Remove $name from your organisation? Their activity history will be preserved.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: AppTheme.darkGreen)),
-          ),
-          FilledButton(
-            onPressed: () {
-              firestore.collection('OrgMembers').doc(memberId).delete();
-              Navigator.pop(ctx);
-            },
-            style: FilledButton.styleFrom(
-                backgroundColor: Colors.red,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10))),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SMALL SHARED WIDGETS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CapacityStat extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-  final Color? valueColor;
-
-  const _CapacityStat({
-    required this.icon,
-    required this.value,
-    required this.label,
-    this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white70, size: 16),
-        const SizedBox(height: 5),
-        Text(value,
-            style: TextStyle(
-              color: valueColor ?? Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-            )),
-        Text(label,
-            style: const TextStyle(
-                color: Colors.white60,
-                fontSize: 10,
-                fontWeight: FontWeight.w500)),
       ],
-    );
-  }
-}
-
-class _RoleBadge extends StatelessWidget {
-  final MemberRole role;
-  const _RoleBadge({required this.role});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: role.color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(role.label,
-          style: TextStyle(
-            color: role.color,
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-          )),
-    );
-  }
-}
-
-class _MiniAvatar extends StatelessWidget {
-  final String userId;
-  const _MiniAvatar({required this.userId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 26,
-      height: 26,
-      decoration: BoxDecoration(
-        color: AppTheme.lightGreen.withOpacity(0.4),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 1.5),
-      ),
-      child: Icon(Icons.person, size: 14, color: AppTheme.darkGreen),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final Color? color;
-  final VoidCallback onTap;
-
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = color ?? AppTheme.primary;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? c.withOpacity(0.12) : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? c : AppTheme.lightGreen.withOpacity(0.5),
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Text(label,
-            style: TextStyle(
-              color: selected ? c : AppTheme.darkGreen.withOpacity(0.55),
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            )),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.lightGreen.withOpacity(0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 48, color: AppTheme.lightGreen),
-            ),
-            const SizedBox(height: 16),
-            Text(title,
-                style: TextStyle(
-                  color: AppTheme.darkGreen,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                )),
-            const SizedBox(height: 8),
-            Text(subtitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppTheme.darkGreen.withOpacity(0.55),
-                  fontSize: 13,
-                )),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetHandle extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 36,
-        height: 4,
-        decoration: BoxDecoration(
-          color: AppTheme.lightGreen.withOpacity(0.4),
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-    );
-  }
-}
-
-class _StyledTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String? hint;
-  final IconData icon;
-  final int maxLines;
-  final TextInputType? keyboardType;
-
-  const _StyledTextField({
-    required this.controller,
-    required this.label,
-    required this.icon,
-    this.hint,
-    this.maxLines = 1,
-    this.keyboardType,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, size: 20),
-        labelStyle: TextStyle(color: AppTheme.darkGreen.withOpacity(0.7)),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.lightGreen.withOpacity(0.5)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: AppTheme.primary, width: 2),
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      ),
+      actions: [
+        CanopyButton(label: widget.teamId == null ? 'Create team' : 'Save team', expand: true, loading: _saving, onPressed: _save),
+        if (widget.teamId != null) CanopyButton.quietDanger(label: 'Delete team', expand: true, onPressed: _delete),
+      ],
     );
   }
 }

@@ -1,239 +1,209 @@
 // lib/HomeServices/my_service_listings_screen.dart
 //
-// A provider's own listings, manage-card style — same visual language as
-// OrgArticlesScreen's _ArticleManageCard (rounded 18px card, thumb chip,
-// status pill, tap target for the primary action) so "manage things I
-// posted" reads the same across Articles and Services.
+// My listings (SERVICES_HANDOFF §3.7): a card per listing with status +
+// licence labels, bookings/views, rejection callout + "Resubmit licence",
+// Pause/Resume, and a sticky "New listing" (the create flow's first step is
+// the category grid, where regulated rows say which licence they need).
+
+import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../Models/services/service_listing.dart';
 import '../Services/HomeServices/service_marketplace_service.dart';
-import '../Shared/theme/app_theme.dart';
+import '../theme/canopy_components.dart';
 import 'create_service_listing_screen.dart';
 import 'service_listing_detail_screen.dart';
+import 'services_ui.dart';
 
-class MyServiceListingsScreen extends StatelessWidget {
+class MyServiceListingsScreen extends StatefulWidget {
   const MyServiceListingsScreen({super.key});
 
-  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
+  @override
+  State<MyServiceListingsScreen> createState() => _MyServiceListingsScreenState();
+}
 
-  Future<void> _pickCategoryAndCreate(BuildContext context) async {
-    final category = await showModalBottomSheet<ServiceCategory>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('What are you listing?',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.darkGreen)),
-            const SizedBox(height: 16),
-            for (final c in ServiceCategory.values)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Text(c.emoji, style: const TextStyle(fontSize: 24)),
-                title: Text(c.label,
-                    style: const TextStyle(fontWeight: FontWeight.w700, color: AppTheme.darkGreen)),
-                subtitle: Text(c.tagline, style: TextStyle(fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.55))),
-                onTap: () => Navigator.pop(sheetContext, c),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (category != null && context.mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => CreateServiceListingScreen(category: category)),
-      );
+class _MyServiceListingsScreenState extends State<MyServiceListingsScreen> {
+  final _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+  late Stream<List<ServiceListing>> _stream =
+      ServiceMarketplaceService.instance.watchListingsByProvider(_uid);
+  final Set<String> _busy = {};
+
+  void _new() => Navigator.push(
+      context, MaterialPageRoute(builder: (_) => const CreateServiceListingScreen()));
+
+  Future<void> _toggle(ServiceListing l) async {
+    setState(() => _busy.add(l.id));
+    try {
+      await ServiceMarketplaceService.instance.setListingStatus(
+          l.id, l.isActive ? ServiceListingStatus.paused : ServiceListingStatus.active);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't update the listing.", error: true);
+    } finally {
+      if (mounted) setState(() => _busy.remove(l.id));
     }
   }
 
-  Future<void> _toggleStatus(ServiceListing listing) {
-    final next = listing.status == ServiceListingStatus.active
-        ? ServiceListingStatus.paused
-        : ServiceListingStatus.active;
-    return ServiceMarketplaceService.instance.setListingStatus(listing.id, next);
+  /// Re-upload the licence for a rejected electrical/plumbing listing — sends
+  /// it back to 'pending' (the only client-allowed transition).
+  Future<void> _resubmit(ServiceListing l) async {
+    final source = await showCanopySheet<ImageSource>(
+      context,
+      builder: (ctx) => CanopySheetBody(
+        title: 'Photo of your ${l.category.licenceName}',
+        caption: 'Make sure your name and the licence number are readable.',
+        children: [
+          CanopyListGroup(children: [
+            CanopyListRow(
+                icon: Icons.photo_camera_outlined,
+                title: 'Take a photo',
+                onTap: () => Navigator.pop(ctx, ImageSource.camera)),
+            CanopyListRow(
+                icon: Icons.photo_library_outlined,
+                title: 'Choose from gallery',
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery)),
+          ]),
+        ],
+      ),
+    );
+    if (source == null) return;
+    final x = await ImagePicker().pickImage(source: source, imageQuality: 85);
+    if (x == null || !mounted) return;
+    setState(() => _busy.add(l.id));
+    try {
+      final ref = FirebaseStorage.instance.ref(
+          'service_provider_licenses/$_uid/${DateTime.now().millisecondsSinceEpoch}_${l.category.name}.jpg');
+      await ref.putFile(File(x.path));
+      await ServiceMarketplaceService.instance
+          .resubmitLicenseDocument(l.id, await ref.getDownloadURL());
+      if (mounted) {
+        showCanopySnack(context, "Licence sent. We'll check it before your listing goes live.");
+      }
+    } catch (_) {
+      if (mounted) {
+        showCanopySnack(context, "Couldn't upload your licence.",
+            error: true, actionLabel: 'Retry', onAction: () => _resubmit(l));
+      }
+    } finally {
+      if (mounted) setState(() => _busy.remove(l.id));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F2),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppTheme.darkGreen,
-        title: const Text('My Listings',
-            style: TextStyle(color: AppTheme.darkGreen, fontWeight: FontWeight.w800)),
-        actions: [
-          TextButton.icon(
-            onPressed: () => _pickCategoryAndCreate(context),
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('New', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
+    final p = context.canopy;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'My listings'),
       body: StreamBuilder<List<ServiceListing>>(
-        stream: ServiceMarketplaceService.instance.watchListingsByProvider(_uid),
+        stream: _stream,
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+          if (snap.hasError) {
+            return CanopyErrorState(
+                title: "Couldn't load your listings",
+                onRetry: () => setState(() => _stream =
+                    ServiceMarketplaceService.instance.watchListingsByProvider(_uid)));
           }
-          final listings = snap.data ?? const [];
-          if (listings.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.storefront_outlined, size: 40, color: AppTheme.darkGreen.withOpacity(0.3)),
-                    const SizedBox(height: 14),
-                    const Text("You haven't listed a service yet",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.darkGreen)),
-                    const SizedBox(height: 6),
-                    Text('Tap "New" to offer trash collection or landscaping.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12.5, color: AppTheme.darkGreen.withOpacity(0.55))),
-                  ],
-                ),
-              ),
+          if (!snap.hasData) {
+            return ListView(
+              padding: const EdgeInsets.all(CanopySpace.gutter),
+              children: const [CanopyListSkeleton(rows: 2, leadingSize: 56)],
             );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-            itemCount: listings.length,
-            itemBuilder: (context, i) => _ListingManageCard(
-              listing: listings[i],
-              onToggleStatus: () => _toggleStatus(listings[i]),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => ServiceListingDetailScreen(listingId: listings[i].id)),
-              ),
-            ),
+          final list = snap.data!;
+          if (list.isEmpty) {
+            return const CanopyEmptyState(
+              icon: Icons.storefront_outlined,
+              title: "You haven't listed a service yet",
+              line: 'Offer trash collection, landscaping, repairs and more.',
+            );
+          }
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(
+                CanopySpace.gutter, CanopySpace.s4, CanopySpace.gutter, CanopySpace.s32),
+            children: [
+              for (final l in list) ...[
+                CanopyCard(
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => ServiceListingDetailScreen(listingId: l.id))),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CategoryGlyph(l.category, size: 26),
+                          const SizedBox(width: CanopySpace.s12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                LabelRow(children: [
+                                  StatusLabel(l.status.label,
+                                      color: l.isActive ? p.success : p.inkMuted),
+                                  if (l.requiresLicenseVerification)
+                                    StatusLabel(l.licenseVerificationStatus.label,
+                                        color: switch (l.licenseVerificationStatus) {
+                                          LicenseVerificationStatus.verified => p.success,
+                                          LicenseVerificationStatus.rejected => p.danger,
+                                          _ => p.warning,
+                                        }),
+                                ]),
+                                const SizedBox(height: CanopySpace.s2),
+                                Text(l.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+                                PriceDisplay(l.pricing, fontSize: 13),
+                                Text('${l.bookingCount} bookings · ${l.viewCount} views',
+                                    style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (l.isLicenseVerificationRejected) ...[
+                        const SizedBox(height: CanopySpace.s12),
+                        regulatoryCallout(l.category,
+                            status: l.licenseVerificationStatus,
+                            rejectionReason: l.licenseRejectionReason)!,
+                      ] else if (l.isPendingLicenseVerification) ...[
+                        const SizedBox(height: CanopySpace.s12),
+                        regulatoryCallout(l.category, status: l.licenseVerificationStatus)!,
+                      ],
+                      Row(
+                        children: [
+                          if (l.isLicenseVerificationRejected)
+                            CanopyButton.secondary(
+                              label: 'Resubmit licence',
+                              size: CanopyButtonSize.compact,
+                              loading: _busy.contains(l.id),
+                              onPressed: () => _resubmit(l),
+                            ),
+                          const Spacer(),
+                          if (l.status != ServiceListingStatus.closed)
+                            CanopyButton.quiet(
+                              label: l.isActive ? 'Pause' : 'Resume',
+                              size: CanopyButtonSize.compact,
+                              loading: _busy.contains(l.id) && !l.isLicenseVerificationRejected,
+                              onPressed: () => _toggle(l),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: CanopySpace.s12),
+              ],
+            ],
           );
         },
       ),
-    );
-  }
-}
-
-class _ListingManageCard extends StatelessWidget {
-  final ServiceListing listing;
-  final VoidCallback onToggleStatus;
-  final VoidCallback onTap;
-
-  const _ListingManageCard({required this.listing, required this.onToggleStatus, required this.onTap});
-
-  Color get _statusColor => switch (listing.status) {
-        ServiceListingStatus.active => AppTheme.primary,
-        ServiceListingStatus.paused => AppTheme.tertiary,
-        ServiceListingStatus.closed => Colors.grey,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(color: AppTheme.primary.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(listing.category.emoji, style: const TextStyle(fontSize: 22)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(listing.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppTheme.darkGreen)),
-                    const SizedBox(height: 3),
-                    Text(listing.pricing.display,
-                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppTheme.primary)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _StatusPill(label: listing.status.label, color: _statusColor),
-                        const SizedBox(width: 10),
-                        Icon(Icons.event_note_outlined, size: 13, color: AppTheme.darkGreen.withOpacity(0.4)),
-                        const SizedBox(width: 3),
-                        Text('${listing.bookingCount} bookings',
-                            style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
-                        const SizedBox(width: 10),
-                        Icon(Icons.visibility_outlined, size: 13, color: AppTheme.darkGreen.withOpacity(0.4)),
-                        const SizedBox(width: 3),
-                        Text('${listing.viewCount}',
-                            style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: onToggleStatus,
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Icon(
-                    listing.status == ServiceListingStatus.active
-                        ? Icons.pause_circle_outline_rounded
-                        : Icons.play_circle_outline_rounded,
-                    size: 22,
-                    color: AppTheme.darkGreen.withOpacity(0.5),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _StatusPill({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-      child: Text(label, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: color)),
+      sticky: StickyActionBar(children: [
+        CanopyButton(label: 'New listing', expand: true, onPressed: _new),
+      ]),
     );
   }
 }

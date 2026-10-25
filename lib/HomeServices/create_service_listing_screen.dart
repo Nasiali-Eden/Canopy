@@ -1,13 +1,19 @@
 // lib/HomeServices/create_service_listing_screen.dart
 //
-// 3-step listing wizard for providers, mirroring
-// EnvironmentalOps/Market/create_listing_screen.dart's PageController shape
-// (not env_trees.dart's IndexedStack wizard — that pattern suits a form with
-// steps that stay mounted for a long-running record; a listing is filled in
-// once and submitted, same as a market listing). Step numbering, the
-// _StepProgressBar, _SectionLabel and _FieldBox visual language are the same
-// as that screen so a provider who has listed on the Marketplace already
-// knows this form.
+// Create listing (SERVICES_HANDOFF §3.8) — 4-step stepper:
+//   1 Category  — 3-col grid; regulated categories need a licence photo to
+//                 continue (LicencePhotoTile: empty · captured + Retake ·
+//                 uploading · failed + retry).
+//   2 Details   — title, description, offerings (filter chips), photo.
+//   3 Pricing & area — rate type segmented, from/to range, county, base,
+//                 radius slider.
+//   4 Review    — edit links per section; regulated → "won't appear in
+//                 Browse until verified".
+// Two confirmations: Live in Browse vs Pending verification (timeline
+// Submitted → Licence check → Live).
+//
+// Edit mode ([existing]): same steps minus the category change; saves a
+// patch via ServiceMarketplaceService.updateListing.
 
 import 'dart:io';
 
@@ -18,836 +24,728 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../Models/geo/canopy_location.dart';
-import '../Models/marketplace/canopy_listing.dart' show SellerSnapshot;
 import '../Models/services/service_listing.dart';
 import '../Services/HomeServices/service_marketplace_service.dart';
-import '../Shared/theme/app_theme.dart';
+import '../theme/canopy_components.dart';
+import 'my_service_listings_screen.dart';
+import 'services_ui.dart';
 
 class CreateServiceListingScreen extends StatefulWidget {
-  final ServiceCategory category;
+  final ServiceCategory? initialCategory;
+  final ServiceListing? existing;
 
-  const CreateServiceListingScreen({required this.category, super.key});
+  const CreateServiceListingScreen({this.initialCategory, this.existing, super.key});
 
   @override
-  State<CreateServiceListingScreen> createState() =>
-      _CreateServiceListingScreenState();
+  State<CreateServiceListingScreen> createState() => _CreateServiceListingScreenState();
 }
 
-class _CreateServiceListingScreenState
-    extends State<CreateServiceListingScreen> {
-  late ServiceCategory _category = widget.category;
-  final Set<String> _offerings = {};
+class _CreateServiceListingScreenState extends State<CreateServiceListingScreen> {
+  static const _labels = ['Category', 'Details', 'Pricing & area', 'Review'];
 
-  final _titleCtrl = TextEditingController();
-  final _descriptionCtrl = TextEditingController();
-  final _fromPriceCtrl = TextEditingController();
-  final _toPriceCtrl = TextEditingController();
-  final _radiusCtrl = TextEditingController();
-  final _venueCtrl = TextEditingController();
-  final _countyCtrl = TextEditingController();
-  ServiceRateType _rateType = ServiceRateType.monthly;
+  late final bool _editing = widget.existing != null;
+  late ServiceCategory? _category = widget.existing?.category ?? widget.initialCategory;
+  late final Set<String> _offerings = {...?widget.existing?.offerings};
+  late final _title = TextEditingController(text: widget.existing?.title);
+  late final _description = TextEditingController(text: widget.existing?.description);
+  late final _from = TextEditingController(
+      text: widget.existing?.pricing.fromKes?.round().toString());
+  late final _to = TextEditingController(
+      text: widget.existing?.pricing.toKes?.round().toString());
+  late final _county = TextEditingController(text: widget.existing?.location.countyName);
+  late final _base = TextEditingController(text: widget.existing?.location.venue);
+  late ServiceRateType _rate = widget.existing?.pricing.rateType ?? ServiceRateType.perVisit;
+  late double _radius = (widget.existing?.serviceRadiusKm ?? 10).clamp(1, 50).toDouble();
 
-  File? _imageFile;
+  File? _photo;
+  File? _licence;
+  bool _licenceFailed = false;
+
+  int _step = 0;
+  bool _showErrors = false;
   bool _submitting = false;
-  final _formKey = GlobalKey<FormState>();
+  bool _failed = false;
+  bool? _doneLive; // null = not submitted; true = live; false = pending check
 
-  final _pageCtrl = PageController();
-  int _step = 0; // 0=category+offerings, 1=details, 2=review
+  @override
+  void initState() {
+    super.initState();
+    if (_editing) _step = 1;
+  }
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
-    _descriptionCtrl.dispose();
-    _fromPriceCtrl.dispose();
-    _toPriceCtrl.dispose();
-    _radiusCtrl.dispose();
-    _venueCtrl.dispose();
-    _countyCtrl.dispose();
-    _pageCtrl.dispose();
+    for (final c in [_title, _description, _from, _to, _county, _base]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  void _nextStep() {
-    if (_step == 0 && _offerings.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pick at least one thing you offer'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-    if (_step < 2) {
-      setState(() => _step++);
-      _pageCtrl.animateToPage(_step,
-          duration: const Duration(milliseconds: 320), curve: Curves.easeInOut);
-    }
+  // ── Validation per step ─────────────────────────────────────────────────
+
+  String? get _titleError =>
+      _title.text.trim().length < 5 ? 'Give your listing a clear title.' : null;
+  String? get _offeringsError => _offerings.isEmpty ? 'Pick at least one thing you offer.' : null;
+  String? get _fromError {
+    if (_rate == ServiceRateType.quoteOnly) return null;
+    final f = int.tryParse(_from.text.trim());
+    return f == null || f <= 0 ? 'Enter your starting price.' : null;
   }
 
-  void _prevStep() {
-    if (_step > 0) {
+  String? get _toError {
+    final t = _to.text.trim();
+    if (_rate == ServiceRateType.quoteOnly || t.isEmpty) return null;
+    final to = int.tryParse(t), from = int.tryParse(_from.text.trim()) ?? 0;
+    return to == null || to <= from ? 'Must be more than the starting price.' : null;
+  }
+
+  String? get _countyError => _county.text.trim().isEmpty ? 'Say which county you work in.' : null;
+
+  bool _stepValid(int s) => switch (s) {
+        0 => _category != null &&
+            (!_category!.requiresLicenseVerification || _licence != null || _editing),
+        1 => _titleError == null && _offeringsError == null,
+        2 => _fromError == null && _toError == null && _countyError == null,
+        _ => true,
+      };
+
+  void _next() {
+    setState(() => _showErrors = true);
+    if (!_stepValid(_step)) return;
+    setState(() {
+      _showErrors = false;
+      _step++;
+    });
+  }
+
+  void _back() {
+    if (_step == 0 || (_editing && _step == 1)) {
+      Navigator.maybePop(context);
+    } else {
       setState(() => _step--);
-      _pageCtrl.animateToPage(_step,
-          duration: const Duration(milliseconds: 320), curve: Curves.easeInOut);
     }
   }
 
-  Future<void> _pickImage() async {
-    final xFile =
-        await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 82);
-    if (xFile != null) setState(() => _imageFile = File(xFile.path));
+  Future<File?> _pick({required bool licence}) async {
+    final source = await showCanopySheet<ImageSource>(
+      context,
+      builder: (ctx) => CanopySheetBody(
+        title: licence ? 'Photo of your ${_category!.licenceName}' : 'Listing photo',
+        caption: licence ? 'Make sure your name and licence number are readable.' : null,
+        children: [
+          CanopyListGroup(children: [
+            CanopyListRow(
+                icon: Icons.photo_camera_outlined,
+                title: 'Take a photo',
+                onTap: () => Navigator.pop(ctx, ImageSource.camera)),
+            CanopyListRow(
+                icon: Icons.photo_library_outlined,
+                title: 'Choose from gallery',
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery)),
+          ]),
+        ],
+      ),
+    );
+    if (source == null) return null;
+    final x = await ImagePicker().pickImage(source: source, imageQuality: 85);
+    return x == null ? null : File(x.path);
   }
+
+  // ── Submit ──────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _failed = false;
+      _licenceFailed = false;
+    });
+    final uid = FirebaseAuth.instance.currentUser!.uid;
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final uid = user?.uid ?? 'anon';
-
-      String providerName = user?.displayName ?? '';
-      if (providerName.isEmpty) {
-        final userDoc = await FirebaseFirestore.instance.collection('Users').doc(uid).get();
-        providerName = (userDoc.data()?['name'] as String?) ?? 'Canopy provider';
+      String? photoUrl;
+      if (_photo != null) {
+        final ref = FirebaseStorage.instance
+            .ref('service_listings/${DateTime.now().millisecondsSinceEpoch}_$uid.jpg');
+        await ref.putFile(_photo!);
+        photoUrl = await ref.getDownloadURL();
       }
-
-      String? imageUrl;
-      if (_imageFile != null) {
-        final ref = FirebaseStorage.instance.ref(
-            'service_listings/${DateTime.now().millisecondsSinceEpoch}_$uid.jpg');
-        await ref.putFile(_imageFile!);
-        imageUrl = await ref.getDownloadURL();
+      String? licenceUrl;
+      if (_licence != null) {
+        try {
+          final ref = FirebaseStorage.instance.ref(
+              'service_provider_licenses/$uid/${DateTime.now().millisecondsSinceEpoch}_${_category!.name}.jpg');
+          await ref.putFile(_licence!);
+          licenceUrl = await ref.getDownloadURL();
+        } catch (_) {
+          setState(() => _licenceFailed = true);
+          rethrow;
+        }
       }
-
-      final fromKes = double.tryParse(_fromPriceCtrl.text.trim());
-      final toKes = double.tryParse(_toPriceCtrl.text.trim());
-      final radius = double.tryParse(_radiusCtrl.text.trim()) ?? 0;
-
-      final listing = ServiceListing(
-        id: '',
-        category: _category,
-        title: _titleCtrl.text.trim(),
-        description: _descriptionCtrl.text.trim(),
-        offerings: _offerings.toList(),
-        images: [if (imageUrl != null) imageUrl],
-        provider: SellerSnapshot(
-          sellerId: uid,
-          shopName: providerName,
-          city: _countyCtrl.text.trim(),
-        ),
-        postedByUid: uid,
-        pricing: fromKes == null
-            ? const ServicePricing()
-            : ServicePricing(rateType: _rateType, fromKes: fromKes, toKes: toKes),
-        serviceRadiusKm: radius,
-        location: CanopyLocation(
-          countyName: _countyCtrl.text.trim().isEmpty ? null : _countyCtrl.text.trim(),
-          venue: _venueCtrl.text.trim().isEmpty ? null : _venueCtrl.text.trim(),
-        ),
-        createdAt: DateTime.now(),
+      final from = int.tryParse(_from.text.trim());
+      final to = int.tryParse(_to.text.trim());
+      final pricing = _rate == ServiceRateType.quoteOnly || from == null
+          ? const ServicePricing()
+          : ServicePricing(rateType: _rate, fromKes: from.toDouble(), toKes: to?.toDouble());
+      final location = CanopyLocation(
+        countyName: _county.text.trim(),
+        venue: _base.text.trim().isEmpty ? null : _base.text.trim(),
       );
 
-      await ServiceMarketplaceService.instance.createListing(listing);
+      if (_editing) {
+        final e = widget.existing!;
+        await ServiceMarketplaceService.instance.updateListing(e.id, {
+          'title': _title.text.trim(),
+          'description': _description.text.trim(),
+          'offerings': _offerings.toList(),
+          if (photoUrl != null) 'images': [photoUrl, ...e.images.skip(1)],
+          'pricing': pricing.toMap(),
+          'serviceRadiusKm': _radius,
+          ...location.toFirestore(),
+        });
+        if (mounted) {
+          Navigator.pop(context);
+          showCanopySnack(context, 'Listing updated.');
+        }
+        return;
+      }
 
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Service listed — requesters can now find you'),
-            backgroundColor: AppTheme.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      final user = FirebaseAuth.instance.currentUser!;
+      var name = user.displayName ?? '';
+      if (name.isEmpty) {
+        final doc = await FirebaseFirestore.instance.collection('Users').doc(uid).get();
+        name = (doc.data()?['name'] as String?) ?? 'Canopy provider';
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      final c = _category!;
+      await ServiceMarketplaceService.instance.createListing(ServiceListing(
+        id: '',
+        category: c,
+        title: _title.text.trim(),
+        description: _description.text.trim(),
+        offerings: _offerings.toList(),
+        images: [if (photoUrl != null) photoUrl],
+        provider: SellerSnapshot(sellerId: uid, shopName: name, city: _county.text.trim()),
+        postedByUid: uid,
+        pricing: pricing,
+        serviceRadiusKm: _radius,
+        location: location,
+        licenseDocumentUrl: licenceUrl,
+        licenseVerificationStatus: c.requiresLicenseVerification
+            ? LicenseVerificationStatus.pending
+            : LicenseVerificationStatus.notRequired,
+        createdAt: DateTime.now(),
+      ));
+      if (mounted) setState(() => _doneLive = !c.requiresLicenseVerification);
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
+  // ── Build ───────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    const color = AppTheme.primary;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F2),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: Icon(_step > 0 ? Icons.arrow_back_ios_new_rounded : Icons.close_rounded,
-              size: 18),
-          color: AppTheme.darkGreen,
-          onPressed: _step > 0 ? _prevStep : () => Navigator.pop(context),
+    if (_doneLive != null) return _confirmation(_doneLive!);
+    final p = context.canopy;
+    return CanopyScaffold(
+      appBar: canopyAppBar(
+        context,
+        title: _editing ? 'Edit listing' : 'List a service',
+        leading: CanopyIconButton(
+          icon: _step == 0 || (_editing && _step == 1) ? Icons.close : Icons.arrow_back,
+          tooltip: 'Back',
+          onPressed: _back,
         ),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('List Your Service',
-                style: TextStyle(
-                    color: AppTheme.darkGreen, fontWeight: FontWeight.w800, fontSize: 16)),
-            Text('Step ${_step + 1} of 3',
-                style: TextStyle(
-                    fontSize: 10, color: color.withOpacity(0.75), fontWeight: FontWeight.w600)),
-          ],
-        ),
-        centerTitle: true,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(4),
-          child: LinearProgressIndicator(
-            value: (_step + 1) / 3,
-            backgroundColor: color.withOpacity(0.10),
-            valueColor: const AlwaysStoppedAnimation(color),
-            minHeight: 3,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            CanopySpace.gutter, CanopySpace.s4, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          CanopyStepper(step: _step + 1, total: 4, label: _labels[_step]),
+          const SizedBox(height: CanopySpace.section),
+          ...switch (_step) {
+            0 => _categoryStep(p),
+            1 => _detailsStep(p),
+            2 => _pricingStep(p),
+            _ => _reviewStep(p),
+          },
+        ],
+      ),
+      sticky: StickyActionBar(children: [
+        if (_step < 3)
+          CanopyButton(
+            label: 'Next · ${_labels[_step + 1]}',
+            expand: true,
+            onPressed: _next,
+          )
+        else
+          CanopyButton(
+            label: _editing ? 'Save changes' : (_failed ? 'Try again' : 'Post listing'),
+            expand: true,
+            loading: _submitting,
+            onPressed: _submit,
           ),
-        ),
-      ),
-      body: Form(
-        key: _formKey,
-        child: PageView(
-          controller: _pageCtrl,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _StepCategoryOfferings(
-              category: _category,
-              offerings: _offerings,
-              onCategoryChanged: (c) => setState(() {
-                _category = c;
-                _offerings.clear();
-              }),
-              onOfferingToggled: (key) => setState(() {
-                if (_offerings.contains(key)) {
-                  _offerings.remove(key);
-                } else {
-                  _offerings.add(key);
-                }
-              }),
-            ),
-            _StepDetails(
-              rateType: _rateType,
-              onRateTypeChanged: (t) => setState(() => _rateType = t),
-              titleCtrl: _titleCtrl,
-              descriptionCtrl: _descriptionCtrl,
-              fromPriceCtrl: _fromPriceCtrl,
-              toPriceCtrl: _toPriceCtrl,
-              radiusCtrl: _radiusCtrl,
-              venueCtrl: _venueCtrl,
-              countyCtrl: _countyCtrl,
-              imageFile: _imageFile,
-              onPickImage: _pickImage,
-            ),
-            _StepReview(
-              category: _category,
-              offerings: _offerings,
-              title: _titleCtrl.text,
-              description: _descriptionCtrl.text,
-              rateType: _rateType,
-              fromPrice: _fromPriceCtrl.text,
-              toPrice: _toPriceCtrl.text,
-              venue: _venueCtrl.text,
-              county: _countyCtrl.text,
-              imageFile: _imageFile,
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFF0F0F0))),
-        ),
-        padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
-        child: SizedBox(
-          height: 52,
-          child: _step < 2
-              ? ElevatedButton(
-                  onPressed: _nextStep,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: color,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  child: Row(
+      ]),
+    );
+  }
+
+  List<Widget> _categoryStep(CanopyPalette p) {
+    final c = _category;
+    final reg = c == null ? null : regulatoryCallout(c);
+    return [
+      Text('What are you offering?', style: CanopyType.title.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s12),
+      GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: CanopySpace.s8,
+        crossAxisSpacing: CanopySpace.s8,
+        childAspectRatio: 0.95,
+        children: [
+          for (final cat in ServiceCategory.values)
+            Material(
+              color: p.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                side: BorderSide(
+                    color: cat == c ? p.ink : p.outline, width: cat == c ? 2 : 1),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                onTap: () => setState(() {
+                  _category = cat;
+                  _offerings.clear();
+                  if (!cat.requiresLicenseVerification) _licence = null;
+                }),
+                child: Padding(
+                  padding: const EdgeInsets.all(CanopySpace.s8),
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(_step == 0 ? 'Continue to Details' : 'Review Listing',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.arrow_forward_rounded, size: 18),
-                    ],
-                  ),
-                )
-              : ElevatedButton(
-                  onPressed: _submitting ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: color,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-                        )
-                      : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.publish_rounded, size: 18),
-                            SizedBox(width: 8),
-                            Text('Post Listing',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 0 — CATEGORY + OFFERINGS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StepCategoryOfferings extends StatelessWidget {
-  final ServiceCategory category;
-  final Set<String> offerings;
-  final ValueChanged<ServiceCategory> onCategoryChanged;
-  final ValueChanged<String> onOfferingToggled;
-
-  const _StepCategoryOfferings({
-    required this.category,
-    required this.offerings,
-    required this.onCategoryChanged,
-    required this.onOfferingToggled,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      children: [
-        const _SectionLabel(label: 'Category'),
-        const SizedBox(height: 10),
-        Row(
-          children: ServiceCategory.values.map((c) {
-            final selected = c == category;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => onCategoryChanged(c),
-                child: Container(
-                  margin: EdgeInsets.only(
-                      right: c == ServiceCategory.values.first ? 8 : 0),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.07),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                        color: selected
-                            ? AppTheme.primary
-                            : AppTheme.primary.withOpacity(0.20)),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(c.emoji, style: const TextStyle(fontSize: 22)),
-                      const SizedBox(height: 4),
-                      Text(
-                        c.label,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: selected ? Colors.white : AppTheme.darkGreen.withOpacity(0.8),
-                        ),
-                      ),
+                      CategoryGlyph(cat, size: 26),
+                      const SizedBox(height: CanopySpace.s4),
+                      Text(cat.name2,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          style: CanopyType.label.copyWith(color: p.ink, fontSize: 12)),
+                      if (cat.licenceName != null)
+                        Text(cat.licenceName!,
+                            textAlign: TextAlign.center,
+                            style: CanopyType.micro.copyWith(color: p.inkMuted, letterSpacing: 0)),
                     ],
                   ),
                 ),
               ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 24),
-        _SectionLabel(label: 'What do you offer?', note: 'Pick all that apply'),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: category.offeringOptions.map((key) {
-            final selected = offerings.contains(key);
-            return GestureDetector(
-              onTap: () => onOfferingToggled(key),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                decoration: BoxDecoration(
-                  color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.20)),
-                ),
-                child: Text(
-                  ServiceCategory.offeringLabel(key),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: selected ? Colors.white : AppTheme.darkGreen.withOpacity(0.75),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 1 — DETAILS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StepDetails extends StatelessWidget {
-  final ServiceRateType rateType;
-  final ValueChanged<ServiceRateType> onRateTypeChanged;
-  final TextEditingController titleCtrl;
-  final TextEditingController descriptionCtrl;
-  final TextEditingController fromPriceCtrl;
-  final TextEditingController toPriceCtrl;
-  final TextEditingController radiusCtrl;
-  final TextEditingController venueCtrl;
-  final TextEditingController countyCtrl;
-  final File? imageFile;
-  final VoidCallback onPickImage;
-
-  const _StepDetails({
-    required this.rateType,
-    required this.onRateTypeChanged,
-    required this.titleCtrl,
-    required this.descriptionCtrl,
-    required this.fromPriceCtrl,
-    required this.toPriceCtrl,
-    required this.radiusCtrl,
-    required this.venueCtrl,
-    required this.countyCtrl,
-    required this.imageFile,
-    required this.onPickImage,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      children: [
-        const _SectionLabel(label: 'Listing title'),
-        const SizedBox(height: 8),
-        _FieldBox(
-          child: TextFormField(
-            controller: titleCtrl,
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-            style: const TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.darkGreen),
-            decoration: InputDecoration(
-              hintText: 'e.g. Weekly compound pickup, Kiambu Rd',
-              hintStyle: TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.30)),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        const _SectionLabel(label: 'Description'),
-        const SizedBox(height: 8),
-        _FieldBox(
-          child: TextFormField(
-            controller: descriptionCtrl,
-            maxLines: 3,
-            style: const TextStyle(fontSize: 13.5, color: AppTheme.darkGreen),
-            decoration: InputDecoration(
-              hintText: 'What makes your service reliable — experience, equipment, coverage.',
-              hintStyle: TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.30)),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        _SectionLabel(
-          label: 'Your rate',
-          note: 'What you charge — negotiated per job, this is just a starting figure',
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          children: ServiceRateType.values.map((t) {
-            final selected = t == rateType;
-            return GestureDetector(
-              onTap: () => onRateTypeChanged(t),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: selected ? AppTheme.primary : AppTheme.primary.withOpacity(0.20)),
-                ),
-                child: Text(
-                  switch (t) {
-                    ServiceRateType.monthly => 'Monthly',
-                    ServiceRateType.perVisit => 'Per visit',
-                    ServiceRateType.quoteOnly => 'Quote only',
-                  },
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: selected ? Colors.white : AppTheme.darkGreen.withOpacity(0.75),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        if (rateType != ServiceRateType.quoteOnly) ...[
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _FieldBox(
-                  child: TextFormField(
-                    controller: fromPriceCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.darkGreen),
-                    decoration: InputDecoration(
-                      hintText: 'From (KSh)',
-                      hintStyle:
-                          TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.30)),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _FieldBox(
-                  child: TextFormField(
-                    controller: toPriceCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.darkGreen),
-                    decoration: InputDecoration(
-                      hintText: 'To (optional)',
-                      hintStyle:
-                          TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.30)),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
-        const SizedBox(height: 20),
-        const _SectionLabel(label: "Where you're based"),
-        const SizedBox(height: 8),
+      ),
+      if (_showErrors && c == null) ...[
+        const SizedBox(height: CanopySpace.s8),
+        Text('Pick a category.', style: CanopyType.caption.copyWith(color: p.danger)),
+      ],
+      if (reg != null) ...[const SizedBox(height: CanopySpace.s16), reg],
+      if (c != null && c.requiresLicenseVerification) ...[
+        const SizedBox(height: CanopySpace.s16),
+        Text('Photo of your ${c.licenceName}', style: CanopyType.label.copyWith(color: p.ink)),
+        const SizedBox(height: CanopySpace.s4 + 2),
+        _LicenceTile(
+          file: _licence,
+          uploading: _submitting && _licence != null,
+          failed: _licenceFailed,
+          showRequired: _showErrors && _licence == null,
+          onPick: () async {
+            final f = await _pick(licence: true);
+            if (f != null) setState(() => _licence = f);
+          },
+        ),
+        const SizedBox(height: CanopySpace.s4 + 2),
+        Text('Only Canopy sees this. Customers see "Licence verified" once it\'s checked.',
+            style: CanopyType.caption.copyWith(color: p.inkMuted)),
+      ],
+    ];
+  }
+
+  List<Widget> _detailsStep(CanopyPalette p) {
+    final c = _category!;
+    return [
+      CanopyTextField(
+        label: 'Title',
+        hint: '${c.name2} in ${_county.text.isEmpty ? 'your area' : _county.text}',
+        controller: _title,
+        maxLength: 70,
+        error: _showErrors ? _titleError : null,
+        onChanged: (_) => setState(() {}),
+      ),
+      const SizedBox(height: CanopySpace.s16),
+      CanopyTextField(
+        label: 'Description',
+        hint: 'What you do, how you work, what customers should know',
+        controller: _description,
+        minLines: 4,
+        maxLines: 8,
+        maxLength: 800,
+      ),
+      const SizedBox(height: CanopySpace.s16),
+      Text('What do you offer?', style: CanopyType.label.copyWith(color: p.ink)),
+      Wrap(
+        spacing: CanopySpace.s8,
+        children: [
+          for (final o in c.offeringOptions)
+            CanopyFilterChip(
+              label: ServiceCategory.offeringLabel(o),
+              selected: _offerings.contains(o),
+              onTap: () => setState(
+                  () => _offerings.contains(o) ? _offerings.remove(o) : _offerings.add(o)),
+            ),
+        ],
+      ),
+      if (_showErrors && _offeringsError != null)
+        Text(_offeringsError!, style: CanopyType.caption.copyWith(color: p.danger)),
+      const SizedBox(height: CanopySpace.s16),
+      Text('Photo (optional)', style: CanopyType.label.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s4 + 2),
+      _PhotoTile(
+        file: _photo,
+        existingUrl: widget.existing?.coverImage,
+        onPick: () async {
+          final f = await _pick(licence: false);
+          if (f != null) setState(() => _photo = f);
+        },
+        onRemove: () => setState(() => _photo = null),
+      ),
+    ];
+  }
+
+  List<Widget> _pricingStep(CanopyPalette p) {
+    return [
+      Text('How do you charge?', style: CanopyType.label.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s4 + 2),
+      CanopySegmented<ServiceRateType>(
+        options: const [
+          (ServiceRateType.monthly, 'Per month'),
+          (ServiceRateType.perVisit, 'Per visit'),
+          (ServiceRateType.quoteOnly, 'Quote only'),
+        ],
+        value: _rate,
+        onChanged: (v) => setState(() => _rate = v),
+      ),
+      const SizedBox(height: CanopySpace.s16),
+      if (_rate == ServiceRateType.quoteOnly)
+        const CanopyCallout(
+            text: 'Customers see "Quote on request · free to ask" and you quote each job.')
+      else
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: _FieldBox(
-                child: TextFormField(
-                  controller: countyCtrl,
-                  style: const TextStyle(fontSize: 13.5, color: AppTheme.darkGreen),
-                  decoration: InputDecoration(
-                    hintText: 'County / town',
-                    hintStyle:
-                        TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.30)),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
+              child: CanopyTextField.money(
+                label: 'From',
+                controller: _from,
+                error: _showErrors ? _fromError : null,
+                onChanged: (_) => setState(() {}),
               ),
             ),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 110,
-              child: _FieldBox(
-                child: TextFormField(
-                  controller: radiusCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  style: const TextStyle(fontSize: 13.5, color: AppTheme.darkGreen),
-                  decoration: InputDecoration(
-                    hintText: 'Radius km',
-                    hintStyle:
-                        TextStyle(fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.30)),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
+            const SizedBox(width: CanopySpace.s12),
+            Expanded(
+              child: CanopyTextField.money(
+                label: 'Up to (optional)',
+                controller: _to,
+                error: _showErrors ? _toError : null,
+                onChanged: (_) => setState(() {}),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        _FieldBox(
-          child: TextFormField(
-            controller: venueCtrl,
-            style: const TextStyle(fontSize: 13.5, color: AppTheme.darkGreen),
-            decoration: InputDecoration(
-              hintText: 'Landmark / area detail (optional)',
-              hintStyle: TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.30)),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        const _SectionLabel(label: 'Photo (optional)'),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: onPickImage,
-          child: Container(
-            height: 120,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF4F6F9),
-              borderRadius: BorderRadius.circular(14),
-              image: imageFile != null
-                  ? DecorationImage(image: FileImage(imageFile!), fit: BoxFit.cover)
-                  : null,
-            ),
-            child: imageFile == null
-                ? Center(
-                    child: Icon(Icons.add_a_photo_outlined,
-                        color: AppTheme.darkGreen.withOpacity(0.35), size: 28),
-                  )
-                : null,
-          ),
+      if (_rate != ServiceRateType.quoteOnly) ...[
+        const SizedBox(height: CanopySpace.s8),
+        Text('The actual price is agreed per job when you send a quote. Canopy keeps 8% of it.',
+            style: CanopyType.caption.copyWith(color: p.inkMuted)),
+      ],
+      const SizedBox(height: CanopySpace.section),
+      CanopyTextField(
+        label: 'County',
+        hint: 'Nairobi',
+        controller: _county,
+        error: _showErrors ? _countyError : null,
+        onChanged: (_) => setState(() {}),
+      ),
+      const SizedBox(height: CanopySpace.s16),
+      CanopyTextField(
+        label: 'Where you\'re based (optional)',
+        hint: 'Estate or area',
+        controller: _base,
+      ),
+      const SizedBox(height: CanopySpace.s16),
+      Row(
+        children: [
+          Expanded(
+              child: Text('How far will you travel?',
+                  style: CanopyType.label.copyWith(color: p.ink))),
+          Text('${_radius.round()} km',
+              style: CanopyType.money.copyWith(fontSize: 15, color: p.ink)),
+        ],
+      ),
+      Slider(
+        value: _radius,
+        min: 1,
+        max: 50,
+        divisions: 49,
+        activeColor: p.primary,
+        inactiveColor: p.outline,
+        label: '${_radius.round()} km',
+        onChanged: (v) => setState(() => _radius = v),
+      ),
+    ];
+  }
+
+  List<Widget> _reviewStep(CanopyPalette p) {
+    final c = _category!;
+    final from = int.tryParse(_from.text.trim());
+    final pricing = _rate == ServiceRateType.quoteOnly || from == null
+        ? const ServicePricing()
+        : ServicePricing(
+            rateType: _rate, fromKes: from.toDouble(), toKes: int.tryParse(_to.text.trim())?.toDouble());
+    Widget section(String label, int step, List<String> lines) => CanopyListRow(
+          title: label,
+          below: Text(lines.where((s) => s.isNotEmpty).join('\n'),
+              style: CanopyType.body.copyWith(color: p.inkMuted)),
+          trailing: Text('Edit', style: CanopyType.label.copyWith(color: p.primaryInk)),
+          chevron: false,
+          onTap: step == 0 && _editing ? null : () => setState(() => _step = step),
+        );
+    final reg = regulatoryCallout(c,
+        status: _editing ? widget.existing!.licenseVerificationStatus : LicenseVerificationStatus.pending);
+    return [
+      Text('Check your listing', style: CanopyType.title.copyWith(color: p.ink)),
+      const SizedBox(height: CanopySpace.s12),
+      CanopyListGroup(children: [
+        section('Category', 0, [c.name2, if (_licence != null) '${c.licenceName} photo added']),
+        section('Details', 1, [
+          _title.text.trim(),
+          _offerings.map(ServiceCategory.offeringLabel).join(' · '),
+          if (_photo != null || widget.existing?.coverImage != null) 'Photo added',
+        ]),
+        section('Pricing & area', 2, [
+          pricing.isQuoteOnly
+              ? 'Quote on request'
+              : '${ksh(pricing.fromKes!)}${pricing.toKes != null ? ' – ${ksh(pricing.toKes!)}' : ''} ${pricing.rateType.suffix}',
+          [_county.text.trim(), if (_base.text.trim().isNotEmpty) _base.text.trim()].join(' · '),
+          'Travels up to ${_radius.round()} km',
+        ]),
+      ]),
+      if (reg != null) ...[const SizedBox(height: CanopySpace.s16), reg],
+      if (_failed) ...[
+        const SizedBox(height: CanopySpace.s16),
+        CanopyCallout(
+          kind: CalloutKind.danger,
+          text: _licenceFailed
+              ? "Your licence photo didn't upload. Check your connection and try again."
+              : "Your listing didn't save. Nothing was lost — try again.",
         ),
       ],
+    ];
+  }
+
+  Widget _confirmation(bool live) {
+    final p = context.canopy;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, showBack: false, actions: [
+        CanopyIconButton(
+            icon: Icons.close, tooltip: 'Close', onPressed: () => Navigator.pop(context)),
+      ]),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            CanopySpace.gutter, 0, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          Icon(live ? Icons.check_circle_outline : Icons.hourglass_top_outlined,
+              size: CanopyIconSize.empty, color: live ? p.success : p.warning),
+          const SizedBox(height: CanopySpace.s12),
+          StatusLabel(live ? 'Live in Browse' : 'Pending verification',
+              color: live ? p.success : p.warning),
+          const SizedBox(height: CanopySpace.s4),
+          Text(live ? 'Your listing is live' : 'We\'re checking your licence',
+              style: CanopyType.display.copyWith(color: p.ink)),
+          const SizedBox(height: CanopySpace.s8),
+          Text(
+            live
+                ? 'Neighbours can find you under ${_category!.name2} now. Requests arrive in My bookings → Incoming jobs.'
+                : 'Your listing won\'t appear in Browse until Canopy has checked your ${_category!.licenceName}. We\'ll let you know.',
+            style: CanopyType.body.copyWith(color: p.inkMuted),
+          ),
+          if (!live) ...[
+            const SizedBox(height: CanopySpace.section),
+            CanopyCard(
+              child: CanopyTimeline(steps: [
+                const TimelineStep('Submitted', state: TimelineState.done),
+                TimelineStep('Licence check',
+                    line: 'Canopy reviews your ${_category!.licenceName}',
+                    state: TimelineState.now),
+                const TimelineStep('Live in Browse'),
+              ]),
+            ),
+          ],
+        ],
+      ),
+      sticky: StickyActionBar(children: [
+        CanopyButton(
+          label: 'See my listings',
+          expand: true,
+          onPressed: () => Navigator.pushReplacement(
+              context, MaterialPageRoute(builder: (_) => const MyServiceListingsScreen())),
+        ),
+      ]),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STEP 2 — REVIEW
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _StepReview extends StatelessWidget {
-  final ServiceCategory category;
-  final Set<String> offerings;
-  final String title;
-  final String description;
-  final ServiceRateType rateType;
-  final String fromPrice;
-  final String toPrice;
-  final String venue;
-  final String county;
-  final File? imageFile;
-
-  const _StepReview({
-    required this.category,
-    required this.offerings,
-    required this.title,
-    required this.description,
-    required this.rateType,
-    required this.fromPrice,
-    required this.toPrice,
-    required this.venue,
-    required this.county,
-    required this.imageFile,
-  });
+class _LicenceTile extends StatelessWidget {
+  final File? file;
+  final bool uploading;
+  final bool failed;
+  final bool showRequired;
+  final VoidCallback onPick;
+  const _LicenceTile(
+      {required this.file,
+      required this.uploading,
+      required this.failed,
+      required this.showRequired,
+      required this.onPick});
 
   @override
   Widget build(BuildContext context) {
-    final from = double.tryParse(fromPrice.trim());
-    final to = double.tryParse(toPrice.trim());
-    final pricing = from == null
-        ? const ServicePricing()
-        : ServicePricing(rateType: rateType, fromKes: from, toKes: to);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-      children: [
-        const _SectionLabel(label: 'Review before posting'),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    final p = context.canopy;
+    if (file == null) {
+      return DashedBorder(
+        color: showRequired ? p.danger : p.outlineStrong,
+        radius: CanopyRadius.sm,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onPick,
+            child: SizedBox(
+              height: 120,
+              width: double.infinity,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(category.emoji, style: const TextStyle(fontSize: 20)),
-                  const SizedBox(width: 8),
-                  Text(category.label,
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.primary)),
+                  Icon(Icons.badge_outlined, size: CanopyIconSize.s32, color: p.ink),
+                  const SizedBox(height: CanopySpace.s4),
+                  Text('Photograph or upload', style: CanopyType.label.copyWith(color: p.ink)),
+                  if (showRequired)
+                    Text('Required to continue',
+                        style: CanopyType.caption.copyWith(color: p.danger)),
                 ],
               ),
-              const SizedBox(height: 10),
-              Text(
-                title.isEmpty ? '(untitled listing)' : title,
-                style: const TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.darkGreen),
-              ),
-              if (description.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Text(description,
-                    style: TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.7))),
-              ],
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children:
-                    offerings.map((o) => _Chip(label: ServiceCategory.offeringLabel(o))).toList(),
-              ),
-              const Divider(height: 28),
-              _ReviewRow(label: 'Rate', value: pricing.display),
-              _ReviewRow(
-                  label: 'Location',
-                  value: [
-                    if (county.trim().isNotEmpty) county.trim(),
-                    if (venue.trim().isNotEmpty) venue.trim(),
-                  ].join(', ').isEmpty
-                      ? 'Not set'
-                      : [
-                          if (county.trim().isNotEmpty) county.trim(),
-                          if (venue.trim().isNotEmpty) venue.trim(),
-                        ].join(', ')),
-            ],
+            ),
           ),
         ),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.07),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.info_outline_rounded, size: 18, color: AppTheme.primary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Requesters will message you for a quote — you set the final '
-                  'price per job. Canopy takes a small commission from your '
-                  'payout, and the requester pays a flat booking fee.',
-                  style: TextStyle(
-                      fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.75), height: 1.4),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(CanopyRadius.sm),
+      child: SizedBox(
+        height: 140,
+        width: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.file(file!, fit: BoxFit.cover),
+            if (uploading || failed)
+              ColoredBox(
+                color: failed ? p.danger.withAlpha(0xB3) : p.scrim,
+                child: Center(
+                  child: uploading
+                      ? const CircularProgressIndicator(color: CanopyPalette.onHero)
+                      : Text('Upload failed — tap Try again',
+                          style: CanopyType.label.copyWith(color: CanopyPalette.onHero)),
                 ),
               ),
-            ],
+            if (!uploading)
+              Positioned(
+                right: CanopySpace.s8,
+                bottom: CanopySpace.s8,
+                child: Material(
+                  color: p.scrim,
+                  borderRadius: BorderRadius.circular(CanopyRadius.xs),
+                  child: InkWell(
+                    onTap: onPick,
+                    borderRadius: BorderRadius.circular(CanopyRadius.xs),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: CanopySpace.s12, vertical: CanopySpace.s8),
+                      child: Text('Retake',
+                          style: CanopyType.label.copyWith(color: CanopyPalette.onHero)),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoTile extends StatelessWidget {
+  final File? file;
+  final String? existingUrl;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+  const _PhotoTile(
+      {required this.file, required this.existingUrl, required this.onPick, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    if (file == null && existingUrl == null) {
+      return DashedBorder(
+        color: p.outlineStrong,
+        radius: CanopyRadius.sm,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onPick,
+            child: SizedBox(
+              height: 120,
+              width: double.infinity,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_a_photo_outlined, size: CanopyIconSize.nav, color: p.ink),
+                  const SizedBox(height: CanopySpace.s4),
+                  Text('Add a photo of your work',
+                      style: CanopyType.label.copyWith(color: p.ink)),
+                ],
+              ),
+            ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _ReviewRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _ReviewRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(label,
-                style: TextStyle(fontSize: 12, color: AppTheme.darkGreen.withOpacity(0.55))),
-          ),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.darkGreen)),
-          ),
-        ],
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(CanopyRadius.sm),
+      child: SizedBox(
+        height: 160,
+        width: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            file != null ? Image.file(file!, fit: BoxFit.cover) : CanopyImage(url: existingUrl),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Row(children: [
+                CanopyIconButton(
+                    icon: Icons.edit_outlined, tooltip: 'Change photo', onImage: true, onPressed: onPick),
+                if (file != null)
+                  CanopyIconButton(
+                      icon: Icons.close, tooltip: 'Remove photo', onImage: true, onPressed: onRemove),
+              ]),
+            ),
+          ],
+        ),
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SHARED FIELD WIDGETS — same visual language as create_listing_screen.dart
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  final String? note;
-  const _SectionLabel({required this.label, this.note});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.darkGreen)),
-        if (note != null) ...[
-          const SizedBox(height: 2),
-          Text(note!,
-              style: TextStyle(fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
-        ],
-      ],
-    );
-  }
-}
-
-class _FieldBox extends StatelessWidget {
-  final Widget child;
-  const _FieldBox({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F6F9),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  final String label;
-  const _Chip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppTheme.lightGreen.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(label,
-          style: const TextStyle(
-              fontSize: 10.5, fontWeight: FontWeight.w600, color: AppTheme.darkGreen)),
     );
   }
 }

@@ -1,16 +1,14 @@
 // lib/Shared/widgets/location_switcher.dart
 //
-// The location switch that sits at the top of every localized surface — feed,
-// marketplace, activities.
+// The location switch at the top of every localised surface — feed,
+// marketplace, activities (v2).
 //
-// Two pieces:
-//   • LocationSwitcher  — the compact bar. Shows the active scope and opens
-//     the picker. Defaults to the member's county.
-//   • LocationPickerSheet — the tiered picker: Everywhere / Country / Region /
-//     County / Area, drilling down, searchable at the county and area tiers.
+//   • LocationSwitcher — the compact bar: active scope, opens the picker.
+//     Defaults to the member's county.
+//   • LocationPickerSheet — tiered picker: Everywhere / Country / Region /
+//     County / Area, drilling down, searchable at country, county and area.
 //
-// The switch never silently changes what a member is looking at. Widening to
-// "Everywhere" is always one tap, and returning home is always one tap.
+// Widening to "Everywhere" and returning home are each always one tap.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -18,21 +16,20 @@ import 'package:provider/provider.dart';
 import '../../Models/geo/canopy_location.dart';
 import '../../Providers/location_provider.dart';
 import '../../Services/Geo/geo_registry.dart';
-import '../theme/app_theme.dart';
+import '../../theme/canopy_components.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SWITCHER BAR
 // ─────────────────────────────────────────────────────────────────────────────
 
 class LocationSwitcher extends StatelessWidget {
-  /// Renders light-on-dark, for use over an image or coloured header.
+  /// Light-on-dark, for use over an image or coloured header.
   final bool onDark;
 
-  /// Compact form for app bars — no sub-label, smaller hit area.
+  /// Compact form — no sub-label.
   final bool dense;
 
-  /// Bare app-bar presentation: label and chevron only, without the location
-  /// icon, container decoration, home badge, or quick actions.
+  /// App-bar form: label and chevron only.
   final bool bare;
 
   final EdgeInsetsGeometry padding;
@@ -42,56 +39,35 @@ class LocationSwitcher extends StatelessWidget {
     this.onDark = false,
     this.dense = false,
     this.bare = false,
-    this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    this.padding = const EdgeInsets.symmetric(horizontal: CanopySpace.gutter, vertical: CanopySpace.s8),
   });
 
   @override
   Widget build(BuildContext context) {
+    final p = context.canopy;
     final provider = context.watch<LocationProvider>();
     final filter = provider.filter;
-
-    final fg = onDark ? Colors.white : AppTheme.darkGreen;
-    final subFg = onDark
-        ? Colors.white.withOpacity(0.75)
-        : AppTheme.darkGreen.withOpacity(0.6);
-    final bg = onDark
-        ? Colors.white.withOpacity(0.14)
-        : AppTheme.lightGreen.withOpacity(0.14);
-    final borderColor = onDark
-        ? Colors.white.withOpacity(0.24)
-        : AppTheme.lightGreen.withOpacity(0.32);
+    final fg = onDark ? Colors.white : p.ink;
+    final subFg = onDark ? Colors.white.withAlpha(190) : p.inkMuted;
+    final label = provider.isResolving ? 'Finding your area…' : filter.label;
 
     if (bare) {
       return Padding(
         padding: padding,
-        child: Material(
-          color: Colors.transparent,
+        child: Semantics(
+          button: true,
+          label: 'Location: $label. Change',
           child: InkWell(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(CanopyRadius.xs),
             onTap: () => showLocationPicker(context),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Row(
-                children: [
-                  Flexible(
-                    child: Text(
-                      provider.isResolving
-                          ? 'Finding your area…'
-                          : filter.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: fg,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(Icons.expand_more_rounded, size: 18, color: subFg),
-                ],
-              ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: CanopySpace.minTouch),
+              child: Row(children: [
+                Flexible(
+                  child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: CanopyType.label.copyWith(color: fg)),
+                ),
+                Icon(Icons.expand_more, size: 18, color: subFg),
+              ]),
             ),
           ),
         ),
@@ -100,173 +76,65 @@ class LocationSwitcher extends StatelessWidget {
 
     return Padding(
       padding: padding,
-      child: Row(
-        children: [
-          Expanded(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => showLocationPicker(context),
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: 12, vertical: dense ? 8 : 10),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: borderColor, width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        filter.isEverywhere
-                            ? Icons.public_rounded
-                            : Icons.place_rounded,
-                        size: dense ? 16 : 18,
-                        color: onDark ? Colors.white : AppTheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    provider.isResolving
-                                        ? 'Finding your area…'
-                                        : filter.label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: fg,
-                                      fontSize: dense ? 13 : 14.5,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                ),
-                                if (provider.isAtHome) ...[
-                                  const SizedBox(width: 6),
-                                  _HomeDot(onDark: onDark),
-                                ],
-                              ],
-                            ),
-                            if (!dense && filter.contextLabel != null)
-                              Text(
-                                '${filter.scope.label} · ${filter.contextLabel}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: subFg,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.expand_more_rounded,
-                          size: dense ? 18 : 20, color: subFg),
-                    ],
-                  ),
+      child: Row(children: [
+        Expanded(
+          child: Semantics(
+            button: true,
+            label: 'Location: $label. Change',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(CanopyRadius.sm),
+              onTap: () => showLocationPicker(context),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: CanopySpace.minTouch),
+                padding: EdgeInsets.symmetric(horizontal: CanopySpace.s12, vertical: dense ? CanopySpace.s4 : CanopySpace.s8),
+                decoration: BoxDecoration(
+                  color: onDark ? Colors.white.withAlpha(36) : p.surface,
+                  borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                  border: Border.all(color: onDark ? Colors.white.withAlpha(60) : p.outlineStrong),
                 ),
+                child: Row(children: [
+                  Icon(filter.isEverywhere ? Icons.public : Icons.place_outlined, size: 18, color: onDark ? Colors.white : p.primaryInk),
+                  const SizedBox(width: CanopySpace.s8),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                      Row(children: [
+                        Flexible(
+                          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: CanopyType.label.copyWith(color: fg)),
+                        ),
+                        if (provider.isAtHome) ...[
+                          const SizedBox(width: CanopySpace.s8),
+                          StatusLabel('Yours', color: onDark ? Colors.white : p.primaryInk),
+                        ],
+                      ]),
+                      if (!dense && filter.contextLabel != null)
+                        Text('${filter.scope.label} · ${filter.contextLabel}',
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: CanopyType.caption.copyWith(color: subFg)),
+                    ]),
+                  ),
+                  Icon(Icons.expand_more, size: 20, color: subFg),
+                ]),
               ),
             ),
           ),
-          if (!filter.isEverywhere) ...[
-            const SizedBox(width: 8),
-            _QuickAction(
-              label: 'All',
-              icon: Icons.public_rounded,
-              onDark: onDark,
-              onTap: provider.showEverywhere,
-            ),
-          ] else if (provider.homeLocation?.countyId != null) ...[
-            const SizedBox(width: 8),
-            _QuickAction(
-              label: 'My county',
-              icon: Icons.my_location_rounded,
-              onDark: onDark,
-              onTap: provider.resetToHome,
-            ),
-          ],
+        ),
+        if (!filter.isEverywhere) ...[
+          const SizedBox(width: CanopySpace.s8),
+          CanopyButton(
+            label: 'All',
+            variant: CanopyButtonVariant.secondary,
+            size: CanopyButtonSize.compact,
+            onPressed: provider.showEverywhere,
+          ),
+        ] else if (provider.homeLocation?.countyId != null) ...[
+          const SizedBox(width: CanopySpace.s8),
+          CanopyButton(
+            label: 'My county',
+            variant: CanopyButtonVariant.secondary,
+            size: CanopyButtonSize.compact,
+            onPressed: provider.resetToHome,
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class _HomeDot extends StatelessWidget {
-  final bool onDark;
-  const _HomeDot({required this.onDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppTheme.tertiary.withOpacity(onDark ? 0.30 : 0.18),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        'YOURS',
-        style: TextStyle(
-          fontSize: 8.5,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.6,
-          color: onDark ? Colors.white : AppTheme.darkGreen,
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool onDark;
-  final VoidCallback onTap;
-
-  const _QuickAction({
-    required this.label,
-    required this.icon,
-    required this.onDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = onDark ? Colors.white : AppTheme.primary;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: onDark
-                  ? Colors.white.withOpacity(0.24)
-                  : AppTheme.lightGreen.withOpacity(0.32),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 15, color: fg),
-              const SizedBox(width: 5),
-              Text(label,
-                  style: TextStyle(
-                      color: fg, fontSize: 12, fontWeight: FontWeight.w700)),
-            ],
-          ),
-        ),
-      ),
+      ]),
     );
   }
 }
@@ -276,15 +144,11 @@ class _QuickAction extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<void> showLocationPicker(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => ChangeNotifierProvider.value(
-      value: context.read<LocationProvider>(),
-      child: const LocationPickerSheet(),
-    ),
+  final provider = context.read<LocationProvider>();
+  return showCanopySheet<void>(
+    context,
+    tall: true,
+    builder: (_) => ChangeNotifierProvider.value(value: provider, child: const LocationPickerSheet()),
   );
 }
 
@@ -341,46 +205,19 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
   Widget build(BuildContext context) {
     final provider = context.watch<LocationProvider>();
     final geo = GeoRegistry.instance;
-
-    return DraggableScrollableSheet(
-      initialChildSize: 0.72,
-      minChildSize: 0.5,
-      maxChildSize: 0.94,
-      expand: false,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * .8,
+      child: Column(children: [
+        _header(provider),
+        if (_level == _PickerLevel.counties || _level == _PickerLevel.areas || _level == _PickerLevel.countries) _searchField(),
+        Divider(height: 1, color: context.canopy.outline),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+            children: _body(provider, geo),
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              _header(provider),
-              if (_level == _PickerLevel.counties ||
-                  _level == _PickerLevel.areas ||
-                  _level == _PickerLevel.countries)
-                _searchField(),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                  children: _body(provider, geo),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+        ),
+      ]),
     );
   }
 
@@ -396,42 +233,21 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
         '${GeoRegistry.instance.county(_drillCountyId)?.name ?? ''} areas',
     };
 
+    final p = context.canopy;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-      child: Row(
-        children: [
-          if (_level != _PickerLevel.root)
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-              icon: const Icon(Icons.arrow_back_rounded,
-                  size: 20, color: AppTheme.darkGreen),
-              onPressed: () => _go(_PickerLevel.root),
-            ),
-          if (_level != _PickerLevel.root) const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: AppTheme.darkGreen,
-                        letterSpacing: -0.3)),
-                const SizedBox(height: 2),
-                Text(
-                  'Showing: ${provider.filter.label}',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.darkGreen.withOpacity(0.6),
-                      fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(CanopySpace.s8, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s12),
+      child: Row(children: [
+        if (_level != _PickerLevel.root)
+          CanopyIconButton(icon: Icons.arrow_back, tooltip: 'Back', onPressed: () => _go(_PickerLevel.root))
+        else
+          const SizedBox(width: CanopySpace.s8),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: CanopyType.title.copyWith(color: p.ink)),
+            Text('Showing: ${provider.filter.label}', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+          ]),
+        ),
+      ]),
     );
   }
 
@@ -442,22 +258,8 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
       _ => 'Search all 47 counties',
     };
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: TextField(
-        controller: _searchCtrl,
-        decoration: InputDecoration(
-          hintText: hint,
-          isDense: true,
-          prefixIcon: const Icon(Icons.search_rounded, size: 19),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide:
-                BorderSide(color: AppTheme.lightGreen.withOpacity(0.4)),
-          ),
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, 0, CanopySpace.gutter, CanopySpace.s12),
+      child: CanopyTextField(controller: _searchCtrl, hint: hint, prefixIcon: Icons.search),
     );
   }
 
@@ -492,11 +294,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
               subtitle: '${r.countyIds.length} counties',
               selected: provider.filter.scope == LocationScope.region &&
                   provider.filter.anchor.regionId == r.id,
-              trailing: IconButton(
-                icon: const Icon(Icons.chevron_right_rounded, size: 20),
-                onPressed: () =>
-                    _go(_PickerLevel.counties, regionId: r.id),
-              ),
+              trailing: CanopyIconButton(icon: Icons.chevron_right, tooltip: 'Counties in ${r.name}', onPressed: () => _go(_PickerLevel.counties, regionId: r.id)),
               onTap: () => _apply(() => provider.selectRegion(r.id)),
             ),
         ];
@@ -521,11 +319,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
               isHome: provider.homeLocation?.countyId == c.id,
               trailing: c.areas.isEmpty
                   ? null
-                  : IconButton(
-                      icon: const Icon(Icons.chevron_right_rounded, size: 20),
-                      onPressed: () =>
-                          _go(_PickerLevel.areas, countyId: c.id),
-                    ),
+                  : CanopyIconButton(icon: Icons.chevron_right, tooltip: 'Areas in ${c.name}', onPressed: () => _go(_PickerLevel.areas, countyId: c.id)),
               onTap: () => _apply(() => provider.selectCounty(c.id)),
             ),
         ];
@@ -578,50 +372,28 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
         subtitle: 'All 47 Kenyan counties',
         leading: Icons.map_outlined,
         onTap: () => _go(_PickerLevel.counties),
-        trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+        trailing: Icon(Icons.chevron_right, size: 20, color: context.canopy.inkMuted),
       ),
       _Row(
         title: 'By region',
         subtitle: 'Coast, Rift Valley, Nyanza, Western…',
         leading: Icons.layers_outlined,
         onTap: () => _go(_PickerLevel.regions),
-        trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+        trailing: Icon(Icons.chevron_right, size: 20, color: context.canopy.inkMuted),
       ),
       _Row(
         title: 'By country',
         subtitle: '${geo.countries.length} countries',
         leading: Icons.flag_outlined,
         onTap: () => _go(_PickerLevel.countries),
-        trailing: const Icon(Icons.chevron_right_rounded, size: 20),
+        trailing: Icon(Icons.chevron_right, size: 20, color: context.canopy.inkMuted),
       ),
     ];
   }
 
-  Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 4, 0, 6),
-        child: Text(
-          text.toUpperCase(),
-          style: TextStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1.1,
-            color: AppTheme.darkGreen.withOpacity(0.45),
-          ),
-        ),
-      );
+  Widget _sectionLabel(String text) => CanopySectionHeader(title: text, padding: const EdgeInsets.only(top: CanopySpace.s8));
 
-  Widget _empty(String message) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Center(
-          child: Text(
-            message,
-            style: TextStyle(
-                color: AppTheme.darkGreen.withOpacity(0.55),
-                fontSize: 13,
-                fontWeight: FontWeight.w500),
-          ),
-        ),
-      );
+  Widget _empty(String message) => CanopyEmptyState(icon: Icons.search_off, title: message);
 }
 
 class _Row extends StatelessWidget {
@@ -645,99 +417,41 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.canopy;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Material(
-        color: selected
-            ? AppTheme.primary.withOpacity(0.08)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.only(bottom: CanopySpace.s8),
+      child: Semantics(
+        selected: selected,
+        button: true,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(CanopyRadius.sm),
           onTap: onTap,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            constraints: const BoxConstraints(minHeight: CanopySpace.minTouch + 8),
+            padding: const EdgeInsets.symmetric(horizontal: CanopySpace.s12, vertical: CanopySpace.s8),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: selected
-                    ? AppTheme.primary.withOpacity(0.35)
-                    : AppTheme.lightGreen.withOpacity(0.22),
-              ),
+              color: selected ? p.surfaceBrand : p.surface,
+              borderRadius: BorderRadius.circular(CanopyRadius.sm),
+              border: Border.all(color: selected ? p.ink : p.outline, width: selected ? 1.5 : 1),
             ),
-            child: Row(
-              children: [
-                if (leading != null) ...[
-                  Icon(leading,
-                      size: 19,
-                      color: selected
-                          ? AppTheme.primary
-                          : AppTheme.darkGreen.withOpacity(0.6)),
-                  const SizedBox(width: 11),
-                ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14.5,
-                                fontWeight:
-                                    selected ? FontWeight.w800 : FontWeight.w600,
-                                color: AppTheme.darkGreen,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ),
-                          if (isHome) ...[
-                            const SizedBox(width: 7),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppTheme.tertiary.withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(5),
-                              ),
-                              child: const Text('YOURS',
-                                  style: TextStyle(
-                                      fontSize: 8.5,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.6,
-                                      color: AppTheme.darkGreen)),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (subtitle != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            subtitle!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: AppTheme.darkGreen.withOpacity(0.58),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                if (trailing != null) trailing!,
-                if (trailing == null && selected)
-                  const Icon(Icons.check_circle_rounded,
-                      size: 19, color: AppTheme.primary),
+            child: Row(children: [
+              if (leading != null) ...[
+                Icon(leading, size: 20, color: selected ? p.primaryInk : p.inkMuted),
+                const SizedBox(width: CanopySpace.s12),
               ],
-            ),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Row(children: [
+                    Flexible(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: CanopyType.label.copyWith(color: p.ink))),
+                    if (isHome) ...[const SizedBox(width: CanopySpace.s8), StatusLabel('Yours', color: p.primaryInk)],
+                  ]),
+                  if (subtitle != null)
+                    Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                ]),
+              ),
+              if (trailing != null) trailing!,
+              if (trailing == null && selected) Icon(Icons.check_circle, size: 20, color: p.primaryInk),
+            ]),
           ),
         ),
       ),

@@ -526,7 +526,7 @@ class CommunityAuthService {
           .collection('org_rep')
           .doc(uid)
           .set({'guidelinesAcceptedAt': timestamp}, SetOptions(merge: true));
-      final orgRepData = orgDoc.data() as Map<String, dynamic>?;
+      final orgRepData = orgDoc.data();
       final orgName = orgRepData?['org_name'];
       if (orgName != null) {
         final orgQuery = await _db

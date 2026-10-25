@@ -1,699 +1,379 @@
+// lib/Shared/Activities/create_activity.dart
+//
+// Create activity (v2). One calm form: cover + photos, what (title, category,
+// description), where (city, area, venue), when (date, time), spots and
+// registration, then one primary "Publish activity". Org callers pass
+// orgId so the event can never be written orphaned.
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../Models/user.dart';
 import '../../Services/Activities/activity_service.dart';
-import '../theme/app_theme.dart';
+import '../Inputs/pin_picker_screen.dart';
+import '../../theme/canopy_components.dart';
 import 'activity.dart';
-import 'activity_detail.dart';
+import 'activity_detail_screen.dart';
 
-/// Neutral grey used for input-field accents (labels, prefix-icon chips,
-/// borders). Replaces the previous loud green so the fields read as calm
-/// white cards.
-const Color _kFieldAccent = Color(0xFF9AA0A6);
-
-/// When true, pops back to the caller on success instead of opening the detail
-/// screen. Used from org Operations so the event appears in the Events tab.
+/// When [returnOnSuccess] is true, pops back to the caller with the new id
+/// instead of opening the detail screen (org Operations uses this).
 class CreateActivityScreen extends StatefulWidget {
   final bool returnOnSuccess;
 
-  /// Org that owns the event. Callers already inside an org context (e.g. the
-  /// Operations tab) pass this explicitly — re-deriving it from the user
-  /// requires a network read that silently yields null when it fails, which
-  /// writes an event no org can see.
+  /// Org that owns the event. Callers already inside an org context pass it
+  /// explicitly — re-deriving it needs a network read that can silently
+  /// yield null and write an event no org can see.
   final String? orgId;
 
-  const CreateActivityScreen({
-    super.key,
-    this.returnOnSuccess = false,
-    this.orgId,
-  });
+  const CreateActivityScreen({super.key, this.returnOnSuccess = false, this.orgId});
 
   @override
   State<CreateActivityScreen> createState() => _CreateActivityScreenState();
 }
 
-class _CreateActivityScreenState extends State<CreateActivityScreen>
-    with SingleTickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
+class _CreateActivityScreenState extends State<CreateActivityScreen> {
+  /// Stored in `type`; must match the community filter keys.
+  static const _categories = [
+    ('cleanup', 'Clean-up', Icons.cleaning_services_outlined),
+    ('tree_planting', 'Tree planting', Icons.park_outlined),
+    ('awareness', 'Awareness', Icons.campaign_outlined),
+    ('training', 'Training', Icons.school_outlined),
+    ('monitoring', 'Monitoring', Icons.monitor_heart_outlined),
+    ('other', 'Other', Icons.more_horiz),
+  ];
 
-  // ── Form fields ──────────────────────────────────────────────────────────
-  RegistrationState _registrationState = RegistrationState.open;
+  final _title = TextEditingController();
+  final _desc = TextEditingController();
+  final _venue = TextEditingController();
+  int _spots = 10;
+  String _type = 'cleanup';
+  RegistrationState _registration = RegistrationState.open;
 
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _venueController = TextEditingController();
-  final _requiredParticipantsController = TextEditingController(text: '10');
-
-  // Location
-  String? _selectedCity;
-  String? _selectedArea;
-
-  /// Activity category. Stored in the doc's `type` field and what the
-  /// community event filters match on — so it must use the same keys as the
-  /// filter chips (cleanup / tree_planting / …). 'event' is intentionally not
-  /// an option: it was the old hardcoded value that no filter chip matched.
-  static const Map<String, String> _categoryOptions = {
-    'cleanup': 'Cleanup',
-    'tree_planting': 'Tree Planting',
-    'awareness': 'Awareness',
-    'training': 'Training',
-    'monitoring': 'Monitoring',
-    'other': 'Other',
-  };
-  String _selectedType = 'cleanup';
+  String? _city, _area;
   double _lat = 0, _lng = 0;
-  Map<String, List<Map<String, dynamic>>> _kenyaCities = {};
+  LatLng? _pin; // the exact spot; required
+  Map<String, List<Map<String, dynamic>>> _cities = {};
 
   DateTime? _date;
   TimeOfDay? _time;
-
-  // Images — max 4 slots
   final List<XFile?> _images = [null, null, null, null];
-
-  bool _saving = false;
-  final _picker = ImagePicker();
+  bool _saving = false, _showErrors = false;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-        duration: const Duration(milliseconds: 400), vsync: this)
-      ..forward();
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _loadCities();
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _venueController.dispose();
-    _requiredParticipantsController.dispose();
-    _animController.dispose();
+    _title.dispose();
+    _desc.dispose();
+    _venue.dispose();
     super.dispose();
   }
 
   Future<void> _loadCities() async {
     try {
-      final json =
-          await rootBundle.loadString('assets/Cities/African/KenyaCities.json');
-      final data = jsonDecode(json) as Map<String, dynamic>;
-      final map = data['kenyaCitiesAndLocations'] as Map<String, dynamic>;
-      final parsed = <String, List<Map<String, dynamic>>>{};
-      for (final e in map.entries) {
-        parsed[e.key] = (e.value as List).cast<Map<String, dynamic>>();
-      }
+      final raw = await rootBundle.loadString('assets/Cities/African/KenyaCities.json');
+      final map = (jsonDecode(raw) as Map<String, dynamic>)['kenyaCitiesAndLocations'] as Map<String, dynamic>;
+      if (!mounted) return;
       setState(() {
-        _kenyaCities = parsed;
-        _selectedCity = parsed.keys.contains('Nairobi')
-            ? 'Nairobi'
-            : (parsed.keys.isNotEmpty ? parsed.keys.first : null);
+        _cities = {for (final e in map.entries) e.key: (e.value as List).cast<Map<String, dynamic>>()};
+        _city ??= _cities.containsKey('Nairobi') ? 'Nairobi' : null;
       });
-    } catch (e) {
-      debugPrint('KenyaCities load error: $e');
+    } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> get _areas => _cities[_city] ?? const [];
+
+  Future<String?> _pickFromList(String title, List<String> options) =>
+      showCanopySheet<String>(context, tall: true, builder: (_) => _ListSheet(title: title, options: options));
+
+  Future<void> _pickCity() async {
+    final v = await _pickFromList('City or county', _cities.keys.toList()..sort());
+    if (v != null) {
+      setState(() {
+        _city = v;
+        _area = null;
+        _lat = _lng = 0;
+        _pin = null;
+      });
     }
   }
 
-  // ── Area lookup ──────────────────────────────────────────────────────────
-  List<Map<String, dynamic>> get _areas =>
-      (_selectedCity != null && _kenyaCities[_selectedCity!] != null)
-          ? _kenyaCities[_selectedCity!]!
-          : [];
-
-  Map<String, dynamic>? get _selectedAreaData => _selectedArea == null
-      ? null
-      : _areas.firstWhere(
-          (a) => a['area'] == _selectedArea,
-          orElse: () => {},
-        );
-
-  void _onAreaSelected(String? area) {
+  Future<void> _pickArea() async {
+    final v = await _pickFromList('Area', [for (final a in _areas) a['area'] as String? ?? ''].where((a) => a.isNotEmpty).toList());
+    if (v == null) return;
+    final d = _areas.firstWhere((a) => a['area'] == v, orElse: () => {});
+    final c = d['coordinates'] as Map<String, dynamic>? ?? {};
     setState(() {
-      _selectedArea = area;
-      final areaData = _selectedAreaData;
-      if (areaData != null) {
-        final coords = areaData['coordinates'] as Map<String, dynamic>? ?? {};
-        _lat = (coords['lat'] as num?)?.toDouble() ?? 0;
-        _lng = (coords['lng'] as num?)?.toDouble() ?? 0;
-      }
+      _area = v;
+      _lat = (c['lat'] as num?)?.toDouble() ?? 0;
+      _lng = (c['lng'] as num?)?.toDouble() ?? 0;
     });
   }
 
-  // ── Date / time ──────────────────────────────────────────────────────────
+  /// The exact spot, chosen on a map (or from where you're standing). Every
+  /// event has one, so it shows on the Events map.
+  Future<void> _pickPin() async {
+    final start = _pin ?? (_lat != 0 || _lng != 0 ? LatLng(_lat, _lng) : null);
+    final at = await pickPin(context, initial: start, title: 'Where is the event?');
+    if (at != null) setState(() => _pin = at);
+  }
+
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+    final now = DateTime.now();
+    final d = await showDatePicker(
       context: context,
-      firstDate: DateTime.now().subtract(const Duration(days: 1)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDate: DateTime.now(),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme:
-              Theme.of(context).colorScheme.copyWith(primary: AppTheme.primary),
-        ),
-        child: child!,
-      ),
+      initialDate: _date ?? now,
+      firstDate: now.subtract(const Duration(days: 1)),
+      lastDate: now.add(const Duration(days: 365)),
     );
-    if (mounted) setState(() => _date = picked);
+    if (d != null) setState(() => _date = d);
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme:
-              Theme.of(context).colorScheme.copyWith(primary: AppTheme.primary),
-        ),
-        child: child!,
-      ),
-    );
-    if (mounted) setState(() => _time = picked);
+    final t = await showTimePicker(context: context, initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0));
+    if (t != null) setState(() => _time = t);
   }
 
-  // ── Image picking ────────────────────────────────────────────────────────
   Future<void> _pickImage(int slot) async {
-    final file =
-        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (!mounted) return;
-    setState(() => _images[slot] = file);
+    final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (f != null && mounted) setState(() => _images[slot] = f);
   }
 
-  void _removeImage(int slot) => setState(() => _images[slot] = null);
+  String? get _error {
+    if (_images[0] == null) return 'Add a cover photo.';
+    if (_title.text.trim().isEmpty) return 'Give the activity a title.';
+    if (_city == null) return 'Choose a city.';
+    if (_pin == null) return 'Pin the exact location of the event on the map.';
+    if (_date == null || _time == null) return 'Pick a date and a time.';
+    return null;
+  }
 
-  // ── Submit ───────────────────────────────────────────────────────────────
   Future<void> _create() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    if (_date == null || _time == null) {
-      _showSnack('Please select date and time');
-      return;
-    }
-    if (_selectedCity == null) {
-      _showSnack('Please select a city');
-      return;
-    }
-    if (_images[0] == null) {
-      _showSnack('Please add a cover photo');
-      return;
-    }
-
-    final dateTime = DateTime(
-      _date!.year,
-      _date!.month,
-      _date!.day,
-      _time!.hour,
-      _time!.minute,
-    );
-
+    setState(() => _showErrors = true);
+    if (_error != null) return;
+    final at = DateTime(_date!.year, _date!.month, _date!.day, _time!.hour, _time!.minute);
     setState(() => _saving = true);
-
     try {
       final user = Provider.of<F_User?>(context, listen: false);
-      final location = ActivityLocation(
-        area: _selectedArea ?? _selectedCity!,
-        city: _selectedCity!,
-        venue: _venueController.text.trim(),
-        lat: _lat,
-        lng: _lng,
-      );
-
-      // Prefer the org id the caller already resolved. Only fall back to the
-      // network read when we weren't handed one.
       final orgId = widget.orgId ?? await user?.orgId;
-
-      // An org rep opened this from an org context but we couldn't resolve the
-      // org id (typically a dropped Firestore read). Writing the event now
-      // would set orgId: null — visible in the community feed but invisible to
-      // the org that created it. Stop rather than orphan it.
+      // Opened from an org context but the org couldn't be confirmed —
+      // writing now would orphan the event. Stop instead.
       if (widget.returnOnSuccess && orgId == null) {
-        if (!mounted) return;
-        _showSnack(
-            'Could not confirm your organisation. Check your connection and try again.');
+        if (mounted) {
+          showCanopySnack(context, "Couldn't confirm your organisation. Check your connection and try again.", error: true);
+        }
         return;
       }
-
       String? organizerName;
       if (orgId != null) {
         try {
-          final orgDoc = await FirebaseFirestore.instance
-              .collection('organizations')
-              .doc(orgId)
-              .get();
-          organizerName = orgDoc.data()?['org_name'] as String?;
-        } catch (e) {
-          debugPrint('Create activity org lookup error: $e');
-        }
+          final o = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+          organizerName = (o.data()?['org_name'] ?? o.data()?['name']) as String?;
+        } catch (_) {}
       }
-
       final id = await ActivityService().createActivity(
-        type: _selectedType,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        location: location.toMap(),
-        dateTime: dateTime,
-        requiredParticipants:
-            int.tryParse(_requiredParticipantsController.text.trim()) ?? 10,
+        type: _type,
+        title: _title.text.trim(),
+        description: _desc.text.trim(),
+        location: ActivityLocation(area: _area ?? _city!, city: _city!, venue: _venue.text.trim(), lat: _pin!.latitude, lng: _pin!.longitude).toMap(),
+        dateTime: at,
+        requiredParticipants: _spots,
         createdBy: user?.uid,
         orgId: orgId,
         organizerName: organizerName,
         images: _images,
-        registrationState: _registrationState,
+        registrationState: _registration,
       );
-
       if (!mounted) return;
-
+      showCanopySnack(context, 'Activity published.');
       if (widget.returnOnSuccess) {
         Navigator.pop(context, id);
-        return;
+      } else {
+        await Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ActivityDetailScreen(activityId: id)));
       }
-
-      await Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ActivityDetailScreen(activityId: id),
-        ),
-      );
-    } catch (e, stackTrace) {
-      debugPrint('Create activity error: $e\n$stackTrace');
-      if (!mounted) return;
-      _showSnack('Could not create activity. Please try again.');
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't publish the activity. Try again.", error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    ));
-  }
-
-  String _formatDate(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-
-  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final cities = _kenyaCities.keys.toList()..sort();
+    final p = context.canopy;
+    const gap = SizedBox(height: CanopySpace.s16);
+    Widget eyebrow(String t) => Padding(
+          padding: const EdgeInsets.only(top: CanopySpace.section, bottom: CanopySpace.s8),
+          child: Text(t, style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+        );
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
-        leading: IconButton(
-          icon: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppTheme.lightGreen.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.close, size: 18, color: AppTheme.darkGreen),
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'New activity'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          // ── Photos ─────────────────────────────────────────────────────
+          AspectRatio(aspectRatio: 16 / 9, child: _slot(0, p)),
+          const SizedBox(height: CanopySpace.s8),
+          Row(children: [
+            for (var i = 1; i < 4; i++) ...[
+              if (i > 1) const SizedBox(width: CanopySpace.s8),
+              Expanded(child: AspectRatio(aspectRatio: 1, child: _slot(i, p))),
+            ],
+          ]),
+          const SizedBox(height: CanopySpace.s4),
+          Text('The first photo is the cover.', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+
+          // ── What ───────────────────────────────────────────────────────
+          eyebrow('WHAT'),
+          CanopyTextField(label: 'Title', hint: 'e.g. Saturday river clean-up', controller: _title, maxLength: 80, onChanged: (_) => setState(() {})),
+          gap,
+          Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s8, children: [
+            for (final c in _categories)
+              CanopyFilterChip(label: c.$2, icon: c.$3, selected: _type == c.$1, onTap: () => setState(() => _type = c.$1)),
+          ]),
+          gap,
+          CanopyTextField(
+            label: 'Description',
+            hint: 'What people will do, what to bring',
+            controller: _desc,
+            minLines: 3,
+            maxLines: 8,
+            maxLength: 1500,
           ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        centerTitle: true,
-        title: const Text(
-          'Create Activity',
-          style: TextStyle(
-              color: AppTheme.darkGreen,
-              fontWeight: FontWeight.w800,
-              fontSize: 18),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-              height: 1, color: AppTheme.lightGreen.withOpacity(0.18)),
-        ),
-      ),
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: Form(
-          key: _formKey,
-          child: Column(children: [
+
+          // ── Where ──────────────────────────────────────────────────────
+          eyebrow('WHERE'),
+          CanopyPickerField(
+            label: 'City or county',
+            value: _city,
+            placeholder: 'Choose',
+            icon: Icons.location_city_outlined,
+            onTap: _pickCity,
+          ),
+          if (_city != null && _areas.isNotEmpty) ...[
+            gap,
+            CanopyPickerField(label: 'Area', value: _area, placeholder: 'Choose', icon: Icons.place_outlined, onTap: _pickArea),
+          ],
+          gap,
+          CanopyPickerField(
+            label: 'Exact location (required)',
+            value: _pin == null ? null : '${_pin!.latitude.toStringAsFixed(5)}, ${_pin!.longitude.toStringAsFixed(5)}',
+            placeholder: 'Pin it on the map',
+            icon: Icons.push_pin_outlined,
+            onTap: _pickPin,
+          ),
+          gap,
+          CanopyTextField(label: 'Meeting point (optional)', hint: 'e.g. Gate 2, Karura Forest', controller: _venue),
+
+          // ── When ───────────────────────────────────────────────────────
+          eyebrow('WHEN'),
+          Row(children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // ── Basic Info ──────────────────────────────────
-                      _SectionLabel(
-                          icon: Icons.edit_outlined,
-                          label: 'Basic Info',
-                          color: AppTheme.primary),
-                      const SizedBox(height: 10),
-
-                      _StyledField(
-                        controller: _titleController,
-                        label: 'Title',
-                        icon: Icons.title,
-                        accentColor: _kFieldAccent,
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Title is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
-                      _StyledTextArea(
-                        controller: _descriptionController,
-                        label: 'Description',
-                        accentColor: _kFieldAccent,
-                      ),
-                      const SizedBox(height: 12),
-                      _StyledDropdown(
-                        value: _categoryOptions[_selectedType],
-                        items: _categoryOptions.values.toList(),
-                        label: 'Category',
-                        icon: Icons.category_outlined,
-                        accentColor: _kFieldAccent,
-                        onChanged: (label) {
-                          if (label == null) return;
-                          final key = _categoryOptions.entries
-                              .firstWhere((e) => e.value == label)
-                              .key;
-                          setState(() => _selectedType = key);
-                        },
-                      ),
-
-                      const SizedBox(height: 22),
-
-                      // ── Location ─────────────────────────────────────
-                      _SectionLabel(
-                          icon: Icons.map_outlined,
-                          label: 'Location',
-                          color: AppTheme.accent),
-                      const SizedBox(height: 10),
-
-                      _StyledDropdown(
-                        value: _selectedCity,
-                        items: cities,
-                        label: 'City / County',
-                        icon: Icons.location_city_outlined,
-                        accentColor: _kFieldAccent,
-                        onChanged: (val) => setState(() {
-                          _selectedCity = val;
-                          _selectedArea = null;
-                          _lat = 0;
-                          _lng = 0;
-                        }),
-                        validator: (v) => (v == null || v.isEmpty)
-                            ? 'City is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
-                      _StyledDropdown(
-                        value: _selectedArea,
-                        items: _areas.map((a) => a['area'] as String).toList(),
-                        label: 'Area / Neighbourhood',
-                        icon: Icons.pin_drop_outlined,
-                        accentColor: _kFieldAccent,
-                        onChanged: _onAreaSelected,
-                      ),
-                      const SizedBox(height: 12),
-                      _StyledField(
-                        controller: _venueController,
-                        label: 'Venue (e.g. Gate 2, Karura Forest)',
-                        icon: Icons.place_outlined,
-                        accentColor: _kFieldAccent,
-                      ),
-
-                      if (_lat != 0 || _lng != 0) ...[
-                        const SizedBox(height: 8),
-                        Row(children: [
-                          Icon(Icons.my_location,
-                              size: 12,
-                              color: AppTheme.accent.withOpacity(0.6)),
-                          const SizedBox(width: 5),
-                          Text(
-                            'Coordinates: ${_lat.toStringAsFixed(4)}, ${_lng.toStringAsFixed(4)}',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.accent.withOpacity(0.7)),
-                          ),
-                        ]),
-                      ],
-
-                      const SizedBox(height: 22),
-
-                      // ── Schedule ──────────────────────────────────────
-                      _SectionLabel(
-                          icon: Icons.schedule_outlined,
-                          label: 'Schedule',
-                          color: AppTheme.secondary),
-                      const SizedBox(height: 10),
-
-                      Row(children: [
-                        Expanded(
-                          child: _DateTimeButton(
-                            icon: Icons.calendar_today_outlined,
-                            label: _date == null
-                                ? 'Pick Date'
-                                : _formatDate(_date!),
-                            color: AppTheme.secondary,
-                            onTap: _pickDate,
-                            filled: _date != null,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _DateTimeButton(
-                            icon: Icons.access_time_rounded,
-                            label: _time == null
-                                ? 'Pick Time'
-                                : _time!.format(context),
-                            color: AppTheme.secondary,
-                            onTap: _pickTime,
-                            filled: _time != null,
-                          ),
-                        ),
-                      ]),
-                      const SizedBox(height: 12),
-                      _StyledField(
-                        controller: _requiredParticipantsController,
-                        label: 'Required Participants',
-                        icon: Icons.people_outline,
-                        accentColor: _kFieldAccent,
-                        keyboardType: TextInputType.number,
-                        validator: (v) {
-                          final n = int.tryParse((v ?? '').trim());
-                          return (n == null || n <= 0)
-                              ? 'Enter a valid number'
-                              : null;
-                        },
-                      ),
-
-                      const SizedBox(height: 22),
-
-                      // ── Registration ──────────────────────────────────
-                      _SectionLabel(
-                          icon: Icons.how_to_reg_outlined,
-                          label: 'Registration',
-                          color: AppTheme.tertiary),
-                      const SizedBox(height: 10),
-
-                      Row(
-                        children: RegistrationState.values.map((s) {
-                          final isSelected = _registrationState == s;
-                          final isOpen = s == RegistrationState.open;
-                          final color = isOpen
-                              ? const Color(0xFF2E7D32)
-                              : Colors.red.shade600;
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () =>
-                                  setState(() => _registrationState = s),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                margin: EdgeInsets.only(
-                                    right: s == RegistrationState.open ? 8 : 0),
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 12, horizontal: 14),
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? color.withOpacity(0.08)
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? color
-                                        : Colors.grey.shade200,
-                                    width: isSelected ? 2 : 1.2,
-                                  ),
-                                ),
-                                child: Row(children: [
-                                  Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(
-                                      color: isSelected
-                                          ? color
-                                          : Colors.grey.shade300,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(s.label,
-                                      style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: isSelected
-                                              ? color
-                                              : Colors.black54)),
-                                  if (isSelected) ...[
-                                    const Spacer(),
-                                    Icon(Icons.check_circle,
-                                        size: 16, color: color),
-                                  ],
-                                ]),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                      const SizedBox(height: 22),
-
-                      // ── Photos (4 slots) ──────────────────────────────
-                      _SectionLabel(
-                          icon: Icons.photo_library_outlined,
-                          label:
-                              'Photos  (${_images.where((i) => i != null).length}/4)',
-                          color: AppTheme.darkGreen),
-                      const SizedBox(height: 10),
-
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          childAspectRatio: 1.5,
-                        ),
-                        itemCount: 4,
-                        itemBuilder: (context, i) => _ImageSlot(
-                          index: i,
-                          file: _images[i],
-                          onPick: () => _pickImage(i),
-                          onRemove: () => _removeImage(i),
-                          isFirst: i == 0,
-                        ),
-                      ),
-
-                      const SizedBox(height: 8),
-                      const Text(
-                        'First photo will be used as the cover image',
-                        style: TextStyle(fontSize: 11, color: Colors.black38),
-                      ),
-
-                      const SizedBox(height: 24),
-                    ]),
+              child: CanopyPickerField(
+                label: 'Date',
+                value: _date == null ? null : DateFormat('EEE d MMM').format(_date!),
+                placeholder: 'Pick',
+                icon: Icons.calendar_today_outlined,
+                onTap: _pickDate,
               ),
             ),
-
-            // ── Action row ────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 16,
-                    offset: const Offset(0, -4),
-                  )
-                ],
+            const SizedBox(width: CanopySpace.s12),
+            Expanded(
+              child: CanopyPickerField(
+                label: 'Time',
+                value: _time?.format(context),
+                placeholder: 'Pick',
+                icon: Icons.schedule,
+                onTap: _pickTime,
               ),
-              child: Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppTheme.darkGreen,
-                      side: BorderSide(
-                          color: AppTheme.lightGreen.withOpacity(0.5)),
-                      minimumSize: const Size(0, 50),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: const Text('Cancel',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          AppTheme.darkGreen,
-                          AppTheme.primary,
-                          AppTheme.secondary,
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primary.withOpacity(0.28),
-                          blurRadius: 14,
-                          offset: const Offset(0, 5),
-                        )
-                      ],
-                    ),
-                    child: Material(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(14),
-                      child: InkWell(
-                        onTap: _saving ? null : _create,
-                        borderRadius: BorderRadius.circular(14),
-                        child: Center(
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
-                              : const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.add_circle_outline,
-                                        color: Colors.white, size: 18),
-                                    SizedBox(width: 8),
-                                    Text('Create Activity',
-                                        style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700)),
-                                  ],
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+            ),
+          ]),
+
+          // ── Who ────────────────────────────────────────────────────────
+          eyebrow('WHO'),
+          Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Spots', style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+                Text('How many people you need', style: CanopyType.caption.copyWith(color: p.inkMuted)),
               ]),
             ),
+            CanopyIconButton(
+              icon: Icons.remove,
+              tooltip: 'Fewer spots',
+              onPressed: _spots > 1 ? () => setState(() => _spots = _spots > 5 ? _spots - 5 : _spots - 1) : null,
+            ),
+            SizedBox(
+              width: 48,
+              child: Text('$_spots', textAlign: TextAlign.center, style: CanopyType.title.copyWith(color: p.ink)),
+            ),
+            CanopyIconButton(
+              icon: Icons.add,
+              tooltip: 'More spots',
+              onPressed: () => setState(() => _spots = _spots >= 5 ? _spots + 5 : _spots + 1),
+            ),
+          ]),
+          gap,
+          CanopySegmented<RegistrationState>(
+            options: const [(RegistrationState.open, 'Registration open'), (RegistrationState.closed, 'Closed for now')],
+            value: _registration,
+            onChanged: (v) => setState(() => _registration = v),
+          ),
+          if (_showErrors && _error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: CanopySpace.s16),
+              child: Text(_error!, style: CanopyType.body.copyWith(color: p.danger)),
+            ),
+        ],
+      ),
+      sticky: StickyActionBar(children: [
+        CanopyButton(label: 'Publish activity', expand: true, loading: _saving, onPressed: _create),
+      ]),
+    );
+  }
+
+  Widget _slot(int i, CanopyPalette p) {
+    final f = _images[i];
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(CanopyRadius.sm),
+      child: Material(
+        color: p.surfaceMuted,
+        child: InkWell(
+          onTap: () => _pickImage(i),
+          child: Stack(fit: StackFit.expand, children: [
+            if (f != null)
+              Image.file(File(f.path), fit: BoxFit.cover)
+            else
+              Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.add_photo_alternate_outlined, color: _showErrors && i == 0 ? p.danger : p.inkMuted),
+                  if (i == 0) Text('Add a cover photo', style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                ]),
+              ),
+            if (f != null)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: CanopyIconButton(
+                  icon: Icons.close,
+                  tooltip: 'Remove photo',
+                  onImage: true,
+                  onPressed: () => setState(() => _images[i] = null),
+                ),
+              ),
           ]),
         ),
       ),
@@ -701,438 +381,29 @@ class _CreateActivityScreenState extends State<CreateActivityScreen>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// IMAGE SLOT
-// ─────────────────────────────────────────────────────────────────────────────
-class _ImageSlot extends StatelessWidget {
-  final int index;
-  final XFile? file;
-  final VoidCallback onPick;
-  final VoidCallback onRemove;
-  final bool isFirst;
-
-  const _ImageSlot({
-    required this.index,
-    required this.file,
-    required this.onPick,
-    required this.onRemove,
-    required this.isFirst,
-  });
+class _ListSheet extends StatefulWidget {
+  final String title;
+  final List<String> options;
+  const _ListSheet({required this.title, required this.options});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: file == null ? onPick : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        decoration: BoxDecoration(
-          color: file != null
-              ? Colors.transparent
-              : AppTheme.lightGreen.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: file != null
-                ? AppTheme.primary.withOpacity(0.3)
-                : AppTheme.lightGreen.withOpacity(0.3),
-            width: isFirst && file == null ? 2 : 1.2,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(11),
-          child: file == null
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.add_photo_alternate_outlined,
-                      size: 26,
-                      color: isFirst
-                          ? AppTheme.primary.withOpacity(0.5)
-                          : AppTheme.lightGreen.withOpacity(0.6),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      index == 0 ? 'Cover Photo' : 'Photo ${index + 1}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isFirst
-                            ? AppTheme.primary.withOpacity(0.6)
-                            : Colors.black38,
-                      ),
-                    ),
-                    if (isFirst) ...[
-                      const SizedBox(height: 2),
-                      Text('Required',
-                          style: TextStyle(
-                              fontSize: 9,
-                              color: AppTheme.primary.withOpacity(0.5))),
-                    ]
-                  ],
-                )
-              : Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.file(
-                      File(file!.path),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: AppTheme.lightGreen.withOpacity(0.15),
-                        child: const Center(
-                          child: Icon(Icons.broken_image_outlined,
-                              size: 30, color: AppTheme.primary),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: GestureDetector(
-                        onTap: onRemove,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black.withOpacity(0.12),
-                                  blurRadius: 4)
-                            ],
-                          ),
-                          child: const Icon(Icons.close,
-                              size: 12, color: Colors.red),
-                        ),
-                      ),
-                    ),
-                    if (isFirst)
-                      Positioned(
-                        bottom: 4,
-                        left: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text('Cover',
-                              style: TextStyle(
-                                  fontSize: 9,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
+  State<_ListSheet> createState() => _ListSheetState();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// REUSABLE FORM WIDGETS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _SectionLabel(
-      {required this.icon, required this.label, required this.color});
+class _ListSheetState extends State<_ListSheet> {
+  String _q = '';
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, size: 14, color: color),
-      ),
-      const SizedBox(width: 8),
-      Text(label,
-          style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: color,
-              letterSpacing: 0.2)),
-      const SizedBox(width: 10),
-      Expanded(child: Container(height: 1, color: color.withOpacity(0.12))),
+    final list = widget.options.where((o) => o.toLowerCase().contains(_q)).take(80).toList();
+    return CanopySheetBody(title: widget.title, children: [
+      if (widget.options.length > 10) ...[
+        CanopyTextField.search(hint: 'Search', onChanged: (v) => setState(() => _q = v.trim().toLowerCase())),
+        const SizedBox(height: CanopySpace.s12),
+      ],
+      CanopyListGroup(children: [
+        for (final o in list) CanopyListRow(title: o, chevron: false, onTap: () => Navigator.pop(context, o)),
+      ]),
     ]);
-  }
-}
-
-OutlineInputBorder _border(Color c, {double width = 1.2}) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(14),
-    borderSide: BorderSide(color: c, width: width));
-
-class _StyledField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final IconData icon;
-  final Color accentColor;
-  final TextInputType? keyboardType;
-  final String? Function(String?)? validator;
-
-  const _StyledField({
-    required this.controller,
-    required this.label,
-    required this.icon,
-    required this.accentColor,
-    this.keyboardType,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      style: const TextStyle(
-          color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle:
-            TextStyle(color: accentColor.withOpacity(0.75), fontSize: 13),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, size: 15, color: accentColor),
-          ),
-        ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 52, minHeight: 52),
-        border: _border(accentColor.withOpacity(0.2)),
-        enabledBorder: _border(accentColor.withOpacity(0.22)),
-        focusedBorder: _border(accentColor, width: 2),
-        errorBorder: _border(Colors.red.shade300),
-        focusedErrorBorder: _border(Colors.red.shade400, width: 2),
-      ),
-      validator: validator,
-    );
-  }
-}
-
-class _StyledTextArea extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final Color accentColor;
-
-  const _StyledTextArea({
-    required this.controller,
-    required this.label,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      maxLines: 4,
-      style: const TextStyle(color: AppTheme.darkGreen, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        alignLabelWithHint: true,
-        labelStyle:
-            TextStyle(color: accentColor.withOpacity(0.75), fontSize: 13),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.all(14),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 68),
-          child: Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(Icons.notes, size: 15, color: accentColor),
-          ),
-        ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 52, minHeight: 52),
-        border: _border(accentColor.withOpacity(0.2)),
-        enabledBorder: _border(accentColor.withOpacity(0.22)),
-        focusedBorder: _border(accentColor, width: 2),
-        errorBorder: _border(Colors.red.shade300),
-      ),
-      validator: (v) =>
-          (v == null || v.trim().isEmpty) ? 'Description is required' : null,
-    );
-  }
-}
-
-class _StyledDropdown extends StatelessWidget {
-  final String? value;
-  final List<String> items;
-  final String label;
-  final IconData icon;
-  final Color accentColor;
-  final ValueChanged<String?> onChanged;
-  final String? Function(String?)? validator;
-
-  const _StyledDropdown({
-    required this.value,
-    required this.items,
-    required this.label,
-    required this.icon,
-    required this.accentColor,
-    required this.onChanged,
-    this.validator,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      dropdownColor: Colors.white,
-      menuMaxHeight: 280,
-      style: const TextStyle(
-          color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
-      icon: Icon(Icons.keyboard_arrow_down_rounded,
-          color: accentColor.withOpacity(0.6), size: 20),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle:
-            TextStyle(color: accentColor.withOpacity(0.75), fontSize: 13),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(icon, size: 15, color: accentColor),
-          ),
-        ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 52, minHeight: 52),
-        border: _border(accentColor.withOpacity(0.2)),
-        enabledBorder: _border(accentColor.withOpacity(0.22)),
-        focusedBorder: _border(accentColor, width: 2),
-        errorBorder: _border(Colors.red.shade300),
-      ),
-      items: items
-          .map((c) => DropdownMenuItem<String>(value: c, child: Text(c)))
-          .toList(),
-      onChanged: onChanged,
-      validator: validator,
-    );
-  }
-}
-
-class _DateTimeButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  final bool filled;
-
-  const _DateTimeButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-    this.filled = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-        decoration: BoxDecoration(
-          color: filled ? color.withOpacity(0.07) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: filled ? color : color.withOpacity(0.22),
-            width: filled ? 1.5 : 1.2,
-          ),
-        ),
-        child: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 14, color: color),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: filled ? color : Colors.black45),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ACTIVITY TYPE CONFIG  (kept for use by other files that import from here)
-// ─────────────────────────────────────────────────────────────────────────────
-class ActivityTypeConfig {
-  final Color color;
-  final Color lightColor;
-  final IconData icon;
-  final List<Color> gradient;
-
-  const ActivityTypeConfig({
-    required this.color,
-    required this.lightColor,
-    required this.icon,
-    required this.gradient,
-  });
-
-  static ActivityTypeConfig forType(ActivityType type) {
-    switch (type) {
-      case ActivityType.cleanup:
-        return ActivityTypeConfig(
-          color: AppTheme.accent,
-          lightColor: AppTheme.accent.withOpacity(0.1),
-          icon: Icons.cleaning_services_outlined,
-          gradient: [AppTheme.accent, const Color(0xFF2EBFA5)],
-        );
-      case ActivityType.event:
-        return ActivityTypeConfig(
-          color: AppTheme.tertiary,
-          lightColor: AppTheme.tertiary.withOpacity(0.1),
-          icon: Icons.celebration_outlined,
-          gradient: [AppTheme.tertiary, const Color(0xFFE8A020)],
-        );
-      case ActivityType.task:
-        return ActivityTypeConfig(
-          color: AppTheme.secondary,
-          lightColor: AppTheme.secondary.withOpacity(0.1),
-          icon: Icons.task_alt_outlined,
-          gradient: [AppTheme.secondary, AppTheme.primary],
-        );
-    }
   }
 }

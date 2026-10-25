@@ -1,813 +1,240 @@
+// lib/Culture/Heritage/Archive/heritage_archive_screen.dart
+//
+// Archive (ARCHIVE_HANDOFF §3.1, F). Title + count → search → chips (All ·
+// Drafts · types present) → ArchiveEntryRows, each showing visibility → ⋯
+// opens the EntryActionsSheet: Edit content · Edit locality · Manage media ·
+// Preview as a member · Change visibility (confirmed) · Delete draft (drafts
+// only — published entries are sealed instead, never deleted from the app).
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../Shared/theme/app_theme.dart';
-import '../Components/index.dart';
-import '../Models/index.dart';
-import '../Services/heritage_providers.dart';
-import '../heritage_theme.dart';
-import '../Create/country_completeness_card.dart';
-import '../Create/edit_entry_screen.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  HeritageArchiveScreen
-//
-//  Shows all cultural entries uploaded by this org with:
-//    · Category + visibility filter chips
-//    · Edit button per card (opens edit stub)
-//    · Empty state with call to action
-// ─────────────────────────────────────────────────────────────────────────────
+import '../../../theme/canopy_components.dart';
+import '../../archive_ui.dart';
+import '../Create/create_entry_screen.dart';
+import '../Create/edit_entry_screen.dart';
+import '../Create/locality_selector_sheet.dart';
+import 'heritage_post_screen.dart';
+import '../Media/heritage_media_screen.dart';
+import '../Models/cultural_entry.dart';
+import '../Services/heritage_content_types.dart';
+import '../Services/heritage_providers.dart';
 
 class HeritageArchiveScreen extends StatefulWidget {
   final String orgId;
-
-  const HeritageArchiveScreen({required this.orgId, Key? key}) : super(key: key);
+  final bool canEdit;
+  const HeritageArchiveScreen({required this.orgId, this.canEdit = true, super.key});
 
   @override
   State<HeritageArchiveScreen> createState() => _HeritageArchiveScreenState();
 }
 
 class _HeritageArchiveScreenState extends State<HeritageArchiveScreen> {
-  String _selectedCategory = 'All';
-  String _selectedVisibility = 'All';
-  String _searchQuery = '';
-  final _searchController = TextEditingController();
-
-  static const _categories = [
-    'All', 'oral_tradition', 'food_tradition', 'ingredient',
-    'music_tradition', 'instrument', 'ceremony', 'craft_technique',
-    'clothing_tradition', 'language_entry', 'place_knowledge',
-    'medicine_knowledge', 'person',
-  ];
-
-  static const _categoryLabels = {
-    'All': 'All',
-    'oral_tradition': 'Oral Tradition',
-    'food_tradition': 'Food',
-    'ingredient': 'Ingredient',
-    'music_tradition': 'Music',
-    'instrument': 'Instrument',
-    'ceremony': 'Ceremony',
-    'craft_technique': 'Craft',
-    'clothing_tradition': 'Clothing',
-    'language_entry': 'Language',
-    'place_knowledge': 'Place',
-    'medicine_knowledge': 'Medicine',
-    'person': 'Person',
-  };
-
-  static const _visibilities = ['All', 'public', 'community_only', 'restricted', 'sealed'];
-
-  static const _visibilityLabels = {
-    'All': 'All',
-    'public': 'Public',
-    'community_only': 'Community Only',
-    'restricted': 'Restricted',
-    'sealed': 'Sealed',
-  };
+  String _q = '';
+  String? _filter; // null all · 'drafts' · a content type key
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<HeritageEntriesProvider>().fetchEntries(widget.orgId);
-    });
-    _searchController.addListener(() {
-      setState(() => _searchQuery = _searchController.text.toLowerCase().trim());
+      if (mounted) context.read<HeritageEntriesProvider>().fetchEntries(widget.orgId);
     });
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<CulturalEntry> _filter(List<CulturalEntry> entries) {
-    return entries.where((e) {
-      final catMatch =
-          _selectedCategory == 'All' || e.contentType == _selectedCategory;
-      final visMatch =
-          _selectedVisibility == 'All' || e.visibility == _selectedVisibility;
-      final searchMatch = _searchQuery.isEmpty ||
-          e.title.toLowerCase().contains(_searchQuery) ||
-          (e.locality?.toLowerCase().contains(_searchQuery) ?? false);
-      return catMatch && visMatch && searchMatch;
-    }).toList();
-  }
+  void _add([String? type]) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CreateEntryScreen(orgId: widget.orgId)));
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<HeritageEntriesProvider>();
-    final entries = provider.entries;
-    final isLoading = provider.isLoading;
+    final p = context.canopy;
+    final prov = context.watch<HeritageEntriesProvider>();
+    final all = prov.entries;
+    final q = _q.toLowerCase();
+    final shown = all.where((e) {
+      if (_filter == 'drafts' && !e.isDraft) return false;
+      if (_filter != null && _filter != 'drafts' && e.contentType != _filter) return false;
+      if (q.isEmpty) return true;
+      return '${e.title} ${e.description ?? ''} ${e.locality ?? ''}'.toLowerCase().contains(q);
+    }).toList();
+    final types = [for (final t in HeritageContentTypes.ordered) if (all.any((e) => e.contentType == t.key)) t];
+    final drafts = all.where((e) => e.isDraft).length;
 
-    if (isLoading) {
-      return Center(
-        child: CircularProgressIndicator(color: AppTheme.tertiary),
-      );
-    }
-
-    final filtered = _filter(entries);
-
-    return CustomScrollView(
-      slivers: [
-        // Stats strip
-        SliverToBoxAdapter(
-          child: _buildStatsStrip(entries),
-        ),
-
-        // Per-country "missing features" checklist (Phase 5.3)
-        SliverToBoxAdapter(
-          child: CountryCompletenessCard(orgId: widget.orgId),
-        ),
-
-        // Search bar
-        SliverToBoxAdapter(
-          child: _buildSearchBar(),
-        ),
-
-        // Category filter
-        SliverToBoxAdapter(
-          child: _buildFilterRow(),
-        ),
-
-        // Entry list or empty state
-        if (filtered.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: _buildEmptyState(entries.isEmpty),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, i) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _buildEntryCard(filtered[i]),
-                ),
-                childCount: filtered.length,
+    return CanopyScaffold(
+      body: prov.isLoading && all.isEmpty
+          ? ListView(padding: const EdgeInsets.all(CanopySpace.gutter), children: const [CanopyListSkeleton(rows: 5, leadingSize: 60)])
+          : CustomScrollView(slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, 0),
+                sliver: SliverList.list(children: [
+                  Text('Archive', style: CanopyType.display.copyWith(color: p.ink)),
+                  Text('${all.length - drafts} entr${all.length - drafts == 1 ? 'y' : 'ies'}${drafts > 0 ? ' · $drafts draft${drafts == 1 ? '' : 's'}' : ''}',
+                      style: CanopyType.label.copyWith(color: p.inkMuted)),
+                  const SizedBox(height: CanopySpace.s12),
+                  CanopyTextField.search(hint: 'Search the archive', onChanged: (v) => setState(() => _q = v.trim())),
+                ]),
               ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // ── Stats strip ──────────────────────────────────────────────────────────
-
-  Widget _buildStatsStrip(List<CulturalEntry> entries) {
-    final public = entries.where((e) => e.visibility == 'public').length;
-    final communities = entries
-        .map((e) => e.locality)
-        .where((l) => l != null && l.isNotEmpty)
-        .toSet()
-        .length;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: HeritageTheme.heritageCardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0x1FC4A961)),
-        boxShadow: [HeritageTheme.heritageCardShadow],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _statCell(entries.length.toString(), 'ENTRIES'),
-          _divider(),
-          _statCell(communities.toString(), 'COMMUNITIES'),
-          _divider(),
-          _statCell(public.toString(), 'PUBLIC'),
-        ],
-      ),
-    );
-  }
-
-  Widget _statCell(String number, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          number,
-          style: TextStyle(
-            color: AppTheme.darkGreen,
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          style: TextStyle(
-            color: AppTheme.darkGreen.withOpacity(0.45),
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.6,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _divider() => Container(
-        width: 1,
-        height: 28,
-        color: const Color(0x1FC4A961),
-      );
-
-  // ── Search bar ───────────────────────────────────────────────────────────
-
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Search entries…',
-          hintStyle: TextStyle(color: AppTheme.darkGreen.withOpacity(0.35), fontSize: 14),
-          prefixIcon: Icon(Icons.search, color: AppTheme.darkGreen.withOpacity(0.4), size: 20),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: Icon(Icons.clear, size: 18, color: AppTheme.darkGreen.withOpacity(0.4)),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _searchQuery = '');
-                  },
+              SliverToBoxAdapter(
+                child: CanopyChipRail(chips: [
+                  CanopyFilterChip(label: 'All', selected: _filter == null, onTap: () => setState(() => _filter = null)),
+                  if (drafts > 0) CanopyFilterChip(label: 'Drafts', count: drafts, selected: _filter == 'drafts', onTap: () => setState(() => _filter = 'drafts')),
+                  for (final t in types)
+                    CanopyFilterChip(label: t.label, selected: _filter == t.key, onTap: () => setState(() => _filter = _filter == t.key ? null : t.key)),
+                ]),
+              ),
+              if (all.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: CanopyEmptyState(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Your archive is empty',
+                    line: 'Record a story, a dish, a ceremony or a person who holds knowledge.',
+                    actionLabel: widget.canEdit ? 'Add an entry' : null,
+                    primaryAction: true,
+                    onAction: widget.canEdit ? _add : null,
+                  ),
                 )
-              : null,
-          filled: true,
-          fillColor: HeritageTheme.heritageCardBackground,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0x1FC4A961)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Color(0x1FC4A961)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppTheme.tertiary.withOpacity(0.5)),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Filter row ───────────────────────────────────────────────────────────
-
-  Widget _buildFilterRow() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _filterLabel('TYPE'),
-          const SizedBox(height: 6),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _categories.map((cat) {
-                final active = _selectedCategory == cat;
-                return _filterChip(
-                  label: _categoryLabels[cat] ?? cat,
-                  active: active,
-                  onTap: () => setState(() => _selectedCategory = cat),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          _filterLabel('VISIBILITY'),
-          const SizedBox(height: 6),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _visibilities.map((vis) {
-                final active = _selectedVisibility == vis;
-                return _filterChip(
-                  label: _visibilityLabels[vis] ?? vis,
-                  active: active,
-                  onTap: () => setState(() => _selectedVisibility = vis),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _filterLabel(String text) => Text(
-        text,
-        style: TextStyle(
-          color: AppTheme.tertiary,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.6,
-        ),
-      );
-
-  Widget _filterChip({
-    required String label,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        margin: const EdgeInsets.only(right: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: active ? AppTheme.tertiary : Colors.transparent,
-          border: Border.all(
-            color: active ? AppTheme.tertiary : AppTheme.tertiary.withOpacity(0.3),
-          ),
-          borderRadius: BorderRadius.circular(HeritageTheme.pillBorderRadius),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: active ? Colors.white : AppTheme.darkGreen.withOpacity(0.6),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Entry card ───────────────────────────────────────────────────────────
-
-  Widget _buildEntryCard(CulturalEntry entry) {
-    return HeritageCard(
-      margin: EdgeInsets.zero,
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          // Active dispute banner
-          if (entry.hasActiveDispute)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFF3CD),
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(14)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_outlined,
-                      size: 13, color: Colors.amber),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Dispute pending',
-                    style: TextStyle(
-                      color: Colors.amber[800],
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+              else if (shown.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    CanopyEmptyState(
+                      icon: Icons.search_off,
+                      title: _filter != null && _filter != 'drafts'
+                          ? 'No ${HeritageContentTypes.labelFor(_filter!)} entries${_q.isEmpty ? '' : ' match "$_q"'}'
+                          : 'Nothing matches "$_q"',
+                      actionLabel: 'Clear filters',
+                      onAction: () => setState(() {
+                        _filter = null;
+                        _q = '';
+                      }),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Cover image / emoji
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: _typeColor(entry.contentType).withOpacity(0.12),
-                    image: entry.imageUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(entry.imageUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                  ),
-                  child: entry.imageUrl == null
-                      ? Center(
-                          child: Text(
-                            _typeEmoji(entry.contentType),
-                            style: const TextStyle(fontSize: 28),
+                    if (widget.canEdit && _filter != null && _filter != 'drafts')
+                      CanopyButton(label: 'Add a ${HeritageContentTypes.labelFor(_filter!)} entry', onPressed: () => _add(_filter)),
+                  ]),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+                  sliver: SliverToBoxAdapter(
+                    child: CanopyCard(
+                      padding: EdgeInsets.zero,
+                      child: Column(children: [
+                        for (var i = 0; i < shown.length; i++) ...[
+                          if (i > 0) Divider(height: 1, color: p.outline),
+                          ArchiveEntryRow(
+                            typeKey: shown[i].contentType,
+                            community: shown[i].locality,
+                            title: shown[i].title,
+                            coverUrl: shown[i].imageUrl,
+                            visibility: visibilityFrom(shown[i].visibility),
+                            seekingContributors: shown[i].isSeekingContributors,
+                            disputed: shown[i].hasActiveDispute,
+                            missingLocation: !shown[i].isDraft && !shown[i].hasMapPoint,
+                            onTap: shown[i].isDraft && widget.canEdit
+                                ? () => Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => CreateEntryScreen(orgId: widget.orgId, draftId: shown[i].id)))
+                                : () => widget.canEdit
+                                    ? Navigator.of(context).push(MaterialPageRoute(
+                                        builder: (_) => HeritagePostScreen(entryId: shown[i].id, orgId: widget.orgId)))
+                                    : openEntryPreview(context, shown[i].id, published: true),
+                            onMore: widget.canEdit ? () => showEntryActions(context, shown[i]) : null,
                           ),
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 12),
-
-                // Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        entry.title,
-                        style: TextStyle(
-                          color: AppTheme.darkGreen,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 5),
-                      Row(
-                        children: [
-                          ContentTypePill(contentType: entry.contentType),
-                          if (entry.subcategory != null) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              entry.subcategory!,
-                              style: TextStyle(
-                                color: AppTheme.darkGreen.withOpacity(0.5),
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
                         ],
-                      ),
-                      const SizedBox(height: 4),
-                      if (entry.locality != null)
-                        Row(
-                          children: [
-                            Icon(Icons.place_outlined,
-                                size: 11,
-                                color: AppTheme.darkGreen.withOpacity(0.45)),
-                            const SizedBox(width: 3),
-                            Expanded(
-                              child: Text(
-                                entry.locality!,
-                                style: TextStyle(
-                                  color: AppTheme.darkGreen.withOpacity(0.5),
-                                  fontSize: 11,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          VisibilityDot(
-                            visibility: entry.visibility,
-                            labelFontSize: 10,
-                          ),
-                          const Spacer(),
-                          _countChip(Icons.chat_bubble_outline,
-                              entry.commentCount),
-                          const SizedBox(width: 10),
-                          _countChip(Icons.link, entry.connectionCount),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Edit button
-                const SizedBox(width: 4),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () => _onEditTapped(entry),
-                    child: Container(
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: AppTheme.tertiary.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: AppTheme.tertiary.withOpacity(0.2)),
-                      ),
-                      child: Icon(Icons.edit_outlined,
-                          size: 16, color: AppTheme.tertiary),
+                      ]),
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
+            ]),
     );
-  }
-
-  void _onEditTapped(CulturalEntry entry) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _EditOptionsSheet(entry: entry),
-    );
-  }
-
-  Widget _countChip(IconData icon, int count) => Row(
-        children: [
-          Icon(icon, size: 11, color: AppTheme.darkGreen.withOpacity(0.45)),
-          const SizedBox(width: 3),
-          Text(
-            '$count',
-            style: TextStyle(
-              color: AppTheme.darkGreen.withOpacity(0.45),
-              fontSize: 10,
-            ),
-          ),
-        ],
-      );
-
-  // ── Empty state ──────────────────────────────────────────────────────────
-
-  Widget _buildEmptyState(bool noEntries) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: const Color(0xFFC4A961).withOpacity(0.08),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFC4A961).withOpacity(0.2)),
-            ),
-            child: const Center(
-              child: Text('📜', style: TextStyle(fontSize: 36)),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            noEntries ? 'Your archive is empty' : 'No entries match these filters',
-            style: TextStyle(
-              color: AppTheme.darkGreen,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Cormorant Garamond',
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            noEntries
-                ? 'Tap the Add Entry tab to begin documenting\ncultural knowledge for your community.'
-                : 'Try removing some filters to see more entries.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppTheme.darkGreen.withOpacity(0.55),
-              fontSize: 13,
-              height: 1.5,
-            ),
-          ),
-          if (!noEntries) ...[
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => setState(() {
-                _selectedCategory = 'All';
-                _selectedVisibility = 'All';
-                _searchController.clear();
-              }),
-              child: const Text('Clear filters'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
-
-  Color _typeColor(String type) {
-    return HeritageTheme.contentTypePillColours[type] ?? AppTheme.tertiary;
-  }
-
-  String _typeEmoji(String type) {
-    const map = {
-      'oral_tradition': '📖', 'food_tradition': '🍳', 'ingredient': '🌿',
-      'music_tradition': '🎵', 'instrument': '🥁', 'ceremony': '🕯️',
-      'craft_technique': '🛠️', 'clothing_tradition': '👘',
-      'language_entry': '🗣️', 'place_knowledge': '📍',
-      'medicine_knowledge': '🌱', 'person': '👤',
-    };
-    return map[type] ?? '📝';
   }
 }
 
-// ─── Edit options sheet ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTRY ACTIONS
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _EditOptionsSheet extends StatelessWidget {
-  final CulturalEntry entry;
-
-  const _EditOptionsSheet({required this.entry});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          // Entry title
-          Row(
-            children: [
-              Text(
-                entry.title,
-                style: TextStyle(
-                  color: AppTheme.darkGreen,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Cormorant Garamond',
-                  fontStyle: FontStyle.italic,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _option(
-            context,
-            icon: Icons.edit_note_outlined,
-            label: 'Edit content',
-            subtitle: 'Update title, description, cover & visibility',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => HeritageEntryEditScreen(entryId: entry.id),
-                ),
-              );
-            },
-          ),
-          _option(
-            context,
-            icon: Icons.photo_library_outlined,
-            label: 'Manage media',
-            subtitle: 'Add or remove images and audio',
-            onTap: () {
-              Navigator.pop(context);
-              _showSoon(context, 'Media management');
-            },
-          ),
-          _option(
-            context,
-            icon: Icons.visibility_outlined,
-            label: 'Change visibility',
-            subtitle: 'Control who can see this entry',
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => HeritageEntryEditScreen(entryId: entry.id),
-                ),
-              );
-            },
-          ),
-          _option(
-            context,
-            icon: Icons.place_outlined,
-            label: 'Edit locality',
-            subtitle: 'Update community and location details',
-            onTap: () {
-              Navigator.pop(context);
-              _showSoon(context, 'Locality edit');
-            },
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _confirmDelete(context);
-            },
-            icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('Delete entry'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.red[700],
-              side: BorderSide(color: Colors.red.withOpacity(0.4)),
-              minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
+Future<void> showEntryActions(BuildContext context, CulturalEntry e) async {
+  final v = visibilityFrom(e.visibility);
+  final action = await showCanopySheet<String>(context, builder: (ctx) {
+    return CanopySheetBody(
+      title: e.title.isEmpty ? 'Untitled' : e.title,
+      children: [
+        Row(children: [ContentTypeLabel(e.contentType), const SizedBox(width: CanopySpace.s8), VisibilityLabel(v)]),
+        const SizedBox(height: CanopySpace.s12),
+        CanopyListGroup(children: [
+          CanopyListRow(icon: Icons.edit_outlined, title: e.isDraft ? 'Continue draft' : 'Edit content', onTap: () => Navigator.pop(ctx, 'edit')),
+          CanopyListRow(icon: Icons.place_outlined, title: 'Edit locality', subtitle: e.locality, onTap: () => Navigator.pop(ctx, 'locality')),
+          if (!e.isDraft) CanopyListRow(icon: Icons.photo_library_outlined, title: 'Manage media', onTap: () => Navigator.pop(ctx, 'media')),
+          CanopyListRow(icon: Icons.visibility_outlined, title: 'Preview as a member', onTap: () => Navigator.pop(ctx, 'preview')),
+          if (!e.isDraft) CanopyListRow(icon: Icons.shield_outlined, title: 'Change visibility', onTap: () => Navigator.pop(ctx, 'visibility')),
+          if (e.isDraft)
+            CanopyListRow(icon: Icons.delete_outline, title: 'Delete draft', titleColor: ctx.canopy.danger, onTap: () => Navigator.pop(ctx, 'delete')),
+        ]),
+        if (!e.isDraft) ...[
+          const SizedBox(height: CanopySpace.s8),
+          Text('Published entries are sealed rather than deleted, so nothing disappears from a community\'s record.',
+              style: CanopyType.caption.copyWith(color: ctx.canopy.inkMuted)),
         ],
-      ),
+      ],
     );
+  });
+  if (action == null || !context.mounted) return;
+  final ref = FirebaseFirestore.instance.collection('cultural_entries').doc(e.id);
+  switch (action) {
+    case 'edit':
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => e.isDraft ? CreateEntryScreen(orgId: e.orgId, draftId: e.id) : HeritageEntryEditScreen(entryId: e.id),
+      ));
+    case 'locality':
+      final r = await showCanopySheet<CommunitySelection>(context, tall: true, builder: (_) => const LocalitySelectorSheet());
+      if (r == null) return;
+      try {
+        await ref.update({
+          'locality.community_id': r.isUnknown ? null : r.id,
+          'locality.community_name': r.isUnknown ? null : r.name,
+          'locality.community_unknown': r.isUnknown,
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+        if (context.mounted) showCanopySnack(context, 'Locality updated.');
+      } catch (_) {
+        if (context.mounted) showCanopySnack(context, "Couldn't update. Try again.", error: true);
+      }
+    case 'media':
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => HeritageMediaScreen(orgId: e.orgId, entryId: e.id, entryTitle: e.title)));
+    case 'preview':
+      openEntryPreview(context, e.id, published: !e.isDraft);
+    case 'visibility':
+      await changeEntryVisibility(context, e.id, v);
+    case 'delete':
+      final ok = await showCanopyConfirm(context,
+          title: 'Delete this draft?', message: 'It is removed for good. This can\'t be undone.', confirmLabel: 'Delete draft', danger: true);
+      if (!ok) return;
+      try {
+        await ref.delete();
+      } catch (_) {
+        if (context.mounted) showCanopySnack(context, "Couldn't delete. Try again.", error: true);
+      }
   }
+}
 
-  Widget _option(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.tertiary.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 20, color: AppTheme.tertiary),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label,
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.darkGreen)),
-                    Text(subtitle,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.darkGreen.withOpacity(0.5))),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right,
-                  color: AppTheme.darkGreen.withOpacity(0.3)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$feature — coming soon'),
-        duration: const Duration(seconds: 1),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete entry?'),
-        content: const Text(
-            'This action cannot be undone. The entry will be permanently removed from the archive.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Delete — coming soon'),
-                  duration: Duration(seconds: 1),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+/// Selector → confirm (old → new, consent when widening) → save.
+Future<void> changeEntryVisibility(BuildContext context, String entryId, ArchiveVisibility? current) async {
+  final picked = await showCanopySheet<ArchiveVisibility>(context, builder: (ctx) {
+    return CanopySheetBody(title: 'Who can see it?', children: [
+      VisibilitySelector(value: current, onChanged: (v) => Navigator.pop(ctx, v)),
+    ]);
+  });
+  if (picked == null || picked == current || !context.mounted) return;
+  final ok = await showVisibilityConfirm(context, from: current, to: picked);
+  if (!ok) return;
+  try {
+    await FirebaseFirestore.instance.collection('cultural_entries').doc(entryId).update({
+      'visibility': visibilityKey(picked),
+      'updated_at': FieldValue.serverTimestamp(),
+      'last_activity_at': FieldValue.serverTimestamp(),
+    });
+    if (context.mounted) showCanopySnack(context, 'Now ${visibilityWord(picked).toLowerCase()}.');
+  } catch (_) {
+    if (context.mounted) showCanopySnack(context, "Couldn't change visibility. Try again.", error: true);
   }
 }

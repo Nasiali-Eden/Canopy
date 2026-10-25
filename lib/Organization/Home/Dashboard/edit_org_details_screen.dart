@@ -1,27 +1,24 @@
 // lib/Organization/Home/Dashboard/edit_org_details_screen.dart
 //
-// Edit all editable organisation details in one place:
-//   • Logo / profile photo      → logoUrl (+ profilePhoto mirror)
-//   • Cover image               → coverImageUrl
-//   • Name, designation, city
-//   • Background / about         → background (+ about mirror)
-//   • Phone, website
-//   • Founded year, member count
-//
-// Images are picked locally and only uploaded on Save, so cancelling leaves
-// the org untouched. Returns `true` via Navigator.pop when changes are saved.
+// Edit org details (ORG_HANDOFF §3.3, T): cover + logo, name, designation,
+// city, country, about, phone, website, founded year, member count, and a
+// link to Heritage backgrounds. Images upload only on Save, so cancelling
+// leaves the org untouched. Pops `true` when saved.
 
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../Shared/theme/app_theme.dart';
+import '../../../Community/Heritage/heritage_ui.dart';
 import '../../../Culture/Heritage/Create/heritage_backgrounds_screen.dart';
+import '../../../theme/tokens/heritage_tokens.dart' show HeritageGlass;
+import '../../../theme/canopy_components.dart';
 
 class EditOrgDetailsScreen extends StatefulWidget {
   final String orgId;
@@ -32,27 +29,19 @@ class EditOrgDetailsScreen extends StatefulWidget {
 }
 
 class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
-  final _formKey = GlobalKey<FormState>();
-
-  final _nameCtrl = TextEditingController();
-  final _designationCtrl = TextEditingController();
-  final _cityCtrl = TextEditingController();
-  final _backgroundCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _websiteCtrl = TextEditingController();
-  final _foundedCtrl = TextEditingController();
-  final _membersCtrl = TextEditingController();
-
-  String? _logoUrl;
-  String? _coverUrl;
-  File? _newLogo;
-  File? _newCover;
-
-  // Heritage: the org's country. Backgrounds are set in HeritageBackgroundsScreen.
-  String? _country;
-
-  bool _loading = true;
-  bool _saving = false;
+  final _name = TextEditingController();
+  final _designation = TextEditingController();
+  final _city = TextEditingController();
+  final _about = TextEditingController();
+  final _phone = TextEditingController();
+  final _website = TextEditingController();
+  final _founded = TextEditingController();
+  final _members = TextEditingController();
+  final _lat = TextEditingController();
+  final _lng = TextEditingController();
+  String? _logoUrl, _coverUrl, _country;
+  File? _newLogo, _newCover;
+  bool _loading = true, _loadFailed = false, _saving = false, _showErrors = false;
 
   @override
   void initState() {
@@ -62,690 +51,421 @@ class _EditOrgDetailsScreenState extends State<EditOrgDetailsScreen> {
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _designationCtrl.dispose();
-    _cityCtrl.dispose();
-    _backgroundCtrl.dispose();
-    _phoneCtrl.dispose();
-    _websiteCtrl.dispose();
-    _foundedCtrl.dispose();
-    _membersCtrl.dispose();
+    for (final c in [_name, _designation, _city, _about, _phone, _website, _founded, _members, _lat, _lng]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadFailed = false;
+    });
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(widget.orgId)
-          .get();
-      final d = doc.data() ?? {};
-      _nameCtrl.text = (d['org_name'] ?? d['name'] ?? '') as String;
-      _designationCtrl.text = (d['orgDesignation'] ?? d['designation'] ?? '') as String;
-      _cityCtrl.text = (d['city'] ?? '') as String;
-      _backgroundCtrl.text =
-          (d['background'] ?? d['about'] ?? d['bio'] ?? '') as String;
-      _phoneCtrl.text = (d['phone'] ?? '') as String;
-      _websiteCtrl.text = (d['website'] ?? '') as String;
-      final founded = d['foundedAt'];
-      if (founded is Timestamp) _foundedCtrl.text = '${founded.toDate().year}';
-      final members = d['memberCount'];
-      if (members is num) _membersCtrl.text = '${members.toInt()}';
+      final d = (await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).get())
+              .data() ??
+          {};
+      _name.text = (d['org_name'] ?? d['name'] ?? '') as String;
+      _designation.text = (d['orgDesignation'] ?? d['designation'] ?? '') as String;
+      _city.text = (d['city'] ?? '') as String;
+      _about.text = (d['background'] ?? d['about'] ?? d['bio'] ?? '') as String;
+      _phone.text = (d['phone'] ?? '') as String;
+      _website.text = (d['website'] ?? '') as String;
+      if (d['foundedAt'] is Timestamp) _founded.text = '${(d['foundedAt'] as Timestamp).toDate().year}';
+      if (d['memberCount'] is num) _members.text = '${(d['memberCount'] as num).toInt()}';
+      final gp = d['location'];
+      final lat = gp is GeoPoint ? gp.latitude : (d['lat'] as num?)?.toDouble();
+      final lng = gp is GeoPoint ? gp.longitude : (d['lng'] as num?)?.toDouble();
+      if (lat != null && lng != null) {
+        _lat.text = lat.toStringAsFixed(6);
+        _lng.text = lng.toStringAsFixed(6);
+      }
       _logoUrl = (d['logoUrl'] ?? d['profilePhoto']) as String?;
       _coverUrl = d['coverImageUrl'] as String?;
-      _country = (d['country'] as String?)?.trim();
-      if (_country != null && _country!.isEmpty) _country = null;
-    } catch (e) {
-      debugPrint('EditOrgDetails load error: $e');
+      final c = (d['country'] as String?)?.trim();
+      _country = (c == null || c.isEmpty) ? null : c;
+    } catch (_) {
+      _loadFailed = true;
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _pick(bool isLogo) async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 82,
-    );
-    if (file == null || !mounted) return;
-    setState(() {
-      if (isLogo) {
-        _newLogo = File(file.path);
-      } else {
-        _newCover = File(file.path);
-      }
-    });
+  Future<void> _pick(bool logo) async {
+    final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 82);
+    if (f == null || !mounted) return;
+    setState(() => logo ? _newLogo = File(f.path) : _newCover = File(f.path));
   }
 
-  Future<void> _openCountryPicker() async {
+  Future<void> _pickCountry() async {
     List<String> names;
     try {
       final raw = await rootBundle.loadString('assets/WorldCountries.json');
-      final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      final list = (decoded['countries'] as List?) ?? const [];
-      names = list
+      names = ((jsonDecode(raw) as Map<String, dynamic>)['countries'] as List? ?? const [])
           .map((e) => (e as Map<String, dynamic>)['name'] as String?)
           .whereType<String>()
           .toList()
         ..sort();
-    } catch (e) {
-      debugPrint('Country list load error: $e');
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't load the country list.", error: true);
       return;
     }
     if (!mounted) return;
+    final picked = await showCanopySheet<String>(context, tall: true, builder: (_) => _CountrySheet(names));
+    if (picked != null) setState(() => _country = picked);
+  }
 
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (ctx) => _CountryPickerSheet(countries: names),
-    );
-    if (selected != null && mounted) {
-      setState(() => _country = selected);
+  bool _locating = false;
+
+  /// Fills the coordinate fields from the phone's GPS. Nothing is saved until
+  /// "Save details".
+  Future<void> _useMyLocation() async {
+    setState(() => _locating = true);
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        if (mounted) showCanopySnack(context, 'Allow location access to use your position.', error: true);
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 15)));
+      if (!mounted) return;
+      setState(() {
+        _lat.text = pos.latitude.toStringAsFixed(6);
+        _lng.text = pos.longitude.toStringAsFixed(6);
+      });
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't get your position. Try again outside.", error: true);
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
   }
 
-  Future<String> _upload(File file, String name) async {
-    final ref = FirebaseStorage.instance.ref().child(
-        'organizations/${widget.orgId}/${name}_${DateTime.now().millisecondsSinceEpoch}.jpg');
-    await ref.putFile(file);
+  /// Fills the coordinate fields from the city (Kenyan cities only).
+  Future<void> _fromCity() async {
+    try {
+      final data = jsonDecode(await rootBundle.loadString('assets/Cities/African/KenyaCities.json')) as Map<String, dynamic>;
+      final all = data['kenyaCitiesAndLocations'] as Map<String, dynamic>;
+      final key = all.keys.firstWhere((k) => k.toLowerCase() == _city.text.trim().toLowerCase(), orElse: () => '');
+      final entries = key.isEmpty ? null : (all[key] as List).cast<Map<String, dynamic>>();
+      final c = (entries == null || entries.isEmpty) ? null : entries.first['coordinates'] as Map<String, dynamic>?;
+      final lat = (c?['lat'] as num?)?.toDouble();
+      final lng = (c?['lng'] as num?)?.toDouble();
+      if (lat == null || lng == null) {
+        if (mounted) showCanopySnack(context, 'No coordinates on file for that city. Enter them or use your location.', error: true);
+        return;
+      }
+      if (!mounted) return;
+      setState(() {
+        _lat.text = lat.toStringAsFixed(6);
+        _lng.text = lng.toStringAsFixed(6);
+      });
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't look that up.", error: true);
+    }
+  }
+
+  double? _num(TextEditingController c) => double.tryParse(c.text.trim().replaceAll(',', '.'));
+
+  /// Both or neither; within range.
+  String? get _locationError {
+    final a = _lat.text.trim(), b = _lng.text.trim();
+    if (a.isEmpty && b.isEmpty) return null;
+    final lat = _num(_lat), lng = _num(_lng);
+    if (lat == null || lng == null) return 'Enter both latitude and longitude as numbers.';
+    if (lat < -90 || lat > 90) return 'Latitude is between -90 and 90.';
+    if (lng < -180 || lng > 180) return 'Longitude is between -180 and 180.';
+    return null;
+  }
+
+  Future<String> _upload(File f, String name) async {
+    final ref = FirebaseStorage.instance
+        .ref('organizations/${widget.orgId}/${name}_${DateTime.now().millisecondsSinceEpoch}.jpg');
+    await ref.putFile(f);
     return ref.getDownloadURL();
   }
 
+  String? get _nameError => _name.text.trim().isEmpty ? 'Your organisation needs a name.' : null;
+  String? get _foundedError {
+    final t = _founded.text.trim();
+    if (t.isEmpty) return null;
+    final y = int.tryParse(t);
+    return y == null || y < 1800 || y > DateTime.now().year ? 'Enter a year like 2018.' : null;
+  }
+
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    setState(() => _showErrors = true);
+    if (_nameError != null || _foundedError != null || _locationError != null) return;
     setState(() => _saving = true);
     try {
-      String? logoUrl = _logoUrl;
-      String? coverUrl = _coverUrl;
-      if (_newLogo != null) logoUrl = await _upload(_newLogo!, 'logo');
-      if (_newCover != null) coverUrl = await _upload(_newCover!, 'cover');
-
-      final foundedYear = int.tryParse(_foundedCtrl.text.trim());
-      final members = int.tryParse(_membersCtrl.text.trim());
-      final background = _backgroundCtrl.text.trim();
-
-      final update = <String, dynamic>{
-        'org_name': _nameCtrl.text.trim(),
-        'orgDesignation': _designationCtrl.text.trim(),
-        'city': _cityCtrl.text.trim(),
-        // Write both keys so the public view (background) and model (about) agree.
-        'background': background,
-        'about': background,
-        'phone': _phoneCtrl.text.trim(),
-        'website': _websiteCtrl.text.trim(),
-        if (logoUrl != null) 'logoUrl': logoUrl,
-        // Mirror to profilePhoto for older readers.
-        if (logoUrl != null) 'profilePhoto': logoUrl,
-        if (coverUrl != null) 'coverImageUrl': coverUrl,
-        if (foundedYear != null)
-          'foundedAt': Timestamp.fromDate(DateTime(foundedYear)),
+      final logo = _newLogo != null ? await _upload(_newLogo!, 'logo') : _logoUrl;
+      final cover = _newCover != null ? await _upload(_newCover!, 'cover') : _coverUrl;
+      final founded = int.tryParse(_founded.text.trim());
+      final members = int.tryParse(_members.text.trim());
+      final lat = _num(_lat), lng = _num(_lng);
+      await FirebaseFirestore.instance.collection('organizations').doc(widget.orgId).update({
+        'org_name': _name.text.trim(),
+        'orgDesignation': _designation.text.trim(),
+        'city': _city.text.trim(),
+        // Both keys so the public view (background) and model (about) agree.
+        'background': _about.text.trim(),
+        'about': _about.text.trim(),
+        'phone': _phone.text.trim(),
+        'website': _website.text.trim(),
+        if (logo != null) 'logoUrl': logo,
+        if (logo != null) 'profilePhoto': logo,
+        if (cover != null) 'coverImageUrl': cover,
+        if (founded != null) 'foundedAt': Timestamp.fromDate(DateTime(founded)),
         if (members != null) 'memberCount': members,
-        // Heritage: the org's country. Backgrounds (country + categories +
-        // communities) are managed in HeritageBackgroundsScreen.
-        if (_country != null && _country!.isNotEmpty) 'country': _country,
-      };
-
-      await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(widget.orgId)
-          .update(update);
-
+        if (_country != null) 'country': _country,
+        if (lat != null && lng != null) ...{'location': GeoPoint(lat, lng), 'lat': lat, 'lng': lng},
+      });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Organisation details updated'),
-          backgroundColor: AppTheme.primary,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      debugPrint('EditOrgDetails save error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not save: $e'),
-            backgroundColor: Colors.red.shade600,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      showCanopySnack(context, 'Organisation details saved.');
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't save. Try again.", error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
+  // Same glass design as the Heritage pages: the org's cover (or the Heritage
+  // photo) fills the screen under the page scrim; the form floats in glass.
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: AppTheme.darkGreen,
-        title: const Text('Edit Organisation',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Divider(height: 1, color: Colors.grey.shade200),
-        ),
-      ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(
-                  color: AppTheme.primary, strokeWidth: 2))
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 110),
-                children: [
-                  _buildImagesHeader(),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _sectionLabel('Identity'),
-                        _field(
-                          controller: _nameCtrl,
-                          label: 'Organisation name',
-                          icon: Icons.business_outlined,
-                          validator: (v) =>
-                              (v == null || v.trim().isEmpty) ? 'Required' : null,
+  Widget build(BuildContext context) => HeritageTheme(child: Builder(builder: _buildForm));
+
+  Widget _buildForm(BuildContext context) {
+    final p = context.canopy;
+    if (_loading) {
+      return CanopyScaffold(
+          appBar: canopyAppBar(context, title: 'Organisation details'),
+          body: const Center(child: CircularProgressIndicator()));
+    }
+    if (_loadFailed) {
+      return CanopyScaffold(
+          appBar: canopyAppBar(context, title: 'Organisation details'),
+          body: CanopyErrorState(title: "Couldn't load your details", onRetry: _load));
+    }
+    Widget gap() => const SizedBox(height: CanopySpace.s16);
+    final g = HeritageGlass.of(Theme.of(context).brightness);
+    final fallbackPhoto = Image.asset('images/BG.png', fit: BoxFit.cover);
+    final Widget photo = _newCover != null
+        ? Image.file(_newCover!, fit: BoxFit.cover)
+        : (_coverUrl ?? '').isNotEmpty
+            ? Image.network(_coverUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fallbackPhoto)
+            : fallbackPhoto;
+    return Stack(children: [
+      Positioned.fill(child: photo),
+      Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(gradient: g.pageScrim))),
+      Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: canopyAppBar(context, title: 'Organisation details'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(
+            CanopySpace.gutter, CanopySpace.s4, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          // Cover + logo
+          SizedBox(
+            height: 150 + 36,
+            child: Stack(clipBehavior: Clip.none, children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 150,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(CanopyRadius.md),
+                  child: Material(
+                    color: p.surfaceMuted,
+                    child: InkWell(
+                      onTap: () => _pick(false),
+                      child: Stack(fit: StackFit.expand, children: [
+                        if (_newCover != null)
+                          Image.file(_newCover!, fit: BoxFit.cover)
+                        else if (_coverUrl != null)
+                          CanopyImage(url: _coverUrl)
+                        else
+                          Center(
+                            child: Text('Add a cover photo',
+                                style: CanopyType.label.copyWith(color: p.inkMuted)),
+                          ),
+                        Positioned(
+                          right: CanopySpace.s8,
+                          bottom: CanopySpace.s8,
+                          child: Icon(Icons.edit_outlined, color: p.ink),
                         ),
-                        _field(
-                          controller: _designationCtrl,
-                          label: 'Designation (e.g. NGO, CBO)',
-                          icon: Icons.workspace_premium_outlined,
-                        ),
-                        _field(
-                          controller: _cityCtrl,
-                          label: 'City / County',
-                          icon: Icons.location_on_outlined,
-                        ),
-                        const SizedBox(height: 8),
-                        _sectionLabel('About'),
-                        _field(
-                          controller: _backgroundCtrl,
-                          label: 'Background',
-                          icon: Icons.notes_outlined,
-                          maxLines: 6,
-                          hint: 'Tell people what your organisation does…',
-                        ),
-                        const SizedBox(height: 8),
-                        _sectionLabel('Contact'),
-                        _field(
-                          controller: _phoneCtrl,
-                          label: 'Phone',
-                          icon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
-                        ),
-                        _field(
-                          controller: _websiteCtrl,
-                          label: 'Website',
-                          icon: Icons.language_outlined,
-                          keyboardType: TextInputType.url,
-                        ),
-                        const SizedBox(height: 8),
-                        _sectionLabel('Details'),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _field(
-                                controller: _foundedCtrl,
-                                label: 'Founded year',
-                                icon: Icons.event_outlined,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _field(
-                                controller: _membersCtrl,
-                                label: 'Members',
-                                icon: Icons.people_outline,
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        _sectionLabel('Heritage'),
-                        _countryPickerField(),
-                        const SizedBox(height: 12),
-                        _manageBackgroundsTile(),
-                      ],
+                      ]),
                     ),
                   ),
-                ],
-              ),
-            ),
-      bottomSheet: _loading
-          ? null
-          : Container(
-              padding: EdgeInsets.fromLTRB(
-                  16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
-              color: Colors.white,
-              child: SizedBox(
-                height: 52,
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2.4, color: Colors.white),
-                        )
-                      : const Text('Save Changes',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
                 ),
               ),
-            ),
-    );
-  }
-
-  // ── Cover + logo editor ────────────────────────────────────────────────────
-  Widget _buildImagesHeader() {
-    return SizedBox(
-      height: 210,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Cover
-          GestureDetector(
-            onTap: () => _pick(false),
-            child: Container(
-              height: 170,
-              width: double.infinity,
-              color: AppTheme.lightGreen.withOpacity(0.18),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (_newCover != null)
-                    Image.file(_newCover!, fit: BoxFit.cover)
-                  else if (_coverUrl != null && _coverUrl!.isNotEmpty)
-                    Image.network(_coverUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _coverPlaceholder())
-                  else
-                    _coverPlaceholder(),
-                  Container(color: Colors.black.withOpacity(0.18)),
-                  Positioned(
-                    right: 12,
-                    top: 12,
-                    child: _editChip(Icons.add_photo_alternate_outlined,
-                        'Change cover'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Logo
-          Positioned(
-            left: 20,
-            bottom: 0,
-            child: GestureDetector(
-              onTap: () => _pick(true),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      color: Colors.white,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
+              Positioned(
+                left: CanopySpace.s16,
+                top: 150 - 36,
+                child: GestureDetector(
+                  onTap: () => _pick(true),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(color: p.canvas, borderRadius: BorderRadius.circular(24)),
                     child: _newLogo != null
-                        ? Image.file(_newLogo!, fit: BoxFit.cover)
-                        : (_logoUrl != null && _logoUrl!.isNotEmpty)
-                            ? Image.network(_logoUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _logoPlaceholder())
-                            : _logoPlaceholder(),
-                  ),
-                  Positioned(
-                    right: -4,
-                    bottom: -4,
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const Icon(Icons.edit,
-                          size: 13, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _coverPlaceholder() => Container(
-        color: AppTheme.lightGreen.withOpacity(0.18),
-        alignment: Alignment.center,
-        child: Icon(Icons.image_outlined,
-            size: 40, color: AppTheme.darkGreen.withOpacity(0.3)),
-      );
-
-  Widget _logoPlaceholder() => Container(
-        color: AppTheme.primary.withOpacity(0.12),
-        alignment: Alignment.center,
-        child: const Icon(Icons.add_a_photo_outlined,
-            size: 26, color: AppTheme.primary),
-      );
-
-  Widget _editChip(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.45),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: Colors.white),
-          const SizedBox(width: 5),
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 10),
-      child: Text(
-        text.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.6,
-          color: AppTheme.darkGreen.withOpacity(0.5),
-        ),
-      ),
-    );
-  }
-
-  // Tappable field that opens the country picker.
-  Widget _countryPickerField() {
-    final hasCountry = _country != null && _country!.isNotEmpty;
-    return InkWell(
-      onTap: _openCountryPicker,
-      borderRadius: BorderRadius.circular(12),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Country',
-          labelStyle: TextStyle(
-              fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.6)),
-          filled: true,
-          fillColor: Colors.white,
-          prefixIcon:
-              const Icon(Icons.public_outlined, size: 19, color: AppTheme.primary),
-          suffixIcon:
-              Icon(Icons.expand_more, size: 20, color: AppTheme.darkGreen.withOpacity(0.5)),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-        ),
-        child: Text(
-          hasCountry ? _country! : 'Select country',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: hasCountry
-                ? AppTheme.darkGreen
-                : AppTheme.darkGreen.withOpacity(0.45),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Single rich entry point to set a background for every category & community.
-  Widget _manageBackgroundsTile() {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => HeritageBackgroundsScreen(orgId: widget.orgId),
-        ),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppTheme.tertiary.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppTheme.tertiary.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppTheme.tertiary.withOpacity(0.16),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.photo_library_outlined,
-                  size: 19, color: AppTheme.tertiary),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Manage Heritage backgrounds',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.darkGreen)),
-                  SizedBox(height: 2),
-                  Text('Set a background for each category & community',
-                      style: TextStyle(fontSize: 11.5, color: Colors.black54)),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right,
-                color: AppTheme.darkGreen.withOpacity(0.4)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _field({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    String? hint,
-    int maxLines = 1,
-    TextInputType? keyboardType,
-    String? Function(String?)? validator,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        keyboardType: keyboardType,
-        validator: validator,
-        style: const TextStyle(
-            fontSize: 14, color: AppTheme.darkGreen, fontWeight: FontWeight.w500),
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          labelStyle: TextStyle(
-              fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.6)),
-          filled: true,
-          fillColor: Colors.white,
-          prefixIcon: Icon(icon, size: 19, color: AppTheme.primary),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade200),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COUNTRY PICKER SHEET — searchable list backed by assets/WorldCountries.json
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _CountryPickerSheet extends StatefulWidget {
-  final List<String> countries;
-  const _CountryPickerSheet({required this.countries});
-
-  @override
-  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
-}
-
-class _CountryPickerSheetState extends State<_CountryPickerSheet> {
-  late List<String> _filtered;
-  final _searchCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _filtered = widget.countries;
-  }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onSearch(String q) {
-    final query = q.trim().toLowerCase();
-    setState(() {
-      _filtered = query.isEmpty
-          ? widget.countries
-          : widget.countries
-              .where((c) => c.toLowerCase().contains(query))
-              .toList();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.7,
-        child: Column(
-          children: [
-            const SizedBox(height: 10),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: _onSearch,
-                autofocus: false,
-                decoration: InputDecoration(
-                  hintText: 'Search countries',
-                  prefixIcon: const Icon(Icons.search, size: 20),
-                  isDense: true,
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(22),
+                            child: Image.file(_newLogo!, width: 72, height: 72, fit: BoxFit.cover))
+                        : CanopyAvatar(url: _logoUrl, name: _name.text, size: 72, org: true),
                   ),
                 ),
               ),
-            ),
+            ]),
+          ),
+          Text('Tap the cover or logo to change them.',
+              style: CanopyType.caption.copyWith(color: p.inkMuted)),
+          gap(),
+          ReadingGlass(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          CanopyTextField(
+              label: 'Name',
+              controller: _name,
+              error: _showErrors ? _nameError : null,
+              onChanged: (_) => setState(() {})),
+          gap(),
+          CanopyTextField(label: 'Designation', hint: 'CBO, NGO, company…', controller: _designation),
+          gap(),
+          CanopyTextField(label: 'City or town', controller: _city),
+          gap(),
+          CanopyPickerField(label: 'Country', value: _country, placeholder: 'Choose country', onTap: _pickCountry),
+          gap(),
+          CanopyTextField(
+              label: 'About',
+              hint: 'What you do and who you work with',
+              controller: _about,
+              minLines: 4,
+              maxLines: 10,
+              maxLength: 1200),
+          gap(),
+          CanopyTextField.phone(label: 'Phone', controller: _phone),
+          gap(),
+          CanopyTextField(
+              label: 'Website',
+              hint: 'example.org',
+              controller: _website,
+              keyboardType: TextInputType.url,
+              textCapitalization: TextCapitalization.none),
+          gap(),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
-              child: _filtered.isEmpty
-                  ? Center(
-                      child: Text('No matches',
-                          style: TextStyle(color: Colors.grey.shade500)),
-                    )
-                  : ListView.separated(
-                      itemCount: _filtered.length,
-                      separatorBuilder: (_, __) => Divider(
-                          height: 1, color: Colors.grey.shade100),
-                      itemBuilder: (_, i) {
-                        final name = _filtered[i];
-                        return ListTile(
-                          title: Text(name,
-                              style: const TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.darkGreen)),
-                          onTap: () => Navigator.of(context).pop(name),
-                        );
-                      },
-                    ),
+              child: CanopyTextField(
+                  label: 'Founded',
+                  hint: '2018',
+                  controller: _founded,
+                  keyboardType: TextInputType.number,
+                  error: _showErrors ? _foundedError : null,
+                  onChanged: (_) => setState(() {})),
             ),
-          ],
-        ),
+            const SizedBox(width: CanopySpace.s12),
+            Expanded(
+              child: CanopyTextField(
+                  label: 'Members', hint: '40', controller: _members, keyboardType: TextInputType.number),
+            ),
+          ]),
+          const SizedBox(height: CanopySpace.section),
+          Text('Map location', style: CanopyType.title.copyWith(color: p.ink)),
+          const SizedBox(height: CanopySpace.s4),
+          Text(
+              _lat.text.trim().isEmpty && _lng.text.trim().isEmpty
+                  ? 'Not set — your organisation will not appear on the map.'
+                  : 'Shown on the map as your organisation pin.',
+              style: CanopyType.caption.copyWith(color: p.inkMuted)),
+          gap(),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: CanopyTextField(
+                  label: 'Latitude',
+                  hint: '-1.286389',
+                  controller: _lat,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                  onChanged: (_) => setState(() {})),
+            ),
+            const SizedBox(width: CanopySpace.s12),
+            Expanded(
+              child: CanopyTextField(
+                  label: 'Longitude',
+                  hint: '36.817223',
+                  controller: _lng,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                  error: _showErrors ? _locationError : null,
+                  onChanged: (_) => setState(() {})),
+            ),
+          ]),
+          const SizedBox(height: CanopySpace.s8),
+          Row(children: [
+            Expanded(
+              child: CanopyButton(
+                  label: 'Use my location',
+                  variant: CanopyButtonVariant.secondary,
+                  size: CanopyButtonSize.compact,
+                  loading: _locating,
+                  expand: true,
+                  onPressed: _locating ? null : _useMyLocation),
+            ),
+            const SizedBox(width: CanopySpace.s8),
+            Expanded(
+              child: CanopyButton(
+                  label: 'From my city',
+                  variant: CanopyButtonVariant.secondary,
+                  size: CanopyButtonSize.compact,
+                  expand: true,
+                  onPressed: _fromCity),
+            ),
+          ]),
+          const SizedBox(height: CanopySpace.section),
+          CanopyListGroup(children: [
+            CanopyListRow(
+              icon: Icons.landscape_outlined,
+              title: 'Heritage backgrounds',
+              subtitle: 'Country, category and community images on Heritage',
+              onTap: () => Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => HeritageBackgroundsScreen(orgId: widget.orgId))),
+            ),
+          ]),
+            ]),
+          ),
+        ],
       ),
+      bottomNavigationBar: StickyActionBar(children: [
+        CanopyButton(label: 'Save details', expand: true, loading: _saving, onPressed: _save),
+      ]),
+    ),
+    ]);
+  }
+}
+
+class _CountrySheet extends StatefulWidget {
+  final List<String> names;
+  const _CountrySheet(this.names);
+
+  @override
+  State<_CountrySheet> createState() => _CountrySheetState();
+}
+
+class _CountrySheetState extends State<_CountrySheet> {
+  String _q = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final list = widget.names.where((n) => n.toLowerCase().contains(_q)).take(60).toList();
+    return CanopySheetBody(
+      title: 'Country',
+      children: [
+        CanopyTextField.search(
+            hint: 'Search countries', autofocus: true, onChanged: (v) => setState(() => _q = v.trim().toLowerCase())),
+        const SizedBox(height: CanopySpace.s12),
+        CanopyListGroup(children: [
+          for (final n in list) CanopyListRow(title: n, chevron: false, onTap: () => Navigator.pop(context, n)),
+        ]),
+      ],
     );
   }
 }

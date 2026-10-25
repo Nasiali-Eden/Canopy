@@ -16,9 +16,11 @@ class CulturalEntry {
   final int commentCount;
   final int connectionCount;
   final bool hasActiveDispute;
+  final bool isSeekingContributors;
   final DateTime createdAt;
   final DateTime updatedAt;
   final String createdBy;
+  final bool hasMapPoint; // every entry should be pinned on the culture map
 
   CulturalEntry({
     required this.id,
@@ -34,10 +36,15 @@ class CulturalEntry {
     this.commentCount = 0,
     this.connectionCount = 0,
     this.hasActiveDispute = false,
+    this.isSeekingContributors = false,
     required this.createdAt,
     required this.updatedAt,
     required this.createdBy,
+    this.hasMapPoint = false,
   });
+
+  /// Drafts are stored with visibility 'draft' (never matched by Heritage).
+  bool get isDraft => visibility == 'draft';
 
   factory CulturalEntry.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -45,19 +52,23 @@ class CulturalEntry {
       id: doc.id,
       orgId: data['org_id'] as String? ?? '',
       title: data['title'] as String? ?? '',
-      contentType: data['content_type'] as String? ?? 'Stories',
+      contentType: data['content_type'] as String? ?? 'oral_tradition',
       subcategory: data['subcategory'] as String?,
       description: data['description'] as String?,
       tags: List<String>.from(data['tags'] as List? ?? []),
       visibility: data['visibility'] as String? ?? 'public',
       locality: _localityToDisplay(data['locality']),
-      imageUrl: data['image_url'] as String?,
+      // The creator writes cover_image_url / created_by_uid; image_url /
+      // created_by are the older keys.
+      imageUrl: (data['cover_image_url'] ?? data['image_url']) as String?,
       commentCount: data['comment_count'] as int? ?? 0,
       connectionCount: data['connection_count'] as int? ?? 0,
       hasActiveDispute: data['has_active_dispute'] as bool? ?? false,
+      isSeekingContributors: data['is_seeking_contributors'] as bool? ?? false,
       createdAt: (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updated_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      createdBy: data['created_by'] as String? ?? '',
+      createdBy: (data['created_by_uid'] ?? data['created_by']) as String? ?? '',
+      hasMapPoint: data['map_point'] is GeoPoint,
     );
   }
 
@@ -134,6 +145,7 @@ class CulturalEntry {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy ?? this.createdBy,
+      hasMapPoint: hasMapPoint,
     );
   }
 }

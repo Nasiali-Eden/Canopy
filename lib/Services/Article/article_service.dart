@@ -32,6 +32,14 @@ import 'package:image_picker/image_picker.dart';
 ///   createdAt                   : Timestamp
 ///   publishedAt                 : Timestamp?   (null while draft)
 ///   updatedAt                   : Timestamp
+///   collaboratorOrgs             : List<{name: String, logoUrl: String?}>?
+///                                  Optional — most articles won't have it.
+///                                  Other orgs credited alongside the
+///                                  publishing org (a joint update). Absent
+///                                  on every article until an author sets it
+///                                  via createArticle/updateArticle; readers
+///                                  (home feed card, ArticleViewScreen) treat
+///                                  a missing/empty list exactly like before.
 class ArticleService {
   final FirebaseFirestore _db;
   final FirebaseStorage _storage;
@@ -84,6 +92,7 @@ class ArticleService {
     String? orgId,
     String? createdBy,
     bool publish = true,
+    List<Map<String, String?>>? collaboratorOrgs,
   }) async {
     final docRef = _db.collection('articles').doc();
 
@@ -115,6 +124,8 @@ class ArticleService {
       'createdAt': now,
       'publishedAt': publish ? now : null,
       'updatedAt': now,
+      if (collaboratorOrgs != null && collaboratorOrgs.isNotEmpty)
+        'collaboratorOrgs': collaboratorOrgs,
     });
 
     return docRef.id;
@@ -132,6 +143,7 @@ class ArticleService {
     String? coverPhotoUrl,
     String? orgId,
     bool? publish,
+    List<Map<String, String?>>? collaboratorOrgs,
   }) async {
     String? finalCoverUrl = coverPhotoUrl;
     if (coverPhoto != null) {
@@ -148,6 +160,7 @@ class ArticleService {
       'category': category,
       'body': body,
       'readTimeMinutes': _readMinutes(body),
+      if (collaboratorOrgs != null) 'collaboratorOrgs': collaboratorOrgs,
       'updatedAt': now,
       if (finalCoverUrl != null) ...{
         'coverPhotoUrl': finalCoverUrl,

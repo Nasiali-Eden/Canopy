@@ -17,7 +17,7 @@ import 'package:flutter/material.dart';
 import '../../../Services/Article/article_service.dart';
 import '../../../Services/Article/special_articles_seed.dart';
 import '../../../Shared/config/platform_config.dart';
-import '../../../Shared/theme/app_theme.dart';
+import '../../../theme/canopy_components.dart';
 
 class SpecialArticlesBanner extends StatefulWidget {
   final String orgId;
@@ -53,20 +53,12 @@ class _SpecialArticlesBannerState extends State<SpecialArticlesBanner> {
         existingHeadings: widget.existingHeadings,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(published.isEmpty
-              ? 'Already up to date.'
-              : 'Published ${published.length} article${published.length == 1 ? '' : 's'}.'),
-          backgroundColor: AppTheme.darkGreen,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
+      showCanopySnack(context, published.isEmpty
+          ? 'Already up to date.'
+          : 'Published ${published.length} article${published.length == 1 ? '' : 's'}.');
+    } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not publish: $e')),
-      );
+      showCanopySnack(context, "Couldn't publish. Try again.", error: true);
     } finally {
       if (mounted) setState(() => _publishing = false);
     }
@@ -96,63 +88,18 @@ class _SpecialArticlesBannerState extends State<SpecialArticlesBanner> {
   }
 
   Widget _content(BuildContext context) {
-    return Container(
-          margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.darkGreen,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.hub_outlined, color: Colors.white, size: 22),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Special articles ready to publish',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'The blockchain explainer & ETF guide from the roadmap — '
-                      'one tap publishes what\'s missing.',
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.75), fontSize: 11.5),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              _publishing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2),
-                    )
-                  : TextButton(
-                      onPressed: _publish,
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: const Text('Publish',
-                          style: TextStyle(
-                              color: AppTheme.darkGreen,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12)),
-                    ),
-            ],
-          ),
-        );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: CanopySpace.s12),
+      child: CanopyCallout(
+        icon: Icons.hub_outlined,
+        title: 'Special articles ready to publish',
+        text: "The blockchain explainer and ETF guide from the roadmap — publish what's missing in one go.",
+        action: Align(
+          alignment: Alignment.centerLeft,
+          child: CanopyButton.secondary(
+              label: 'Publish', size: CanopyButtonSize.compact, loading: _publishing, onPressed: _publish),
+        ),
+      ),
+    );
   }
 }

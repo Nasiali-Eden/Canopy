@@ -1,38 +1,17 @@
+// lib/Shared/Activities/activity_home_logic.dart
+//
+// Glue for the Activities tab inside the community shell.
+
 import 'package:flutter/material.dart';
 
 import '../../Models/user.dart';
-import '../../Services/Community/community_service.dart';
-import '../theme/app_theme.dart';
 import 'activities_list.dart';
 import 'activity_filter_sheet.dart';
-import 'create_activity.dart';
 
 class ActivityHomeLogic {
-  static Widget? buildFloatingActionButton(BuildContext context, F_User? user) {
-    if (user == null) return null;
-
-    return FutureBuilder<String?>(
-      future: CommunityService().getUserRole(userId: user.uid),
-      builder: (context, snapshot) {
-        final role = snapshot.data ?? 'Member';
-        final isOrganizer = role == 'Organizer';
-        if (!isOrganizer) return const SizedBox.shrink();
-
-        return FloatingActionButton(
-          heroTag: 'create_activity_fab',
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (context) => const CreateActivityScreen()),
-          ),
-          backgroundColor: AppTheme.tertiary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          child: const Icon(Icons.add, size: 28),
-        );
-      },
-    );
-  }
+  /// Organiser-only "New activity" FAB.
+  static Widget? buildFloatingActionButton(BuildContext context, F_User? user) =>
+      user == null ? null : OrganizerFab(user: user);
 
   static Widget buildActivityTab({ActivityFilter? filter}) {
     return ActivitiesListScreen(

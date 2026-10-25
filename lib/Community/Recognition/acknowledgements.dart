@@ -1,132 +1,62 @@
+// lib/Community/Recognition/acknowledgements.dart
+//
+// Milestones (v2): steps reached from contributions you have logged, with how
+// many are verified. Counts come from your own records only.
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../Models/contribution.dart';
-import '../../Models/user.dart';
 import '../../Services/Impact/impact_service.dart';
-import '../../Shared/theme/app_theme.dart';
+import '../../theme/canopy_components.dart';
 
 class AcknowledgementsScreen extends StatelessWidget {
   const AcknowledgementsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<F_User?>(context);
-
-    if (user == null) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(title: const Text('Acknowledgements')),
-        body: const Center(child: Text('Sign in to view acknowledgements')),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Acknowledgements')),
+    final p = context.canopy;
+    final user = FirebaseAuth.instance.currentUser;
+    final bar = canopyAppBar(context, title: 'Milestones');
+    if (user == null) return CanopyScaffold(appBar: bar, body: const CanopySignedOutState());
+    return CanopyScaffold(
+      appBar: bar,
       body: StreamBuilder<List<Contribution>>(
         stream: ImpactService().watchUserContributions(userId: user.uid),
-        builder: (context, snapshot) {
-          final list = snapshot.data ?? const [];
-
-          final milestones = <_MilestoneItem>[
-            _MilestoneItem(
-              title: 'Started',
-              description: 'Joined the community and accepted guidelines.',
-              reached: true,
-            ),
-            _MilestoneItem(
-              title: 'First contribution',
-              description: 'Logged your first contribution.',
-              reached: list.isNotEmpty,
-            ),
-            _MilestoneItem(
-              title: '5 contributions',
-              description: 'Built a habit of contributing consistently.',
-              reached: list.length >= 5,
-            ),
-            _MilestoneItem(
-              title: '10 contributions',
-              description: 'A strong signal of long-term community support.',
-              reached: list.length >= 10,
-            ),
+        builder: (context, snap) {
+          if (snap.hasError) return const CanopyErrorState(title: "Couldn't load your milestones");
+          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+          final list = snap.data!;
+          final verified = list.where((c) => c.isVerified).length;
+          final steps = <(String, String, bool)>[
+            ('Joined', 'You joined Canopy and accepted the guidelines.', true),
+            ('First contribution', 'You logged your first contribution.', list.isNotEmpty),
+            ('First verified', 'An organisation verified one of your contributions.', verified >= 1),
+            ('5 contributions', 'Five contributions logged.', list.length >= 5),
+            ('10 contributions', 'Ten contributions logged.', list.length >= 10),
+            ('10 verified', 'Ten contributions verified by organisations.', verified >= 10),
           ];
-
+          final reached = steps.where((s) => s.$3).length;
           return ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s32),
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.favorite_outline, size: 26),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Milestones',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Recognizing steady, meaningful contributions.',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+              Text('$reached of ${steps.length}', style: CanopyType.display.copyWith(color: p.ink)),
+              Text('milestones reached · ${list.length} logged, $verified verified',
+                  style: CanopyType.label.copyWith(color: p.inkMuted)),
+              const SizedBox(height: CanopySpace.section),
+              CanopyListGroup(children: [
+                for (final s in steps)
+                  CanopyListRow(
+                    leading: Icon(s.$3 ? Icons.check_circle : Icons.radio_button_unchecked, color: s.$3 ? p.success : p.inkFaint),
+                    title: s.$1,
+                    subtitle: s.$2,
+                    trailing: s.$3 ? null : StatusLabel('Not yet', color: p.inkMuted),
+                    chevron: false,
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...milestones.map((m) => _MilestoneTile(item: m)),
+              ]),
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _MilestoneItem {
-  final String title;
-  final String description;
-  final bool reached;
-
-  const _MilestoneItem(
-      {required this.title, required this.description, required this.reached});
-}
-
-class _MilestoneTile extends StatelessWidget {
-  final _MilestoneItem item;
-
-  const _MilestoneTile({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: item.reached
-              ? AppTheme.tertiary.withAlpha((0.12 * 255).toInt())
-              : colorScheme.surfaceContainerHighest,
-          child: Icon(
-            item.reached ? Icons.check : Icons.timelapse,
-            color:
-                item.reached ? AppTheme.tertiary : colorScheme.onSurfaceVariant,
-          ),
-        ),
-        title: Text(item.title),
-        subtitle: Text(item.description),
       ),
     );
   }

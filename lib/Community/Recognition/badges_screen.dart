@@ -1,143 +1,92 @@
-import 'package:flutter/material.dart' hide Badge;
-import 'package:provider/provider.dart';
+// lib/Community/Recognition/badges_screen.dart
+//
+// Badges (v2): earned count, then a grid of badges — earned (gold ring) and
+// locked with a progress ring toward the requirement. Gold only here, on
+// recognition. Computed from verified contributions and points.
 
-import '../../Models/badge.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+import '../../Models/badge.dart' as m;
 import '../../Models/contribution.dart';
-import '../../Models/user.dart';
 import '../../Services/Impact/impact_service.dart';
 import '../../Services/Recognition/recognition_service.dart';
+import '../../theme/canopy_components.dart';
 
 class BadgesScreen extends StatelessWidget {
   const BadgesScreen({super.key});
 
+  double? _progress(m.Badge b, int points, int verified) {
+    if (b.earned) return null;
+    if (b.requiredPoints != null && b.requiredPoints! > 0) return (points / b.requiredPoints!).clamp(0, 1).toDouble();
+    if (b.requiredContributions != null && b.requiredContributions! > 0) return (verified / b.requiredContributions!).clamp(0, 1).toDouble();
+    return 0;
+  }
+
+  String _need(m.Badge b, int points, int verified) {
+    if (b.earned) return 'Earned';
+    if (b.requiredPoints != null) return '${(b.requiredPoints! - points).clamp(0, 1 << 30)} more points';
+    if (b.requiredContributions != null) {
+      final n = (b.requiredContributions! - verified).clamp(0, 1 << 30);
+      return '$n more verified contribution${n == 1 ? '' : 's'}';
+    }
+    return 'Locked';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = Provider.of<F_User?>(context);
-
-    if (user == null) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(title: const Text('Badges')),
-        body: const Center(child: Text('Sign in to view your badges')),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Badges')),
+    final p = context.canopy;
+    final user = FirebaseAuth.instance.currentUser;
+    final bar = canopyAppBar(context, title: 'Badges');
+    if (user == null) return CanopyScaffold(appBar: bar, body: const CanopySignedOutState());
+    return CanopyScaffold(
+      appBar: bar,
       body: StreamBuilder<int>(
         stream: ImpactService().watchUserImpactPoints(userId: user.uid),
-        builder: (context, pointsSnap) {
-          final points = pointsSnap.data ?? 0;
-
-          return StreamBuilder<List<Contribution>>(
-            stream: ImpactService().watchUserContributions(userId: user.uid),
-            builder: (context, contribSnap) {
-              final contribs = contribSnap.data ?? const [];
-              final badges = RecognitionService().computeBadges(
-                impactPoints: points,
-                contributionsCount: contribs.where((c) => c.isVerified).length,
-              );
-
-              final earned = badges.where((b) => b.earned).toList();
-              final locked = badges.where((b) => !b.earned).toList();
-
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.emoji_events_outlined, size: 28),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Recognition',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${earned.length}/${badges.length} badges earned',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ],
-                            ),
+        builder: (context, pointsSnap) => StreamBuilder<List<Contribution>>(
+          stream: ImpactService().watchUserContributions(userId: user.uid),
+          builder: (context, cSnap) {
+            if (pointsSnap.hasError || cSnap.hasError) return const CanopyErrorState(title: "Couldn't load your badges");
+            if (!pointsSnap.hasData || !cSnap.hasData) return const Center(child: CircularProgressIndicator());
+            final points = pointsSnap.data!;
+            final verified = cSnap.data!.where((c) => c.isVerified).length;
+            final badges = RecognitionService().computeBadges(impactPoints: points, contributionsCount: verified);
+            final earned = badges.where((b) => b.earned).length;
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s32),
+              children: [
+                Text('$earned of ${badges.length}', style: CanopyType.display.copyWith(color: p.ink)),
+                Text('badges earned', style: CanopyType.label.copyWith(color: p.inkMuted)),
+                const SizedBox(height: CanopySpace.section),
+                GridView.count(
+                  crossAxisCount: 3,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: CanopySpace.s16,
+                  crossAxisSpacing: CanopySpace.s12,
+                  childAspectRatio: .62,
+                  children: [
+                    for (final b in badges)
+                      Semantics(
+                        label: '${b.title}. ${_need(b, points, verified)}',
+                        child: Column(children: [
+                          CanopyBadge(
+                            icon: b.earned ? Icons.emoji_events_outlined : Icons.lock_outline,
+                            earned: b.earned,
+                            progress: _progress(b, points, verified),
                           ),
-                        ],
+                          const SizedBox(height: CanopySpace.s8),
+                          Text(b.title, textAlign: TextAlign.center, maxLines: 2, style: CanopyType.label.copyWith(color: p.ink)),
+                          Text(_need(b, points, verified),
+                              textAlign: TextAlign.center, maxLines: 2, style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                        ]),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Earned',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  if (earned.isEmpty)
-                    Text(
-                      'No badges yet. Log a contribution to get started.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    )
-                  else
-                    ...earned.map((b) => _BadgeTile(badge: b)),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Next Badges',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  ...locked.map((b) => _BadgeTile(badge: b)),
-                ],
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _BadgeTile extends StatelessWidget {
-  final Badge badge;
-
-  const _BadgeTile({required this.badge});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: badge.earned
-              ? colorScheme.primary.withAlpha((0.12 * 255).toInt())
-              : colorScheme.surfaceContainerHighest,
-          child: Icon(
-            badge.earned ? Icons.emoji_events : Icons.lock_outline,
-            color: badge.earned
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant,
-          ),
+                  ],
+                ),
+              ],
+            );
+          },
         ),
-        title: Text(badge.title),
-        subtitle: Text(badge.description),
-        trailing: badge.earned
-            ? const Icon(Icons.check_circle_outline)
-            : const Icon(Icons.chevron_right),
       ),
     );
   }

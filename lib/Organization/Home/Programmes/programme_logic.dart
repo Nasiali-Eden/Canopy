@@ -8,9 +8,7 @@ import '../../../Models/programme_enquiry.dart';
 // All Firestore reads/writes for the Programmes feature live here.
 // No UI, no state — screens/providers call these static methods.
 //
-// Required Firestore composite indexes:
-//   programmes          (orgId ASC, createdAt DESC)
-//   programme_enquiries (orgId ASC, createdAt DESC)
+// Index-free: single-field equality queries, sorted client-side.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ProgrammeLogic {
@@ -38,9 +36,32 @@ class ProgrammeLogic {
 
   /// Creates a new programme doc and returns its generated id.
   static Future<String> createProgramme(Programme p) async {
-    final ref = await _db.collection('programmes').add(p.toFirestore());
+    // Keep the caller's id — images are already stored under it.
+    final ref = p.id.isEmpty ? _db.collection('programmes').doc() : _db.collection('programmes').doc(p.id);
+    await ref.set(p.toFirestore());
     return ref.id;
   }
+
+  /// Creates or overwrites the programme doc with [p.id] (editor autosave).
+  static Future<void> saveProgramme(Programme p) async {
+    await _db.collection('programmes').doc(p.id).set(p.toFirestore());
+  }
+
+  static Future<void> deleteProgramme(String id) async {
+    await _db.collection('programmes').doc(id).delete();
+  }
+
+  /// Six editor sections: Type · Basic info · Schedule · Location ·
+  /// Engagement & contact · Images & status. Used for the "4 of 6" bar.
+  static List<bool> sectionsDone(Programme p) => [
+        true,
+        p.title.trim().isNotEmpty && p.summary.trim().isNotEmpty,
+        p.schedule.startDate != null || p.schedule.recurrence == RecurrencePattern.ongoing,
+        p.schedule.isOnline || p.schedule.location != null,
+        (p.details.engagementModel != EngagementModel.paid || (p.details.price ?? 0) > 0) &&
+            (p.contact.enquiryEnabled || (p.contact.externalLink?.isNotEmpty ?? false)),
+        p.coverImageUrl != null,
+      ];
 
   /// Overwrites the programme doc with [id].
   static Future<void> updateProgramme(Programme p) async {
@@ -72,21 +93,15 @@ class ProgrammeLogic {
     });
   }
 
-  /// Dual-write: create the enquiry + signal the org's inbox atomically.
+  /// Creates the enquiry. The org inbox counts unread enquiries from this
+  /// collection directly (members can't write the org doc).
   static Future<void> sendEnquiry(ProgrammeEnquiry enquiry) async {
-    final batch = _db.batch();
+    await _db.collection('programme_enquiries').add(enquiry.toFirestore());
+  }
 
-    // Primary enquiry document
-    final enquiryRef = _db.collection('programme_enquiries').doc();
-    batch.set(enquiryRef, enquiry.toFirestore());
-
-    // Org inbox signal — increments unread counter in the org doc
-    final orgRef = _db.collection('organizations').doc(enquiry.orgId);
-    batch.update(orgRef, {
-      'unreadEnquiries': FieldValue.increment(1),
-    });
-
-    await batch.commit();
+  /// Mark an enquiry as responded (after the org replies or calls).
+  static Future<void> markResponded(String enquiryId) async {
+    await _db.collection('programme_enquiries').doc(enquiryId).update({'status': 'responded'});
   }
 
   /// Mark an enquiry as read.

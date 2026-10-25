@@ -1,9 +1,13 @@
+// lib/Shared/Activities/activity_filter_sheet.dart
+//
+// Activities filter model + sheet (rendered inside showCanopySheet).
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../Models/geo/canopy_location.dart';
 import '../../Providers/location_provider.dart';
-import '../theme/app_theme.dart';
+import '../../theme/canopy_components.dart';
 import '../widgets/location_switcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,28 +80,25 @@ class ActivityFilter {
 const _sentinel = Object();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TYPE DISPLAY LABELS
+// FILTER SHEET
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _typeLabels = {
-  'cleanup': 'Cleanup',
-  'tree_planting': 'Tree Planting',
+const _typeLabels = <String?, String>{
+  null: 'All types',
+  'cleanup': 'Clean-up',
+  'tree_planting': 'Tree planting',
   'awareness': 'Awareness',
   'training': 'Training',
   'monitoring': 'Monitoring',
   'other': 'Other',
 };
 
-const _timeframeLabels = {
-  null: 'Any Time',
+const _timeframeLabels = <String?, String>{
+  null: 'Any time',
   'today': 'Today',
-  'this_week': 'This Week',
-  'this_month': 'This Month',
+  'this_week': 'This week',
+  'this_month': 'This month',
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FILTER SHEET
-// ─────────────────────────────────────────────────────────────────────────────
 
 class ActivityFilterSheet extends StatefulWidget {
   final ActivityFilter current;
@@ -109,272 +110,91 @@ class ActivityFilterSheet extends StatefulWidget {
 }
 
 class _ActivityFilterSheetState extends State<ActivityFilterSheet> {
-  late String? _type;
-  late String? _timeframe;
-  late bool _showFull;
-  late bool _useLocationScope;
+  late String? _type = widget.current.type;
+  late String? _timeframe = widget.current.timeframe;
+  late bool _showFull = widget.current.showFull;
+  late bool _useLocationScope = widget.current.useLocationScope;
 
-  @override
-  void initState() {
-    super.initState();
-    _type = widget.current.type;
-    _timeframe = widget.current.timeframe;
-    _showFull = widget.current.showFull;
-    _useLocationScope = widget.current.useLocationScope;
-  }
+  Widget _label(BuildContext context, String text) => Padding(
+        padding: const EdgeInsets.only(top: CanopySpace.s16, bottom: CanopySpace.s4),
+        child: Text(text.toUpperCase(),
+            style: CanopyType.eyebrow.copyWith(color: context.canopy.inkMuted)),
+      );
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return CanopySheetBody(
+      title: 'Filter activities',
+      children: [
+        // The location scope is app-wide: changing it here changes it on the
+        // feed and in the marketplace too.
+        _label(context, 'Where'),
+        const LocationSwitcher(padding: EdgeInsets.symmetric(vertical: 4)),
+        CanopySwitchRow(
+          title: 'Limit to my location',
+          caption: _useLocationScope
+              ? 'Only activities in ${context.watch<LocationProvider>().filter.label}'
+              : 'Activities everywhere',
+          value: _useLocationScope,
+          onChanged: (v) => setState(() => _useLocationScope = v),
+        ),
+        _label(context, 'Type'),
+        Wrap(
+          spacing: CanopySpace.s8,
           children: [
-            // Drag handle
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: AppTheme.lightGreen.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(2),
-                ),
+            for (final e in _typeLabels.entries)
+              CanopyFilterChip(
+                label: e.value,
+                selected: _type == e.key,
+                onTap: () => setState(() => _type = e.key),
               ),
-            ),
-
-            const Text(
-              'Filter Activities',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.darkGreen),
-            ),
-
-            const SizedBox(height: 20),
-
-            // ── Where section ─────────────────────────────────────────────
-            // The location scope is app-wide, not per-sheet: changing it here
-            // changes it on the feed and in the marketplace too. The switch is
-            // embedded rather than duplicated so there is exactly one notion
-            // of "where am I looking".
-            _SectionLabel('Where'),
-            const SizedBox(height: 6),
-            const LocationSwitcher(padding: EdgeInsets.symmetric(vertical: 4)),
-            SwitchListTile(
-              title: const Text(
-                'Limit to my location',
-                style: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w500),
-              ),
-              subtitle: Text(
-                _useLocationScope
-                    ? 'Only activities in ${context.watch<LocationProvider>().filter.label}'
-                    : 'Activities everywhere, ignoring the location switch',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.darkGreen.withOpacity(0.55)),
-              ),
-              value: _useLocationScope,
-              onChanged: (v) => setState(() => _useLocationScope = v),
-              activeColor: AppTheme.primary,
-              contentPadding: EdgeInsets.zero,
-            ),
-
-            const SizedBox(height: 12),
-
-            // ── Type section ──────────────────────────────────────────────
-            _SectionLabel('Type'),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _FilterChip(
-                  label: 'All Types',
-                  selected: _type == null,
-                  onTap: () => setState(() => _type = null),
-                ),
-                ..._typeLabels.entries.map((e) => _FilterChip(
-                      label: e.value,
-                      selected: _type == e.key,
-                      onTap: () => setState(() => _type = e.key),
-                    )),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // ── When section ──────────────────────────────────────────────
-            _SectionLabel('When'),
-            const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _timeframeLabels.entries.map((e) {
-                  final val = e.key;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _FilterChip(
-                      label: e.value,
-                      selected: _timeframe == val,
-                      onTap: () => setState(() => _timeframe = val),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── Availability ──────────────────────────────────────────────
-            _SectionLabel('Availability'),
-            const SizedBox(height: 4),
-            SwitchListTile(
-              title: const Text(
-                'Include full events',
-                style: TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.darkGreen,
-                    fontWeight: FontWeight.w500),
-              ),
-              subtitle: Text(
-                'Show activities that have reached max capacity',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.darkGreen.withOpacity(0.55)),
-              ),
-              value: _showFull,
-              onChanged: (v) => setState(() => _showFull = v),
-              activeColor: AppTheme.primary,
-              contentPadding: EdgeInsets.zero,
-            ),
-
-            const SizedBox(height: 24),
-
-            // ── Actions ───────────────────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: FilledButton(
-                onPressed: () {
-                  Navigator.pop(
-                    context,
-                    ActivityFilter(
-                      type: _type,
-                      timeframe: _timeframe,
-                      showFull: _showFull,
-                      useLocationScope: _useLocationScope,
-                    ),
-                  );
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text(
-                  'Apply Filters',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 15),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () => setState(() {
-                  _type = null;
-                  _timeframe = null;
-                  _showFull = false;
-                  _useLocationScope = true;
-                }),
-                child: Text(
-                  'Clear All',
-                  style: TextStyle(
-                      color: AppTheme.darkGreen.withOpacity(0.55),
-                      fontWeight: FontWeight.w500),
-                ),
-              ),
-            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SUB-WIDGETS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  const _SectionLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w700,
-        color: AppTheme.darkGreen.withOpacity(0.55),
-        letterSpacing: 0.3,
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _FilterChip(
-      {required this.label,
-      required this.selected,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppTheme.primary
-              : AppTheme.lightGreen.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(20),
-          border: selected
-              ? null
-              : Border.all(
-                  color: AppTheme.lightGreen.withOpacity(0.3)),
+        _label(context, 'When'),
+        Wrap(
+          spacing: CanopySpace.s8,
+          children: [
+            for (final e in _timeframeLabels.entries)
+              CanopyFilterChip(
+                label: e.value,
+                selected: _timeframe == e.key,
+                onTap: () => setState(() => _timeframe = e.key),
+              ),
+          ],
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: selected
-                ? Colors.white
-                : AppTheme.darkGreen.withOpacity(0.8),
+        _label(context, 'Availability'),
+        CanopySwitchRow(
+          title: 'Include full activities',
+          caption: 'Show activities that have reached capacity',
+          value: _showFull,
+          onChanged: (v) => setState(() => _showFull = v),
+        ),
+      ],
+      actions: [
+        CanopyButton(
+          label: 'Apply filters',
+          expand: true,
+          onPressed: () => Navigator.pop(
+            context,
+            ActivityFilter(
+              type: _type,
+              timeframe: _timeframe,
+              showFull: _showFull,
+              useLocationScope: _useLocationScope,
+            ),
           ),
         ),
-      ),
+        CanopyButton.quiet(
+          label: 'Clear all',
+          expand: true,
+          onPressed: () => setState(() {
+            _type = null;
+            _timeframe = null;
+            _showFull = false;
+            _useLocationScope = true;
+          }),
+        ),
+      ],
     );
   }
 }

@@ -1,43 +1,39 @@
 // lib/Culture/Heritage/Create/edit_entry_screen.dart
 //
-// Edit an existing cultural entry: title, description, visibility, and cover
-// image. Loads the live doc by id (so it reads the true written schema —
-// cover_image_url etc.), saves back to cultural_entries/{id}. Cover is uploaded
-// only on Save.
+// Edit a published entry (ARCHIVE_HANDOFF §3.3, T). Cover, type · locality
+// label, title, description, visibility row (tap → selector → confirm, saved
+// at once), Preview, and an explicit "Save changes" — a published entry
+// never shows half-finished edits. The app bar shows when it was last saved.
 
 import 'dart:io';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../Shared/theme/app_theme.dart';
+import '../../../theme/canopy_components.dart';
+import '../../archive_ui.dart';
+import '../Archive/heritage_archive_screen.dart' show changeEntryVisibility;
 
 class HeritageEntryEditScreen extends StatefulWidget {
   final String entryId;
   const HeritageEntryEditScreen({super.key, required this.entryId});
 
   @override
-  State<HeritageEntryEditScreen> createState() =>
-      _HeritageEntryEditScreenState();
+  State<HeritageEntryEditScreen> createState() => _HeritageEntryEditScreenState();
 }
 
 class _HeritageEntryEditScreenState extends State<HeritageEntryEditScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-
-  String _visibility = 'public';
-  String? _coverUrl;
+  final _title = TextEditingController();
+  final _desc = TextEditingController();
+  String _type = '';
+  String? _community, _coverUrl;
   File? _newCover;
-  String _contentTypeLabel = 'Entry';
+  DateTime? _savedAt;
+  bool _loading = true, _failed = false, _saving = false, _showErrors = false;
 
-  bool _loading = true;
-  bool _saving = false;
-
-  static const _visibilities = ['public', 'community', 'restricted', 'sealed'];
+  DocumentReference<Map<String, dynamic>> get _ref => FirebaseFirestore.instance.collection('cultural_entries').doc(widget.entryId);
 
   @override
   void initState() {
@@ -47,73 +43,58 @@ class _HeritageEntryEditScreenState extends State<HeritageEntryEditScreen> {
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
-    _descCtrl.dispose();
+    _title.dispose();
+    _desc.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('cultural_entries')
-          .doc(widget.entryId)
-          .get();
-      final d = doc.data() ?? {};
-      _titleCtrl.text = (d['title'] ?? '') as String;
-      _descCtrl.text = (d['description'] ?? '') as String;
-      final v = (d['visibility'] as String?) ?? 'public';
-      _visibility = _visibilities.contains(v) ? v : 'public';
+      final d = (await _ref.get()).data() ?? {};
+      _title.text = d['title'] as String? ?? '';
+      _desc.text = d['description'] as String? ?? '';
+      _type = d['content_type'] as String? ?? '';
+      _community = ((d['locality'] as Map?)?['community_name']) as String?;
       _coverUrl = (d['cover_image_url'] ?? d['image_url']) as String?;
-      _contentTypeLabel = _humanize((d['content_type'] as String?) ?? 'Entry');
-    } catch (e) {
-      debugPrint('EditEntry load error: $e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      _savedAt = (d['updated_at'] as Timestamp?)?.toDate();
+    } catch (_) {
+      _failed = true;
     }
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _pickCover() async {
-    final f = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (f == null || !mounted) return;
-    setState(() => _newCover = File(f.path));
+    final f = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
+    if (f != null) setState(() => _newCover = File(f.path));
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    setState(() => _showErrors = true);
+    if (_title.text.trim().isEmpty || _desc.text.trim().length < 50) return;
     setState(() => _saving = true);
     try {
-      String? coverUrl = _coverUrl;
+      var cover = _coverUrl;
       if (_newCover != null) {
-        final ref = FirebaseStorage.instance.ref().child(
-            'cultural_entries/${widget.entryId}/cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        final ref = FirebaseStorage.instance.ref('cultural_entries/${widget.entryId}/cover_${DateTime.now().millisecondsSinceEpoch}.jpg');
         await ref.putFile(_newCover!);
-        coverUrl = await ref.getDownloadURL();
+        cover = await ref.getDownloadURL();
       }
-      final now = Timestamp.now();
-      await FirebaseFirestore.instance
-          .collection('cultural_entries')
-          .doc(widget.entryId)
-          .update({
-        'title': _titleCtrl.text.trim(),
-        'description': _descCtrl.text.trim(),
-        'visibility': _visibility,
-        if (coverUrl != null) 'cover_image_url': coverUrl,
-        'updated_at': now,
-        'last_activity_at': now,
+      await _ref.update({
+        'title': _title.text.trim(),
+        'description': _desc.text.trim(),
+        if (cover != null) 'cover_image_url': cover,
+        'updated_at': FieldValue.serverTimestamp(),
+        'last_activity_at': FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Entry updated'), backgroundColor: AppTheme.primary),
-      );
+      showCanopySnack(context, 'Changes saved.');
       Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save: $e')),
-        );
-      }
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't save. Your changes are still here — try again.", error: true);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -121,218 +102,88 @@ class _HeritageEntryEditScreenState extends State<HeritageEntryEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5EDE0),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF5EDE0),
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: AppTheme.darkGreen,
-        title: const Text('Edit entry',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-      ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(
-                  color: AppTheme.tertiary, strokeWidth: 2))
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
-                children: [
-                  // Cover
-                  GestureDetector(
-                    onTap: _pickCover,
-                    child: Container(
-                      height: 170,
-                      width: double.infinity,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: AppTheme.lightGreen.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: AppTheme.tertiary.withOpacity(0.3)),
-                      ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          if (_newCover != null)
-                            Image.file(_newCover!, fit: BoxFit.cover)
-                          else if ((_coverUrl ?? '').isNotEmpty)
-                            CachedNetworkImage(
-                                imageUrl: _coverUrl!, fit: BoxFit.cover)
-                          else
-                            _coverPrompt(),
-                          Positioned(
-                            right: 10,
-                            top: 10,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.45),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.photo_camera_outlined,
-                                      size: 13, color: Colors.white),
-                                  SizedBox(width: 5),
-                                  Text('Cover',
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+    final p = context.canopy;
+    final ago = _savedAt == null ? null : DateTime.now().difference(_savedAt!).inMinutes;
+    final bar = canopyAppBar(context, title: 'Edit entry', actions: [
+      if (ago != null)
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.only(right: CanopySpace.gutter),
+            child: Text(ago < 1 ? 'Saved just now' : (ago < 60 ? 'Saved $ago min ago' : 'Saved earlier'), style: CanopyType.caption.copyWith(color: p.inkMuted)),
+          ),
+        ),
+    ]);
+    if (_loading) return CanopyScaffold(appBar: bar, body: const Center(child: CircularProgressIndicator()));
+    if (_failed) return CanopyScaffold(appBar: bar, body: CanopyErrorState(title: "Couldn't load this entry", onRetry: _load));
+    return CanopyScaffold(
+      appBar: bar,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(CanopyRadius.md),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Material(
+                color: p.surfaceMuted,
+                child: InkWell(
+                  onTap: _pickCover,
+                  child: Stack(fit: StackFit.expand, children: [
+                    if (_newCover != null)
+                      Image.file(_newCover!, fit: BoxFit.cover)
+                    else
+                      CategoryThumb(typeKey: _type, url: _coverUrl, size: 400),
+                    Positioned(
+                      right: CanopySpace.s8,
+                      bottom: CanopySpace.s8,
+                      child: CanopyIconButton(icon: Icons.edit_outlined, tooltip: 'Change cover', onImage: true, onPressed: _pickCover),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(_contentTypeLabel.toUpperCase(),
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.6,
-                          color: AppTheme.darkGreen.withOpacity(0.5))),
-                  const SizedBox(height: 10),
-                  _field(_titleCtrl, 'Title', Icons.title,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null),
-                  _field(_descCtrl, 'Description', Icons.notes_outlined,
-                      maxLines: 8),
-                  const SizedBox(height: 4),
-                  _visibilityField(),
-                ],
-              ),
-            ),
-      bottomSheet: _loading
-          ? null
-          : Container(
-              padding: EdgeInsets.fromLTRB(
-                  16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
-              color: const Color(0xFFF5EDE0),
-              child: SizedBox(
-                height: 52,
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: _saving
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2.4, color: Colors.white))
-                      : const Text('Save changes',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w800)),
+                  ]),
                 ),
               ),
             ),
-    );
-  }
-
-  Widget _coverPrompt() => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.add_photo_alternate_outlined,
-                size: 30, color: AppTheme.primary.withOpacity(0.7)),
-            const SizedBox(height: 6),
-            Text('Add a cover image',
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.darkGreen.withOpacity(0.7))),
-          ],
-        ),
-      );
-
-  Widget _field(TextEditingController c, String label, IconData icon,
-      {int maxLines = 1, String? Function(String?)? validator}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        controller: c,
-        maxLines: maxLines,
-        validator: validator,
-        style: const TextStyle(
-            fontSize: 14, color: AppTheme.darkGreen, fontWeight: FontWeight.w500),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle:
-              TextStyle(fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.6)),
-          filled: true,
-          fillColor: Colors.white,
-          prefixIcon: Icon(icon, size: 19, color: AppTheme.primary),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppTheme.tertiary.withOpacity(0.22)),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: AppTheme.tertiary.withOpacity(0.22)),
+          const SizedBox(height: CanopySpace.s12),
+          ContentTypeLabel(_type, suffix: _community),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField(
+            label: 'Name',
+            controller: _title,
+            error: _showErrors && _title.text.trim().isEmpty ? 'The entry needs a name.' : null,
+            onChanged: (_) => setState(() {}),
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField(
+            label: 'Description',
+            controller: _desc,
+            minLines: 4,
+            maxLines: 12,
+            error: _showErrors && _desc.text.trim().length < 50 ? 'At least 50 characters.' : null,
+            onChanged: (_) => setState(() {}),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _visibilityField() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.tertiary.withOpacity(0.22)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.visibility_outlined, size: 19, color: AppTheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _visibility,
-                isExpanded: true,
-                items: _visibilities
-                    .map((v) => DropdownMenuItem(
-                          value: v,
-                          child: Text(_humanize(v),
-                              style: const TextStyle(
-                                  fontSize: 14, color: AppTheme.darkGreen)),
-                        ))
-                    .toList(),
-                onChanged: (v) =>
-                    setState(() => _visibility = v ?? _visibility),
-              ),
-            ),
+          const SizedBox(height: CanopySpace.section),
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: _ref.snapshots(),
+            builder: (context, snap) {
+              final v = visibilityFrom(snap.data?.data()?['visibility'] as String?);
+              return CanopyListGroup(children: [
+                CanopyListRow(
+                  icon: Icons.shield_outlined,
+                  title: 'Visibility',
+                  trailing: VisibilityLabel(v),
+                  onTap: () => changeEntryVisibility(context, widget.entryId, v),
+                ),
+                CanopyListRow(
+                  icon: Icons.visibility_outlined,
+                  title: 'Preview as a member',
+                  onTap: () => openEntryPreview(context, widget.entryId, published: true),
+                ),
+              ]);
+            },
           ),
         ],
       ),
+      sticky: StickyActionBar(children: [CanopyButton(label: 'Save changes', expand: true, loading: _saving, onPressed: _save)]),
     );
   }
-
-  static String _humanize(String s) => s.isEmpty
-      ? s
-      : s
-          .replaceAll('_', ' ')
-          .split(' ')
-          .where((w) => w.isNotEmpty)
-          .map((w) => '${w[0].toUpperCase()}${w.substring(1)}')
-          .join(' ');
 }

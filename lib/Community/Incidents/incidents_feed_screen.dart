@@ -1,17 +1,22 @@
 // lib/Community/Incidents/incidents_feed_screen.dart
 //
-// "Where do reported issues actually show up" — answers that gap: a live
-// feed reading the Incidents collection back (post_incident.dart only wrote
-// it before; nothing displayed it). Map tab is left as a visible "Soon" —
-// no pin-map exists yet and building a fake one would misrepresent what's
-// real, same call as the Organisations leaderboard tab.
+// Reported issues (v2): Everyone / Mine, one row per report (thumb, headline,
+// type · where · when, status label). Tap opens a detail sheet with photos,
+// the 4-step status timeline and "Open in Maps". Nothing advances status
+// yet, so the timeline says who would do each step without claiming it.
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../Services/Incidents/incidents_service.dart';
-import '../../Shared/theme/app_theme.dart';
+import '../../Shared/Inputs/post_incident.dart' show incidentTypeIcon;
+import '../../theme/canopy_components.dart';
 
 class IncidentsFeedScreen extends StatefulWidget {
-  const IncidentsFeedScreen({super.key});
+  final bool initialMine;
+  const IncidentsFeedScreen({super.key, this.initialMine = false});
 
   @override
   State<IncidentsFeedScreen> createState() => _IncidentsFeedScreenState();
@@ -19,238 +24,166 @@ class IncidentsFeedScreen extends StatefulWidget {
 
 class _IncidentsFeedScreenState extends State<IncidentsFeedScreen> {
   final _service = IncidentsService();
+  late bool _mine = widget.initialMine;
+  final _uid = FirebaseAuth.instance.currentUser?.uid;
+  int _retry = 0;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AppTheme.darkGreen,
-        title: const Text('Reported Issues',
-            style: TextStyle(
-                color: AppTheme.darkGreen,
-                fontWeight: FontWeight.w800,
-                fontSize: 17)),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppTheme.darkGreen.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 9),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(100),
-                        boxShadow: [
-                          BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
-                              blurRadius: 4),
-                        ],
-                      ),
-                      child: const Text('List',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.primary)),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 9),
-                      child: Text('Map · Soon',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.darkGreen.withOpacity(0.35))),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    final bar = canopyAppBar(context, title: 'Reported issues', actions: [
+      CanopyIconButton(icon: Icons.add, tooltip: 'Report an issue', onPressed: () => Navigator.pushNamed(context, '/report-incident')),
+    ]);
+    if (_uid == null) return CanopyScaffold(appBar: bar, body: const CanopySignedOutState());
+    return CanopyScaffold(
+      appBar: bar,
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s8),
+          child: CanopySegmented<bool>(
+            options: const [(false, 'Everyone'), (true, 'Mine')],
+            value: _mine,
+            onChanged: (v) => setState(() => _mine = v),
           ),
-          Expanded(
-            child: StreamBuilder<List<IncidentReport>>(
-              stream: _service.watchAll(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                      child: CircularProgressIndicator(color: AppTheme.primary));
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Could not load reports.\n${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppTheme.darkGreen.withOpacity(0.6))),
-                  );
-                }
-                final reports = snapshot.data ?? const [];
-                if (reports.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(
-                        'No reports yet. Reports submitted from "Report an Issue" show up here.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.5)),
-                      ),
-                    ),
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                  itemCount: reports.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 14),
-                  itemBuilder: (context, i) => _ReportCard(report: reports[i]),
+        ),
+        Expanded(
+          child: StreamBuilder<List<IncidentReport>>(
+            key: ValueKey('$_mine$_retry'),
+            stream: _mine ? _service.watchMine(_uid) : _service.watchAll(),
+            builder: (context, snap) {
+              if (snap.hasError) {
+                return CanopyErrorState(title: "Couldn't load reports", onRetry: () => setState(() => _retry++));
+              }
+              if (!snap.hasData) return const CanopyListSkeleton();
+              final reports = snap.data!;
+              if (reports.isEmpty) {
+                return CanopyEmptyState(
+                  icon: Icons.report_outlined,
+                  title: _mine ? "You haven't reported anything" : 'No reports yet',
+                  line: 'Seen dumping, burning or a blocked drain? Report it so organisations nearby know.',
+                  actionLabel: 'Report an issue',
+                  primaryAction: true,
+                  onAction: () => Navigator.pushNamed(context, '/report-incident'),
                 );
-              },
-            ),
+              }
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8, CanopySpace.gutter, CanopySpace.s32),
+                children: [
+                  CanopyListGroup(children: [for (final r in reports) _ReportRow(report: r)]),
+                ],
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 }
 
-class _ReportCard extends StatelessWidget {
+(String, Color) incidentStatus(IncidentStatus s, CanopyPalette p) => switch (s) {
+      IncidentStatus.pending => ('Pending', p.warning),
+      IncidentStatus.verifying => ('Being checked', p.info),
+      IncidentStatus.confirmed => ('Confirmed', p.primaryInk),
+      IncidentStatus.resolved => ('Resolved', p.success),
+    };
+
+String _when(DateTime? d) {
+  if (d == null) return 'Just now';
+  final diff = DateTime.now().difference(d);
+  if (diff.inMinutes < 60) return '${diff.inMinutes.clamp(1, 59)}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return DateFormat('d MMM').format(d);
+}
+
+class _ReportRow extends StatelessWidget {
   final IncidentReport report;
-  const _ReportCard({required this.report});
+  const _ReportRow({required this.report});
 
-  Color get _statusColor {
-    switch (report.status) {
-      case IncidentStatus.pending:
-        return const Color(0xFF7A6329);
-      case IncidentStatus.verifying:
-        return AppTheme.accent;
-      case IncidentStatus.confirmed:
-        return AppTheme.primary;
-      case IncidentStatus.resolved:
-        return AppTheme.darkGreen;
-    }
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    final (label, color) = incidentStatus(report.status, p);
+    return CanopyListRow(
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(CanopyRadius.xs),
+        child: SizedBox(
+          width: 56,
+          height: 56,
+          child: CanopyImage(url: report.images.isEmpty ? null : report.images.first, fallbackIcon: incidentTypeIcon(report.type)),
+        ),
+      ),
+      title: report.headline,
+      subtitle: '${report.type} · ${report.whereLabel} · ${_when(report.timestamp)}',
+      below: Padding(padding: const EdgeInsets.only(top: CanopySpace.s4), child: StatusLabel(label, color: color)),
+      onTap: () => showCanopySheet(context, tall: true, builder: (_) => _ReportSheet(report: report)),
+    );
   }
+}
 
-  Color get _statusBg {
-    switch (report.status) {
-      case IncidentStatus.pending:
-        return const Color(0x2EC4A961);
-      case IncidentStatus.verifying:
-        return AppTheme.accent.withOpacity(0.15);
-      case IncidentStatus.confirmed:
-        return AppTheme.primary.withOpacity(0.14);
-      case IncidentStatus.resolved:
-        return AppTheme.darkGreen.withOpacity(0.1);
+class _ReportSheet extends StatelessWidget {
+  final IncidentReport report;
+  const _ReportSheet({required this.report});
+
+  Future<void> _openMaps(BuildContext context) async {
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${report.latitude},${report.longitude}');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (context.mounted) showCanopySnack(context, "Couldn't open Maps.", error: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = report.images.isNotEmpty;
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppTheme.lightGreen.withOpacity(0.3)),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            width: 88,
-            decoration: BoxDecoration(
-              borderRadius:
-                  const BorderRadius.horizontal(left: Radius.circular(16)),
-              image: hasImage
-                  ? DecorationImage(
-                      image: NetworkImage(report.images.first),
-                      fit: BoxFit.cover)
-                  : null,
-              gradient: hasImage
-                  ? null
-                  : LinearGradient(
-                      colors: [
-                        AppTheme.accent.withOpacity(0.4),
-                        AppTheme.lightGreen.withOpacity(0.55),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(report.headline,
-                            style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.darkGreen)),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: _statusBg,
-                          borderRadius: BorderRadius.circular(100),
-                        ),
-                        child: Text(report.statusLabel,
-                            style: TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w800,
-                                color: _statusColor)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text('${report.type} · ${report.location}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 11, color: AppTheme.darkGreen.withOpacity(0.5))),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: List.generate(4, (i) {
-                      final done = i < report.stepsDone;
-                      return Expanded(
-                        child: Container(
-                          height: 4,
-                          margin: EdgeInsets.only(right: i == 3 ? 0 : 3),
-                          decoration: BoxDecoration(
-                            color: done
-                                ? AppTheme.primary
-                                : AppTheme.darkGreen.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ],
+    final p = context.canopy;
+    final (label, color) = incidentStatus(report.status, p);
+    final step = report.stepsDone;
+    TimelineState st(int i) => i < step ? TimelineState.done : (i == step ? TimelineState.now : TimelineState.todo);
+    return CanopySheetBody(
+      title: report.headline,
+      caption: '${report.type} · ${_when(report.timestamp)}',
+      children: [
+        StatusLabel(label, color: color),
+        if (report.images.isNotEmpty) ...[
+          const SizedBox(height: CanopySpace.s12),
+          SizedBox(
+            height: 180,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: report.images.length,
+              separatorBuilder: (_, __) => const SizedBox(width: CanopySpace.s8),
+              itemBuilder: (_, i) => ClipRRect(
+                borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                child: SizedBox(width: 180, child: CanopyImage(url: report.images[i])),
               ),
             ),
           ),
         ],
-      ),
+        if (report.description.trim().isNotEmpty) ...[
+          const SizedBox(height: CanopySpace.s12),
+          Text(report.description.trim(), style: CanopyType.body.copyWith(color: p.ink)),
+        ],
+        const SizedBox(height: CanopySpace.s16),
+        CanopyListGroup(children: [
+          CanopyListRow(
+            icon: Icons.place_outlined,
+            title: report.whereLabel,
+            subtitle: report.hasPosition ? 'Open in Maps' : null,
+            onTap: report.hasPosition ? () => _openMaps(context) : null,
+            chevron: report.hasPosition,
+          ),
+        ]),
+        const SizedBox(height: CanopySpace.s16),
+        CanopyTimeline(steps: [
+          TimelineStep('Reported', state: st(0)),
+          TimelineStep('Being checked by an organisation', state: st(1)),
+          TimelineStep('Confirmed', state: st(2)),
+          TimelineStep('Resolved', state: st(3)),
+        ]),
+        const SizedBox(height: CanopySpace.s12),
+        Text('Organisations can see every report. Checking and resolving are not tracked in the app yet.',
+            style: CanopyType.caption.copyWith(color: p.inkMuted)),
+      ],
     );
   }
 }

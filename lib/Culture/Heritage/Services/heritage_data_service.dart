@@ -44,6 +44,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+import 'heritage_bundled_images.dart';
 import 'heritage_content_types.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ class HeritageItem {
   final String id;
   final String contentType; // taxonomy key
   final String orgId;
+  final String authorUid; // the person who recorded the entry
   final String title;
   final String description;
   final String visibility;
@@ -103,6 +105,9 @@ class HeritageItem {
   final String? communityId;
   final String? communityName;
   final String? subGroupId;
+
+  /// Optional: where this culture is on the ground (set from a phone's GPS).
+  final double? lat, lng;
 
   final int commentCount;
   final int relationCount;
@@ -118,6 +123,7 @@ class HeritageItem {
     required this.id,
     required this.contentType,
     required this.orgId,
+    this.authorUid = '',
     required this.title,
     required this.description,
     required this.visibility,
@@ -127,6 +133,8 @@ class HeritageItem {
     required this.communityId,
     required this.communityName,
     required this.subGroupId,
+    this.lat,
+    this.lng,
     required this.commentCount,
     required this.relationCount,
     required this.viewCount,
@@ -145,6 +153,7 @@ class HeritageItem {
       id: doc.id,
       contentType: data['content_type'] as String? ?? '',
       orgId: data['org_id'] as String? ?? '',
+      authorUid: (data['created_by_uid'] ?? data['created_by']) as String? ?? '',
       title: data['title'] as String? ?? '',
       description: data['description'] as String? ?? '',
       visibility: data['visibility'] as String? ?? 'public',
@@ -154,6 +163,8 @@ class HeritageItem {
       communityId: locality['community_id'] as String?,
       communityName: locality['community_name'] as String?,
       subGroupId: locality['sub_group_id'] as String?,
+      lat: (data['map_point'] as GeoPoint?)?.latitude,
+      lng: (data['map_point'] as GeoPoint?)?.longitude,
       commentCount: (data['comment_count'] as num?)?.toInt() ?? 0,
       relationCount: (data['relation_count'] as num?)?.toInt() ?? 0,
       viewCount: (data['view_count'] as num?)?.toInt() ?? 0,
@@ -281,19 +292,21 @@ class HeritageDataService {
         .collection(hierarchyCollection)
         .doc(nodeId)
         .snapshots()
-        .map((d) => (d.data())?['bg_image_url'] as String?);
+        .map((d) => _nonEmpty((d.data())?['bg_image_url'] as String?) ?? HeritageBundledImages.bg(nodeId));
   }
+
+  static String? _nonEmpty(String? s) => (s == null || s.isEmpty) ? null : s;
 
   /// Both images for a node: `bg` is the rectangular backdrop (country screen /
   /// banner), `card` is the square heritage-tab card image. Either may be null.
-  Stream<({String? bg, String? card})> streamNodeImages(String nodeId) {
+  Stream<({String? bg, String? card})> streamNodeImages(String nodeId, {bool bundled = true}) {
     return _db
         .collection(hierarchyCollection)
         .doc(nodeId)
         .snapshots()
         .map((d) => (
-              bg: (d.data())?['bg_image_url'] as String?,
-              card: (d.data())?['card_image_url'] as String?,
+              bg: _nonEmpty((d.data())?['bg_image_url'] as String?) ?? (bundled ? HeritageBundledImages.bg(nodeId) : null),
+              card: _nonEmpty((d.data())?['card_image_url'] as String?) ?? (bundled ? HeritageBundledImages.card(nodeId) : null),
             ));
   }
 
@@ -340,6 +353,21 @@ class HeritageDataService {
     });
   }
 
+  /// Public entries of one content type across every country (search's
+  /// "browse by category"). Two equality filters — index-free.
+  Stream<List<HeritageItem>> streamItemsAnywhere({required String contentType}) {
+    return _entries
+        .where('visibility', isEqualTo: 'public')
+        .where('content_type', isEqualTo: contentType)
+        .snapshots()
+        .map((s) {
+      final list = s.docs.map((d) => HeritageItem.fromDoc(d)).toList();
+      list.sort((a, b) => (b.lastActivityAt ?? DateTime(0))
+          .compareTo(a.lastActivityAt ?? DateTime(0)));
+      return list;
+    });
+  }
+
   /// A single entry, live.
   Stream<HeritageItem?> streamItem(String id) {
     return _entries
@@ -364,6 +392,92 @@ class HeritageDataService {
       final list = s.docs.map((d) => HeritageItem.fromDoc(d)).toList();
       list.sort((a, b) => (b.lastActivityAt ?? DateTime(0))
           .compareTo(a.lastActivityAt ?? DateTime(0)));
+      return list.take(limit).toList();
+    });
+  }
+
+  /// Public entries that have a map point, for the culture map.
+  Stream<List<HeritageItem>> streamMapped() {
+    return _entries.where('visibility', isEqualTo: 'public').snapshots().map((s) => [
+          for (final d in s.docs)
+            if ((d.data()['map_point'] is GeoPoint)) HeritageItem.fromDoc(d),
+        ]);
+  }
+
+  /// Per-country public entry + community counts from ONE equality-only
+  /// stream — drives Live/Soon and "N entries · N communities" on every
+  /// country card without a query per country.
+  Stream<Map<String, ({int entries, int communities})>> streamCountryStats() {
+    return _entries
+        .where('visibility', isEqualTo: 'public')
+        .snapshots()
+        .map((s) {
+      final entries = <String, int>{};
+      final communities = <String, Set<String>>{};
+      for (final d in s.docs) {
+        final loc = (d.data()['locality'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final cid = loc['country_id'] as String?;
+        if (cid == null || cid.isEmpty) continue;
+        entries[cid] = (entries[cid] ?? 0) + 1;
+        final comm = loc['community_id'] as String?;
+        if (comm != null && comm.isNotEmpty) {
+          communities.putIfAbsent(cid, () => {}).add(comm);
+        }
+      }
+      return {
+        for (final e in entries.entries)
+          e.key: (entries: e.value, communities: communities[e.key]?.length ?? 0),
+      };
+    });
+  }
+
+  /// Public organisation name for the item "Published by" credit.
+  Future<String?> orgName(String orgId) async {
+    if (orgId.isEmpty) return null;
+    try {
+      final d = await _db.collection('organizations').doc(orgId).get();
+      return (d.data()?['org_name'] ?? d.data()?['name']) as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// "Eden from SHIELD": the recording person's first name and their
+  /// organisation. Falls back to the organisation alone if the person can't
+  /// be resolved.
+  Future<String?> byline(String authorUid, String orgId) async {
+    final org = await orgName(orgId);
+    String? first;
+    if (authorUid.isNotEmpty) {
+      try {
+        final d = (await _db.collection('Users').doc(authorUid).get()).data();
+        final raw = (d?['FirstName'] ?? d?['firstName'] ?? d?['name'] ?? d?['OrgRepName'] ?? d?['displayName']) as String?;
+        final t = raw?.trim() ?? '';
+        if (t.isNotEmpty) first = t.split(RegExp(r'\s+')).first;
+      } catch (_) {}
+    }
+    if (first != null && org != null && org.isNotEmpty) return '$first from $org';
+    return first ?? org;
+  }
+
+  /// Public discussion under an entry: questions, additions and general
+  /// comments (disputes are handled privately by the archive). Newest first.
+  Stream<List<PublicComment>> streamPublicComments(String entryId, {int limit = 30}) {
+    return _db.collection('cultural_comments').where('entry_id', isEqualTo: entryId).snapshots().map((s) {
+      final list = <PublicComment>[];
+      for (final d in s.docs) {
+        final m = d.data();
+        if ((m['comment_action'] as String?) == 'dispute') continue;
+        final body = (m['comment_body'] as String?)?.trim() ?? '';
+        if (body.isEmpty) continue;
+        list.add(PublicComment(
+          name: ((m['commenter_name'] as String?) ?? '').trim(),
+          body: body,
+          reply: (m['reply_text'] as String?)?.trim(),
+          at: (m['created_at'] as Timestamp?)?.toDate(),
+        ));
+      }
+      list.sort((a, b) => (b.at ?? DateTime(0)).compareTo(a.at ?? DateTime(0)));
       return list.take(limit).toList();
     });
   }
@@ -416,4 +530,14 @@ class HeritageDataService {
       return list;
     });
   }
+}
+
+
+/// A comment shown publicly under an entry.
+class PublicComment {
+  final String name;
+  final String body;
+  final String? reply;
+  final DateTime? at;
+  const PublicComment({required this.name, required this.body, this.reply, this.at});
 }

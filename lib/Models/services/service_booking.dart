@@ -33,16 +33,24 @@
 // more expensive in fees than the collection itself.
 //
 // ── Payment ──
-// paymentStatus mirrors marketplace_checkout.dart's mocked `_pay()`
-// (`await Future.delayed(...); // M-Pesa STK push`) — this model carries the
-// same 'unpaid' / 'simulated_paid' vocabulary so the checkout screen has
-// real fields to flip once a payment method is actually wired up. See
-// IMPLEMENTATION_NOTES_SERVICES.md for the deferred real-payment research.
+// paymentStatus: 'unpaid' | 'stk_pushed' | 'paid' | 'failed'
+// ('simulated_paid' still parses, for any booking written before real
+// payment integration landed). 'stk_pushed'/'paid'/'failed' and everything
+// below it (merchantRequestId..paidAt) are written exclusively by
+// initiateServicePayment / darajaStkCallback (functions/src/index.ts) —
+// firestore.rules no longer lets the requester set paymentStatus directly.
+// See ServiceMarketplaceService.initiatePayment and
+// USER_PAGES_SERVICES_PAYMENTS_BRIEF.md for the real M-Pesa Daraja flow
+// this replaces marketplace_checkout.dart's still-mocked `_pay()` with.
+//
+// payoutStatus mirrors this for the B2C leg — the provider's payout —
+// written exclusively by onServiceBookingCompleted / darajaB2cResultCallback
+// once a booking is both completed and paid. null until then; 'processing'
+// | 'requested' | 'paid' | 'failed' | 'skipped' | 'manual_required' after.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../environmental/enums/payment_method.dart';
-import '../environmental/shared/platform_constants.dart';
 import '../geo/canopy_location.dart';
 import 'service_listing.dart';
 
@@ -105,15 +113,14 @@ class ServiceFeeBreakdown {
     required double agreedPriceKes,
     required bool isRecurring,
   }) {
-    final fee =
-        agreedPriceKes * (PlatformConstants.serviceCommissionDefaultPct / 100);
-    final bookingFee = isRecurring ? 0.0 : PlatformConstants.serviceBookingFeeKes;
+    // Payment is arranged directly between the requester and the provider, so
+    // Canopy takes no fee and the price is simply the agreed price.
     return ServiceFeeBreakdown(
       agreedPriceKes: agreedPriceKes,
-      platformFeeKes: fee,
-      providerPayoutKes: agreedPriceKes - fee,
-      requesterBookingFeeKes: bookingFee,
-      requesterTotalKes: agreedPriceKes + bookingFee,
+      platformFeeKes: 0,
+      providerPayoutKes: agreedPriceKes,
+      requesterBookingFeeKes: 0,
+      requesterTotalKes: agreedPriceKes,
     );
   }
 }
@@ -145,6 +152,9 @@ class ServiceBooking {
   final bool isRecurring;
 
   final String requestMessage;
+
+  /// Keys into ServiceCategory.offeringOptions the requester picked.
+  final List<String> requestedOfferings;
   final ServiceBookingStatus status;
 
   // ── Quote / agreed price ──
@@ -161,8 +171,21 @@ class ServiceBooking {
   // ── Payment — mocked; see file header ──
   final PaymentMethod paymentMethod;
 
-  /// 'unpaid' | 'simulated_paid'
+  /// 'unpaid' | 'stk_pushed' | 'paid' | 'failed' (or the legacy 'simulated_paid')
   final String paymentStatus;
+  final String? merchantRequestId;
+  final String? checkoutRequestId;
+  final String? mpesaReceiptNumber;
+  final double? paidAmountKes;
+  final String? paymentFailureReason;
+  final DateTime? paymentInitiatedAt;
+  final DateTime? paidAt;
+
+  /// null | 'processing' | 'requested' | 'paid' | 'failed' | 'skipped' | 'manual_required'
+  final String? payoutStatus;
+  final String? payoutReceiptNumber;
+  final String? payoutFailureReason;
+  final DateTime? payoutAt;
 
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -188,6 +211,7 @@ class ServiceBooking {
     this.preferredDate,
     this.isRecurring = false,
     this.requestMessage = '',
+    this.requestedOfferings = const [],
     this.status = ServiceBookingStatus.requested,
     this.quotedPriceKes,
     this.quoteNote,
@@ -198,6 +222,17 @@ class ServiceBooking {
     this.requesterTotalKes = 0,
     this.paymentMethod = PaymentMethod.mpesa,
     this.paymentStatus = 'unpaid',
+    this.merchantRequestId,
+    this.checkoutRequestId,
+    this.mpesaReceiptNumber,
+    this.paidAmountKes,
+    this.paymentFailureReason,
+    this.paymentInitiatedAt,
+    this.paidAt,
+    this.payoutStatus,
+    this.payoutReceiptNumber,
+    this.payoutFailureReason,
+    this.payoutAt,
     required this.createdAt,
     this.updatedAt,
     this.quotedAt,
@@ -216,7 +251,9 @@ class ServiceBooking {
         )
       : ServiceFeeBreakdown.zero;
 
-  bool get isPaid => paymentStatus == 'simulated_paid';
+  bool get isPaid => paymentStatus == 'paid' || paymentStatus == 'simulated_paid';
+  bool get isPaymentPending => paymentStatus == 'stk_pushed';
+  bool get isPaymentFailed => paymentStatus == 'failed';
   bool get needsRequesterAction =>
       status == ServiceBookingStatus.quoted || status == ServiceBookingStatus.accepted;
   bool get needsProviderAction => status == ServiceBookingStatus.requested;
@@ -244,6 +281,8 @@ class ServiceBooking {
       preferredDate: (d['preferredDate'] as Timestamp?)?.toDate(),
       isRecurring: d['isRecurring'] as bool? ?? false,
       requestMessage: d['requestMessage'] as String? ?? '',
+      requestedOfferings:
+          (d['requestedOfferings'] as List?)?.whereType<String>().toList() ?? const [],
       status: ServiceBookingStatus.fromString(d['status'] as String?),
       quotedPriceKes: (d['quotedPriceKes'] as num?)?.toDouble(),
       quoteNote: d['quoteNote'] as String?,
@@ -256,6 +295,17 @@ class ServiceBooking {
       paymentMethod:
           PaymentMethod.fromFirestoreKey(d['paymentMethod'] as String? ?? 'mpesa'),
       paymentStatus: d['paymentStatus'] as String? ?? 'unpaid',
+      merchantRequestId: d['merchantRequestId'] as String?,
+      checkoutRequestId: d['checkoutRequestId'] as String?,
+      mpesaReceiptNumber: d['mpesaReceiptNumber'] as String?,
+      paidAmountKes: (d['paidAmountKes'] as num?)?.toDouble(),
+      paymentFailureReason: d['paymentFailureReason'] as String?,
+      paymentInitiatedAt: (d['paymentInitiatedAt'] as Timestamp?)?.toDate(),
+      paidAt: (d['paidAt'] as Timestamp?)?.toDate(),
+      payoutStatus: d['payoutStatus'] as String?,
+      payoutReceiptNumber: d['payoutReceiptNumber'] as String?,
+      payoutFailureReason: d['payoutFailureReason'] as String?,
+      payoutAt: (d['payoutAt'] as Timestamp?)?.toDate(),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate(),
       quotedAt: (d['quotedAt'] as Timestamp?)?.toDate(),
@@ -281,6 +331,7 @@ class ServiceBooking {
             preferredDate != null ? Timestamp.fromDate(preferredDate!) : null,
         'isRecurring': isRecurring,
         'requestMessage': requestMessage,
+        'requestedOfferings': requestedOfferings,
         'status': status.name,
         'quotedPriceKes': quotedPriceKes,
         'quoteNote': quoteNote,
@@ -335,6 +386,7 @@ class ServiceBooking {
       preferredDate: preferredDate,
       isRecurring: isRecurring,
       requestMessage: requestMessage,
+      requestedOfferings: requestedOfferings,
       status: status ?? this.status,
       quotedPriceKes: quotedPriceKes ?? this.quotedPriceKes,
       quoteNote: quoteNote ?? this.quoteNote,

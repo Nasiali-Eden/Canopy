@@ -1,180 +1,87 @@
+// lib/Services/Incidents/incident_upload.dart
+//
+// Write side of the `Incidents` collection. Throws on failure so the screen
+// can say so — a report that didn't save must never look like it did.
+// Location is stored both as the legacy "lat, lng" string and as numbers,
+// plus an optional human place description.
+
 import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:uuid/uuid.dart';
-import 'package:geolocator/geolocator.dart';
 
 class UploadIncident {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
-  final ImagePicker _picker = ImagePicker();
-  final Uuid _uuid = Uuid();
+  final _db = FirebaseFirestore.instance;
+  final _storage = FirebaseStorage.instance;
 
-  /// Requests camera, storage, and location permissions.
-  Future<bool> _requestPermissions() async {
-    Map<Permission, PermissionStatus> statuses = await [
-      Permission.camera,
-      Permission.storage,
-      Permission.locationWhenInUse,
-    ].request();
+  static const maxPhotos = 4;
 
-    return statuses.values.every((status) => status.isGranted);
+  /// Up to [max] photos from the gallery. image_picker handles its own
+  /// permission prompts.
+  Future<List<File>> pickImages({int max = maxPhotos}) async {
+    final picked = await ImagePicker().pickMultiImage(imageQuality: 82, maxWidth: 1600);
+    return picked.take(max).map((x) => File(x.path)).toList();
   }
 
-  /// Crops an image and returns the cropped file.
-  Future<File?> _cropImage(String imagePath) async {
-    try {
-      CroppedFile? croppedFile = await ImageCropper().cropImage(
-        sourcePath: imagePath,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        compressQuality: 85,
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: 'Crop Image',
-            toolbarColor: Colors.blue,
-            toolbarWidgetColor: Colors.white,
-          ),
-          IOSUiSettings(title: 'Crop Image'),
-        ],
-      );
+  Future<File?> takePhoto() async {
+    final x = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 82, maxWidth: 1600);
+    return x == null ? null : File(x.path);
+  }
 
-      return croppedFile != null ? File(croppedFile.path) : null;
-    } catch (e) {
-      debugPrint("Error cropping image: $e");
+  /// Current position, or null when location is off or refused.
+  Future<LatLng?> currentPosition() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return null;
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+      return LatLng(pos.latitude, pos.longitude);
+    } catch (_) {
       return null;
     }
   }
 
-  /// Picks and crops up to 4 images from the gallery.
-  Future<List<File>> pickAndCropImages() async {
-    List<File> imageFiles = [];
-
-    if (await _requestPermissions()) {
-      final List<XFile>? pickedFiles = await _picker.pickMultiImage(imageQuality: 85);
-
-      if (pickedFiles != null) {
-        for (var file in pickedFiles.take(4)) {
-          File? croppedFile = await _cropImage(file.path);
-          if (croppedFile != null) imageFiles.add(croppedFile);
-        }
-      }
-    } else {
-      debugPrint("Permissions denied.");
-    }
-
-    return imageFiles;
-  }
-
-  /// Uploads images to Firebase Storage and returns their download URLs.
-  Future<List<String>> _uploadImages(List<File> images, String incidentId) async {
-    List<Future<String>> uploadTasks = images.map((image) async {
-      try {
-        final ref = _storage.ref().child('incident_images/$incidentId/${_uuid.v4()}.jpg');
-        await ref.putFile(image);
-        return await ref.getDownloadURL();
-      } catch (e) {
-        debugPrint("Error uploading image: $e");
-        return "";
-      }
-    }).toList();
-
-    List<String> uploadedUrls = await Future.wait(uploadTasks);
-    return uploadedUrls.where((url) => url.isNotEmpty).toList();
-  }
-
-  /// Gets the current location as a string.
-  Future<String?> getCurrentLocation() async {
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return null;
-      }
-      if (permission == LocationPermission.deniedForever) return null;
-
-      Position position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-
-      return "${position.latitude}, ${position.longitude}";
-    } catch (e) {
-      debugPrint("Error getting location: $e");
-      return null;
-    }
-  }
-
-  /// Uploads an incident to Firestore.
   Future<void> uploadIncident({
     required String headline,
     required String description,
     required String type,
     required List<File> images,
-    LatLng? customLocation, // Add custom location parameter
-    required BuildContext context,
+    required LatLng position,
+    String place = '',
+    void Function(int done, int total)? onProgress,
   }) async {
-    try {
-      User? user = _auth.currentUser;
-      if (user == null) {
-        debugPrint("Error: User is not authenticated.");
-        return;
-      }
-
-      // Use custom location if provided; otherwise, fetch current location
-      String? location;
-      if (customLocation != null) {
-        location = "${customLocation.latitude}, ${customLocation.longitude}";
-      } else {
-        location = await getCurrentLocation();
-      }
-
-      if (location == null) {
-        debugPrint("Error: Unable to get location.");
-        return;
-      }
-
-      String incidentId = _uuid.v4();
-      List<String> imageUrls = await _uploadImages(images, incidentId);
-
-      Map<String, dynamic> incidentData = {
-        "incidentId": incidentId,
-        "headline": headline,
-        "description": description,
-        "type": type,
-        "location": location,
-        "images": imageUrls,
-        "timestamp": FieldValue.serverTimestamp(),
-        "userId": user.uid,
-        // Status pipeline (Reported Issues feed / IncidentsService). Every
-        // report starts "pending" — nothing in the app currently assigns
-        // verifiers or advances status, so "verifying"/"confirmed"/
-        // "resolved" are read-side states the UI supports but nothing
-        // writes yet. Wiring that assignment is separate follow-up work.
-        "status": "pending",
-        "verifierIds": <String>[],
-        "verifiedAt": null,
-      };
-
-      // Single source of truth: the flat 'Incidents' collection, queried by
-      // userId (see IncidentsService.watchMine). This used to also fan out
-      // to a per-user/org subcollection copy, but nothing ever read that
-      // copy back and it had no Firestore rule covering it (would have
-      // failed permission-denied the moment this screen became reachable) —
-      // removed rather than securing a second copy of the same document.
-      await _firestore.collection("Incidents").doc(incidentId).set(incidentData);
-
-      debugPrint("Incident successfully uploaded.");
-
-      // Navigate to the home page (replace 'HomePage' with your actual screen)
-      Navigator.pushReplacementNamed(context, '/home');
-    } catch (e) {
-      debugPrint("Error uploading incident: $e");
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw StateError('signed-out');
+    final id = const Uuid().v4();
+    final urls = <String>[];
+    for (var i = 0; i < images.length; i++) {
+      final ref = _storage.ref('incident_images/$id/${const Uuid().v4()}.jpg');
+      await ref.putFile(images[i]);
+      urls.add(await ref.getDownloadURL());
+      onProgress?.call(i + 1, images.length);
     }
+    await _db.collection('Incidents').doc(id).set({
+      'incidentId': id,
+      'headline': headline,
+      'description': description,
+      'type': type,
+      'location': '${position.latitude}, ${position.longitude}',
+      'latitude': position.latitude,
+      'longitude': position.longitude,
+      'place': place,
+      'images': urls,
+      'timestamp': FieldValue.serverTimestamp(),
+      'userId': user.uid,
+      // Every report starts pending; nothing assigns verifiers yet.
+      'status': 'pending',
+      'verifierIds': <String>[],
+      'verifiedAt': null,
+    });
   }
 }

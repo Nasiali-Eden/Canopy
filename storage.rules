@@ -57,6 +57,16 @@ service firebase.storage {
       allow write: if isSignedIn() && isReasonableImage();
     }
 
+    // heritage_backgrounds/{nodeId}/{file} — country banner/card, category and
+    // community backgrounds uploaded from the Cultural Archive's Backgrounds
+    // screen (heritage_backgrounds_screen.dart). Shown publicly on the member
+    // Heritage pages. The matching Firestore write (heritage_hierarchy) is
+    // already limited to image fields for signed-in org users.
+    match /heritage_backgrounds/{nodeId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isReasonableImage();
+    }
+
     // cultural_media/{orgId}/pending/{file} — Cultural Archive uploads.
     // Only org members of the owning org may upload; visibility rules for
     // *reading* restricted/sealed media are enforced by the trusted API,
@@ -74,6 +84,21 @@ service firebase.storage {
     match /programmes/{orgId}/{allPaths=**} {
       allow read: if true;
       allow write: if isSignedIn() && isReasonableImage();
+    }
+
+    // service_provider_licenses/{uid}/{file} — photo of a provider's trade
+    // license/registration document (EPRA electrician's license, NCA
+    // registration), uploaded when listing under a category that requires
+    // one (ServiceCategory.requiresLicenseVerification). Deliberately NOT
+    // "anyone can view" like every path above — those hold evidence photos
+    // meant to be public; this holds a personal identity/credential
+    // document, so only the uploading provider can read their own back
+    // from the client. Canopy's own manual review happens through the
+    // Firebase console, which uses project-owner access and isn't subject
+    // to these rules at all — see USER_PAGES_SERVICE_CATEGORIES_BRIEF.md.
+    match /service_provider_licenses/{uid}/{fileName} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if isSignedIn() && request.auth.uid == uid && isReasonableImage();
     }
 
     // Default deny for anything not explicitly matched above.

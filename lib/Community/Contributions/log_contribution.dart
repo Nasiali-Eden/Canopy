@@ -1,1176 +1,849 @@
-import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
-
-import '../../Models/user.dart';
-import '../../Services/Contributions/contribution_service.dart';
-import '../../Shared/theme/app_theme.dart';
-import 'contribution_confirmation.dart';
-
-/// Maximum number of photos a single entry can carry.
-const int _kMaxPhotos = 4;
-
-/// Neutral grey for input-field accents (labels, borders) — replaces the loud
-/// green so the fields read as calm white cards.
-const Color _kFieldAccent = Color(0xFF9AA0A6);
-
-/// Project tracking modes shown as selectable cards.
-enum TrackingType {
-  oneTime(
-    'oneTime',
-    'One-time event',
-    Icons.bolt_outlined,
-    'A single activity — a one-off cleanup, donation drive or repair. '
-        'Logged once, with no monthly follow-ups.',
-  ),
-  transformation(
-    'transformation',
-    'Transformation activity',
-    Icons.timeline_outlined,
-    'An ongoing project you\'ll trace month by month. We\'ll remind you about '
-        'a month from now to add Month 1 photos, then each month after, so the '
-        'change over time is visible.',
-  );
-
-  const TrackingType(this.id, this.label, this.icon, this.description);
-
-  final String id;
-  final String label;
-  final IconData icon;
-  final String description;
-}
-
-/// A single optional social link the user can attach to an entry.
-class _SocialPlatform {
-  final String key;
-  final String label;
-  final String hint;
-  final IconData icon;
-  final Color color;
-
-  const _SocialPlatform({
-    required this.key,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    required this.color,
-  });
-}
-
-const List<_SocialPlatform> _kSocialPlatforms = [
-  _SocialPlatform(
-    key: 'linkedin',
-    label: 'LinkedIn',
-    hint: 'linkedin.com/in/...',
-    icon: Icons.business_center_outlined,
-    color: Color(0xFF0A66C2),
-  ),
-  _SocialPlatform(
-    key: 'facebook',
-    label: 'Facebook',
-    hint: 'facebook.com/...',
-    icon: Icons.facebook,
-    color: Color(0xFF1877F2),
-  ),
-  _SocialPlatform(
-    key: 'instagram',
-    label: 'Instagram',
-    hint: 'instagram.com/...',
-    icon: Icons.camera_alt_outlined,
-    color: Color(0xFFE4405F),
-  ),
-  _SocialPlatform(
-    key: 'tiktok',
-    label: 'TikTok',
-    hint: 'tiktok.com/@...',
-    icon: Icons.music_note,
-    color: Color(0xFF010101),
-  ),
-];
-
-class LogContributionScreen extends StatefulWidget {
-  const LogContributionScreen({super.key});
-
-  @override
-  State<LogContributionScreen> createState() => _LogContributionScreenState();
-}
-
-class _LogContributionScreenState extends State<LogContributionScreen> {
-  final _formKey = GlobalKey<FormState>();
-
-  final _hoursController = TextEditingController();
-  String? _activityId;
-  late final _activities = FirebaseFirestore.instance.collection('activities').limit(100).snapshots();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  String _workType = 'Cleanup';
-  TrackingType _trackingType = TrackingType.oneTime;
-
-  // Social link controllers, keyed by platform.
-  final Map<String, TextEditingController> _socialControllers = {
-    for (final p in _kSocialPlatforms) p.key: TextEditingController(),
-  };
-
-  // Time estimates are awarded only after independent verification.
-  static const String _type = 'Time';
-
-  final _picker = ImagePicker();
-  final List<XFile> _photos = [];
-
-  bool _saving = false;
-  bool _verifyingLocation = false;
-  bool _locationVerified = false;
-  Position? _currentPosition;
-  final _locationController = TextEditingController();
-
-
-  // Work type configurations.
-  static const List<Map<String, dynamic>> _workTypes = [
-    {
-      'name': 'Cleanup',
-      'icon': Icons.cleaning_services,
-      'description': 'Community cleanup initiatives',
-    },
-    {
-      'name': 'Tree Planting',
-      'icon': Icons.park,
-      'description': 'Planting and nurturing trees',
-    },
-    {
-      'name': 'School Upgrading',
-      'icon': Icons.school,
-      'description': 'Improving school facilities',
-    },
-    {
-      'name': 'Waste Management',
-      'icon': Icons.recycling,
-      'description': 'Organizing waste and recycling',
-    },
-    {
-      'name': 'Water & Sanitation',
-      'icon': Icons.water_drop,
-      'description': 'Improving water and sanitation',
-    },
-    {
-      'name': 'Infrastructure',
-      'icon': Icons.construction,
-      'description': 'Community infrastructure projects',
-    },
-  ];
-
-  @override
-  void dispose() {
-    _hoursController.dispose();
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _locationController.dispose();
-    for (final c in _socialControllers.values) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
-  Map<String, dynamic> get _workTypeConfig => _workTypes.firstWhere(
-        (w) => w['name'] == _workType,
-        orElse: () => _workTypes[0],
-      );
-
-  int _estimate() {
-    return ContributionService().estimateImpactPoints(
-      type: _type,
-      hours: double.tryParse(_hoursController.text),
-      workType: _workType,
-    );
-  }
-
-  void _showSnack(String message, Color color, {IconData? icon}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 8),
-            ],
-            Expanded(
-              child: Text(message,
-                  style: const TextStyle(fontWeight: FontWeight.w500)),
-            ),
-          ],
-        ),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-
-  // ── Location verification ────────────────────────────────────────────────────
-
-  Future<void> _verifyLocation() async {
-    setState(() => _verifyingLocation = true);
-
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('Location permissions are denied');
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('Location permissions are permanently denied');
-      }
-
-      // Contributions happen wherever the member is, so capture the reading
-      // as-is. This used to reject anything beyond 500m of a hardcoded point
-      // in central Nairobi, which made logging impossible everywhere else.
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _currentPosition = position;
-        _locationVerified = true;
-        _locationController.text =
-            '${position.latitude.toStringAsFixed(6)}, ${position.longitude.toStringAsFixed(6)}';
-      });
-      _showSnack('Location captured', Colors.green.shade600,
-          icon: Icons.check_circle);
-    } catch (e) {
-      _showSnack('Could not capture location: $e', Colors.red.shade600,
-          icon: Icons.error_outline);
-    } finally {
-      if (mounted) setState(() => _verifyingLocation = false);
-    }
-  }
-
-  // ── Photos ───────────────────────────────────────────────────────────────────
-
-  Future<void> _pickPhoto() async {
-    if (_photos.length >= _kMaxPhotos) {
-      _showSnack('You can add up to $_kMaxPhotos photos.',
-          Colors.orange.shade700,
-          icon: Icons.info_outline);
-      return;
-    }
-
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.lightGreen.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const _IconPill(
-                  icon: Icons.photo_camera_outlined, color: AppTheme.primary),
-              title: const Text('Take a photo',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const _IconPill(
-                  icon: Icons.photo_library_outlined, color: AppTheme.tertiary),
-              title: const Text('Choose from gallery',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-
-    if (source == null) return;
-
-    final file = await _picker.pickImage(
-      source: source,
-      imageQuality: 85,
-      preferredCameraDevice: CameraDevice.rear,
-    );
-
-    if (file != null && mounted) {
-      setState(() => _photos.add(file));
-    }
-  }
-
-  void _removePhoto(int index) => setState(() => _photos.removeAt(index));
-
-  // ── Submit ───────────────────────────────────────────────────────────────────
-
-  Map<String, String> _collectSocialLinks() {
-    final links = <String, String>{};
-    for (final p in _kSocialPlatforms) {
-      final v = _socialControllers[p.key]!.text.trim();
-      if (v.isNotEmpty) links[p.key] = v;
-    }
-    return links;
-  }
-
-  Future<void> _submit() async {
-    final user = Provider.of<F_User?>(context, listen: false);
-    if (user == null) {
-      Navigator.pushReplacementNamed(context, '/welcome');
-      return;
-    }
-
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-
-    if (!_locationVerified) {
-      _showSnack('Please capture your location first.', Colors.orange.shade700,
-          icon: Icons.location_off_outlined);
-      return;
-    }
-
-    if (_photos.isEmpty) {
-      _showSnack('Add at least one photo.', Colors.orange.shade700,
-          icon: Icons.photo_outlined);
-      return;
-    }
-
-    setState(() => _saving = true);
-
-    try {
-      final points = await ContributionService().createContribution(
-        userId: user.uid,
-        activityId: _activityId,
-        title: _titleController.text.trim(),
-        workType: _workType,
-        type: _type,
-      hours: double.tryParse(_hoursController.text),
-        description: _descriptionController.text.trim().isEmpty
-            ? null
-            : _descriptionController.text.trim(),
-        photos: _photos,
-        trackingType: _trackingType.id,
-        socialLinks: _collectSocialLinks(),
-        location: _locationController.text.trim(),
-        latitude: _currentPosition?.latitude,
-        longitude: _currentPosition?.longitude,
-      );
-
-      if (!mounted) return;
-      // Pushed directly rather than by name: the app registers no `routes`
-      // table, so pushReplacementNamed threw *after* the contribution had
-      // already been written — surfacing as a save error for work that saved.
-      await Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ContributionConfirmationScreen(points: points),
-        ),
-      );
-    } catch (e) {
-      _showSnack('Error: $e', Colors.red.shade600, icon: Icons.error_outline);
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  // ── Build ────────────────────────────────────────────────────────────────────
-
-  @override
-  Widget build(BuildContext context) {
-    final points = _estimate();
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppTheme.tertiary.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.arrow_back_ios_new,
-                size: 15, color: AppTheme.darkGreen),
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        centerTitle: true,
-        title: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('Log Contribution',
-              style: TextStyle(
-                  color: AppTheme.darkGreen,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17)),
-          Text('Record the work you did',
-              style: TextStyle(
-                  color: AppTheme.darkGreen.withOpacity(0.5), fontSize: 11)),
-        ]),
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          onChanged: () => setState(() {}),
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Location verification
-                      _LocationCard(
-                        verified: _locationVerified,
-                        verifying: _verifyingLocation,
-                        onVerify: _verifyLocation,
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Title
-                      const _SectionLabel('Title', AppTheme.primary),
-                      const SizedBox(height: 10),
-                      _LabeledField(
-                        controller: _titleController,
-                        label: 'Contribution title',
-                        icon: Icons.title,
-                        accent: _kFieldAccent,
-                        maxLength: 50,
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Required' : null,
-                      ),
-                      const SizedBox(height: 22),
-
-                      // Description
-                      const _SectionLabel('Description', AppTheme.accent),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Shown on the community feed. Tell people what changed.',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.5)),
-                      ),
-                      const SizedBox(height: 10),
-                      _LabeledField(
-                        controller: _descriptionController,
-                        label: 'Describe the activity...',
-                        icon: Icons.notes_outlined,
-                        accent: _kFieldAccent,
-                        maxLines: 4,
-                      ),
-                      const SizedBox(height: 22),
-
-                      // Work type
-                      const _SectionLabel('Work Type', AppTheme.lightGreen),
-                      const SizedBox(height: 10),
-                      _buildWorkTypeDropdown(),
-                      const SizedBox(height: 22),
-
-                      // Tracking type
-                      const _SectionLabel('Activity Type', AppTheme.tertiary),
-                      const SizedBox(height: 6),
-                      Text(
-                        'How should we follow this project over time?',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.5)),
-                      ),
-                      const SizedBox(height: 12),
-                      ...TrackingType.values.map((t) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _TrackingCard(
-                              type: t,
-                              selected: _trackingType == t,
-                              onTap: () =>
-                                  setState(() => _trackingType = t),
-                            ),
-                          )),
-                      const SizedBox(height: 12),
-
-                      // Photos
-                      _SectionLabel(
-                        'Photos',
-                        AppTheme.primary,
-                        trailing: '${_photos.length}/$_kMaxPhotos',
-                      ),
-                      const SizedBox(height: 12),
-                      _PhotoGrid(
-                        photos: _photos,
-                        maxPhotos: _kMaxPhotos,
-                        onAdd: _pickPhoto,
-                        onRemove: _removePhoto,
-                      ),
-                      const SizedBox(height: 22),
-
-                      // Social links
-                      const _SectionLabel('Links', AppTheme.darkGreen,
-                          trailing: 'Optional'),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Attach social links so people can follow the project.',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.darkGreen.withOpacity(0.5)),
-                      ),
-                      const SizedBox(height: 12),
-                      ..._kSocialPlatforms.map((p) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _LabeledField(
-                              controller: _socialControllers[p.key]!,
-                              label: '${p.label} (optional)',
-                              hint: p.hint,
-                              icon: p.icon,
-                              accent: p.color,
-                              keyboardType: TextInputType.url,
-                            ),
-                          )),
-                      const SizedBox(height: 10),
-
-                      TextFormField(
-                        controller: _hoursController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Hours contributed', helperText: '10 estimated points per hour · maximum 24 hours'),
-                        onChanged: (_) => setState(() {}),
-                        validator: (value) {
-                          final h = double.tryParse(value ?? '');
-                          return h == null || !h.isFinite || h <= 0 || h > 24 ? 'Enter hours greater than 0 and up to 24.' : null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(stream: _activities, builder: (context, snapshot) {
-                        final activities = snapshot.data?.docs.where((d) => d.data()['orgId'] is String && (d.data()['orgId'] as String).isNotEmpty).toList() ?? [];
-                        return DropdownButtonFormField<String>(
-                          value: activities.any((d) => d.id == _activityId) ? _activityId : null,
-                          isExpanded: true,
-                          decoration: InputDecoration(labelText: 'Organisation activity (optional)', helperText: snapshot.hasError ? 'Activities unavailable. Try reopening this form.' : 'Link an activity to qualify for verification and ranking.', helperMaxLines: 3),
-                          items: activities.map((d) => DropdownMenuItem(value: d.id, child: Text((d.data()['title'] ?? d.data()['name'] ?? 'Community activity').toString(), overflow: TextOverflow.ellipsis))).toList(),
-                          onChanged: (value) => setState(() => _activityId = value),
-                        );
-                      }),
-                      const SizedBox(height: 16),
-                      // Impact estimate
-                      _ImpactCard(points: points),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Submit
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 16,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: _GradientButton(
-                    label: 'Submit Contribution',
-                    icon: Icons.check_circle_outline,
-                    isLoading: _saving,
-                    onPressed: _saving ? null : _submit,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWorkTypeDropdown() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: AppTheme.lightGreen.withOpacity(0.4), width: 1.5),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        children: [
-          _IconPill(
-              icon: _workTypeConfig['icon'] as IconData,
-              color: AppTheme.lightGreen),
-          const SizedBox(width: 10),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _workType,
-                isExpanded: true,
-                borderRadius: BorderRadius.circular(12),
-                icon: Icon(Icons.keyboard_arrow_down_rounded,
-                    color: AppTheme.lightGreen.withOpacity(0.8)),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.darkGreen,
-                ),
-                items: _workTypes.map((w) {
-                  return DropdownMenuItem(
-                    value: w['name'] as String,
-                    child: Text(w['name'] as String),
-                  );
-                }).toList(),
-                onChanged: (v) => setState(() => _workType = v ?? 'Cleanup'),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Reusable widgets (registration-style)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final String text;
-  final Color color;
-  final String? trailing;
-
-  const _SectionLabel(this.text, this.color, {this.trailing});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(text,
-            style: TextStyle(
-                fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-        if (trailing != null) ...[
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(trailing!,
-                style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _IconPill extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-
-  const _IconPill({required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 30,
-      height: 30,
-      decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(8)),
-      child: Icon(icon, size: 16, color: color),
-    );
-  }
-}
-
-class _LabeledField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final IconData icon;
-  final Color accent;
-  final String? hint;
-  final int maxLines;
-  final int? maxLength;
-  final TextInputType? keyboardType;
-  final String? Function(String?)? validator;
-
-  const _LabeledField({
-    required this.controller,
-    required this.label,
-    required this.icon,
-    required this.accent,
-    this.hint,
-    this.maxLines = 1,
-    this.maxLength,
-    this.keyboardType,
-    this.validator,
-  });
-
-  OutlineInputBorder _border(Color color, {double width = 1.5}) =>
-      OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: color, width: width));
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      maxLines: maxLines,
-      maxLength: maxLength,
-      style: const TextStyle(
-          color: AppTheme.darkGreen, fontSize: 14, fontWeight: FontWeight.w500),
-      decoration: InputDecoration(
-        labelText: hint == null ? label : null,
-        hintText: hint,
-        labelStyle: TextStyle(color: accent.withOpacity(0.75), fontSize: 13),
-        hintStyle: TextStyle(
-            color: AppTheme.darkGreen.withOpacity(0.35), fontSize: 13),
-        filled: true,
-        fillColor: Colors.white,
-        counterText: maxLength == null ? null : '',
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.all(10),
-          child: _IconPill(icon: icon, color: accent),
-        ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 52, minHeight: 52),
-        border: _border(accent.withOpacity(0.2)),
-        enabledBorder: _border(accent.withOpacity(0.22)),
-        focusedBorder: _border(accent, width: 2),
-        errorBorder: _border(Colors.red.shade300),
-        focusedErrorBorder: _border(Colors.red.shade400, width: 2),
-      ),
-      validator: validator,
-    );
-  }
-}
-
-class _TrackingCard extends StatelessWidget {
-  final TrackingType type;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _TrackingCard({
-    required this.type,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const accent = AppTheme.tertiary;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: selected ? accent.withOpacity(0.07) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: selected ? accent : Colors.grey.withOpacity(0.22),
-              width: selected ? 2 : 1),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                      color: accent.withOpacity(0.15),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4))
-                ]
-              : [],
-        ),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: selected ? accent : accent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(type.icon,
-                color: selected ? Colors.white : accent, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(type.label,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: selected ? accent : AppTheme.darkGreen)),
-                  const SizedBox(height: 3),
-                  Text(type.description,
-                      style: TextStyle(
-                          fontSize: 11.5,
-                          height: 1.35,
-                          color: AppTheme.darkGreen.withOpacity(0.6))),
-                ]),
-          ),
-          if (selected) ...[
-            const SizedBox(width: 8),
-            const Icon(Icons.check_circle_rounded, color: accent, size: 20),
-          ],
-        ]),
-      ),
-    );
-  }
-}
-
-class _LocationCard extends StatelessWidget {
-  final bool verified;
-  final bool verifying;
-  final VoidCallback onVerify;
-
-  const _LocationCard({
-    required this.verified,
-    required this.verifying,
-    required this.onVerify,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = verified ? AppTheme.primary : AppTheme.tertiary;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withOpacity(0.3), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: accent,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                  verified ? Icons.check_circle : Icons.location_on_outlined,
-                  color: Colors.white,
-                  size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Location Verification',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.darkGreen)),
-                    const SizedBox(height: 2),
-                    Text(
-                      verified
-                          ? 'Location captured ✓'
-                          : 'Required to log a contribution',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.darkGreen.withOpacity(0.55)),
-                    ),
-                  ]),
-            ),
-          ]),
-          if (!verified) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: FilledButton.icon(
-                onPressed: verifying ? null : onVerify,
-                style: FilledButton.styleFrom(
-                  backgroundColor: accent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: verifying
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: Colors.white))
-                    : const Icon(Icons.my_location, size: 18),
-                label: Text(verifying ? 'Capturing...' : 'Capture Location',
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700)),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ImpactCard extends StatelessWidget {
-  final int points;
-  const _ImpactCard({required this.points});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.primary, AppTheme.lightGreen],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: AppTheme.primary.withOpacity(0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6)),
-        ],
-      ),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.25),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(Icons.eco, color: Colors.white, size: 32),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Estimated Impact',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white.withOpacity(0.95))),
-            const SizedBox(height: 2),
-            Text('$points Points',
-                style: const TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.5)),
-          ]),
-        ),
-      ]),
-    );
-  }
-}
-
-class _GradientButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isLoading;
-  final VoidCallback? onPressed;
-
-  const _GradientButton({
-    required this.label,
-    required this.icon,
-    required this.isLoading,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 54,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: const LinearGradient(
-            colors: [AppTheme.darkGreen, AppTheme.primary, AppTheme.tertiary],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight),
-        boxShadow: [
-          BoxShadow(
-              color: AppTheme.primary.withOpacity(0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6)),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(16),
-          child: Center(
-            child: isLoading
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.5, color: Colors.white))
-                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(icon, color: Colors.white, size: 18),
-                    const SizedBox(width: 10),
-                    Text(label,
-                        style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 0.2)),
-                  ]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Photo grid ────────────────────────────────────────────────────────────────
-
-class _PhotoGrid extends StatelessWidget {
-  final List<XFile> photos;
-  final int maxPhotos;
-  final VoidCallback onAdd;
-  final void Function(int) onRemove;
-
-  const _PhotoGrid({
-    required this.photos,
-    required this.maxPhotos,
-    required this.onAdd,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Show all picked photos plus a single trailing "add" tile while there's room.
-    final showAdd = photos.length < maxPhotos;
-    final itemCount = photos.length + (showAdd ? 1 : 0);
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 1, // square tiles
-      ),
-      itemCount: itemCount,
-      itemBuilder: (context, index) {
-        if (index < photos.length) {
-          return _PhotoTile(
-            file: photos[index],
-            onRemove: () => onRemove(index),
-          );
-        }
-        return _AddPhotoTile(onTap: onAdd);
-      },
-    );
-  }
-}
-
-class _PhotoTile extends StatelessWidget {
-  final XFile file;
-  final VoidCallback onRemove;
-
-  const _PhotoTile({required this.file, required this.onRemove});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.file(File(file.path), fit: BoxFit.cover),
-        ),
-        Positioned(
-          top: 6,
-          right: 6,
-          child: GestureDetector(
-            onTap: onRemove,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: Colors.red.shade600,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2)),
-                ],
-              ),
-              child: const Icon(Icons.close, color: Colors.white, size: 17),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AddPhotoTile extends StatelessWidget {
-  final VoidCallback onTap;
-  const _AddPhotoTile({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.lightGreen.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-              color: AppTheme.lightGreen.withOpacity(0.4), width: 1.5),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.add_a_photo_outlined,
-                  color: AppTheme.primary, size: 24),
-            ),
-            const SizedBox(height: 10),
-            Text('Add photo',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.darkGreen.withOpacity(0.7))),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// lib/Community/Contributions/log_contribution.dart
+//
+// Log Contribution (DESIGN_HANDOFF.md §3). Sections top → bottom: location
+// capture · what you did (title, description, work type, hours) · one-time vs
+// transformation radio cards (transformation shows the month timeline) ·
+// photos (PhotoPickerTile states) · link to an organisation activity · links ·
+// estimated points (gold numerals, "once verified") · sticky "Submit".
+//
+// Data flow is unchanged: ContributionService.createContribution uploads the
+// photos and writes the doc; points only count after verification.
+
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' show LatLng;
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+
+import '../../Models/user.dart';
+import '../../Services/Contributions/contribution_service.dart';
+import '../../Shared/Inputs/pin_picker_screen.dart';
+import '../../theme/canopy_components.dart';
+import 'contribution_confirmation.dart';
+
+/// Maximum number of photos a single entry can carry.
+const int _kMaxPhotos = 4;
+
+/// Project tracking modes shown as radio cards.
+enum TrackingType {
+  oneTime(
+    'oneTime',
+    'One-time',
+    'A single activity — a one-off clean-up, donation drive or repair. Logged once.',
+  ),
+  transformation(
+    'transformation',
+    'Transformation',
+    "An ongoing project you'll trace month by month so the change over time is visible.",
+  );
+
+  const TrackingType(this.id, this.label, this.description);
+
+  final String id;
+  final String label;
+  final String description;
+}
+
+const _kSocialPlatforms = [
+  ('linkedin', 'LinkedIn', 'linkedin.com/in/…'),
+  ('facebook', 'Facebook', 'facebook.com/…'),
+  ('instagram', 'Instagram', 'instagram.com/…'),
+  ('tiktok', 'TikTok', 'tiktok.com/@…'),
+];
+
+const _kWorkTypes = [
+  ('Cleanup', Icons.cleaning_services_outlined),
+  ('Tree Planting', Icons.park_outlined),
+  ('School Upgrading', Icons.school_outlined),
+  ('Waste Management', Icons.recycling_outlined),
+  ('Water & Sanitation', Icons.water_drop_outlined),
+  ('Infrastructure', Icons.construction_outlined),
+];
+
+class LogContributionScreen extends StatefulWidget {
+  const LogContributionScreen({super.key});
+
+  @override
+  State<LogContributionScreen> createState() => _LogContributionScreenState();
+}
+
+class _LogContributionScreenState extends State<LogContributionScreen> {
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _hoursController = TextEditingController();
+  final Map<String, TextEditingController> _socialControllers = {
+    for (final p in _kSocialPlatforms) p.$1: TextEditingController(),
+  };
+
+  late final _activities = FirebaseFirestore.instance
+      .collection('activities')
+      .limit(100)
+      .snapshots();
+
+  // Time estimates are awarded only after independent verification.
+  static const String _type = 'Time';
+
+  String _workType = _kWorkTypes.first.$1;
+  TrackingType _trackingType = TrackingType.oneTime;
+  String? _activityId;
+  String? _activityTitle;
+
+  final _picker = ImagePicker();
+  final List<XFile> _photos = [];
+
+  bool _saving = false;
+  bool _submitFailed = false;
+  bool _showErrors = false;
+
+  bool _locating = false;
+  String? _locationError;
+  Position? _position;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _hoursController.dispose();
+    for (final c in _socialControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  // ── Validation ──────────────────────────────────────────────────────────
+
+  double? get _hours => double.tryParse(_hoursController.text.trim());
+
+  String? get _titleError =>
+      _titleController.text.trim().isEmpty ? 'Give your contribution a title.' : null;
+
+  String? get _hoursError {
+    final h = _hours;
+    if (h == null || !h.isFinite || h <= 0 || h > 24) {
+      return 'Enter hours greater than 0 and up to 24.';
+    }
+    return null;
+  }
+
+  int get _estimate => ContributionService()
+      .estimateImpactPoints(type: _type, hours: _hours, workType: _workType);
+
+  // ── Location ────────────────────────────────────────────────────────────
+
+  /// Pick the exact place on a map instead of reading this phone's GPS.
+  Future<void> _chooseLocation() async {
+    final start = _position == null ? null : LatLng(_position!.latitude, _position!.longitude);
+    final at = await pickPin(context, initial: start, title: 'Where was the work?');
+    if (at == null || !mounted) return;
+    setState(() {
+      _locationError = null;
+      _position = Position(
+        latitude: at.latitude,
+        longitude: at.longitude,
+        timestamp: DateTime.now(),
+        accuracy: 0,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+      );
+    });
+  }
+
+  Future<void> _captureLocation() async {
+    setState(() {
+      _locating = true;
+      _locationError = null;
+    });
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw const _LocationDenied();
+      }
+      // Contributions happen wherever the member is — capture as-is.
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (!mounted) return;
+      setState(() => _position = position);
+    } on _LocationDenied {
+      if (!mounted) return;
+      setState(() => _locationError =
+          'Location access is off. Turn it on in Settings to log where the work happened.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _locationError =
+          "We couldn't get a location fix. Move somewhere with a clear sky and try again.");
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  // ── Photos ──────────────────────────────────────────────────────────────
+
+  Future<void> _pickPhoto() async {
+    if (_photos.length >= _kMaxPhotos) return;
+    final source = await showCanopySheet<ImageSource>(
+      context,
+      builder: (ctx) => CanopySheetBody(
+        title: 'Add a photo',
+        children: [
+          CanopyListGroup(children: [
+            CanopyListRow(
+              icon: Icons.photo_camera_outlined,
+              title: 'Take a photo',
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            CanopyListRow(
+              icon: Icons.photo_library_outlined,
+              title: 'Choose from gallery',
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ]),
+        ],
+      ),
+    );
+    if (source == null) return;
+    final file = await _picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      preferredCameraDevice: CameraDevice.rear,
+    );
+    if (file != null && mounted) {
+      setState(() {
+        _photos.add(file);
+        _submitFailed = false;
+      });
+    }
+  }
+
+  // ── Submit ──────────────────────────────────────────────────────────────
+
+  Future<void> _submit() async {
+    final user = Provider.of<F_User?>(context, listen: false);
+    if (user == null) {
+      Navigator.pushReplacementNamed(context, '/welcome');
+      return;
+    }
+    setState(() => _showErrors = true);
+    if (_titleError != null || _hoursError != null) {
+      showCanopySnack(context, 'Fill in the highlighted fields.', error: true);
+      return;
+    }
+    if (_position == null) {
+      showCanopySnack(context, 'Capture your location first.', error: true);
+      return;
+    }
+    if (_photos.isEmpty) {
+      showCanopySnack(context, 'Add at least one photo.', error: true);
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _submitFailed = false;
+    });
+    try {
+      final links = <String, String>{
+        for (final p in _kSocialPlatforms)
+          if (_socialControllers[p.$1]!.text.trim().isNotEmpty)
+            p.$1: _socialControllers[p.$1]!.text.trim(),
+      };
+      final points = await ContributionService().createContribution(
+        userId: user.uid,
+        activityId: _activityId,
+        title: _titleController.text.trim(),
+        workType: _workType,
+        type: _type,
+        hours: _hours,
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+        photos: _photos,
+        trackingType: _trackingType.id,
+        socialLinks: links,
+        location:
+            '${_position!.latitude.toStringAsFixed(6)}, ${_position!.longitude.toStringAsFixed(6)}',
+        latitude: _position!.latitude,
+        longitude: _position!.longitude,
+      );
+      if (!mounted) return;
+      await Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ContributionConfirmationScreen(
+            points: points,
+            transformation: _trackingType == TrackingType.transformation,
+            linkedActivity: _activityTitle,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _submitFailed = true);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  // ── Build ───────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    return CanopyScaffold(
+      appBar: canopyAppBar(context, title: 'Log contribution'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s8,
+            CanopySpace.gutter, CanopySpace.s32),
+        children: [
+          Text('Record the work you did. Points count once an organisation verifies it.',
+              style: CanopyType.body.copyWith(color: p.inkMuted)),
+          const SizedBox(height: CanopySpace.section),
+
+          // ── Where ─────────────────────────────────────────────────────
+          _Heading('Where'),
+          _LocationBlock(
+            position: _position,
+            locating: _locating,
+            error: _locationError,
+            showRequired: _showErrors && _position == null,
+            onCapture: _captureLocation,
+            onChoose: _chooseLocation,
+          ),
+          const SizedBox(height: CanopySpace.section),
+
+          // ── What ──────────────────────────────────────────────────────
+          _Heading('What you did'),
+          CanopyTextField(
+            label: 'Title',
+            hint: 'Riverbank clean-up at Ngong Road',
+            controller: _titleController,
+            maxLength: 50,
+            error: _showErrors ? _titleError : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField(
+            label: 'Description',
+            hint: 'Tell people what changed.',
+            helper: 'Shown on the community feed.',
+            controller: _descriptionController,
+            minLines: 3,
+            maxLines: 6,
+            maxLength: 500,
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyPickerField(
+            label: 'Work type',
+            value: _workType,
+            onTap: _chooseWorkType,
+          ),
+          const SizedBox(height: CanopySpace.s16),
+          CanopyTextField(
+            label: 'Hours',
+            hint: '3',
+            controller: _hoursController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            helper: '10 estimated points per hour · up to 24 hours',
+            error: _showErrors ? _hoursError : null,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: CanopySpace.section),
+
+          // ── Tracking ──────────────────────────────────────────────────
+          _Heading('How should we follow it?'),
+          for (final t in TrackingType.values) ...[
+            CanopyOptionCard(
+              selected: _trackingType == t,
+              onTap: () => setState(() => _trackingType = t),
+              title: t.label,
+              caption: t.description,
+              child: t == TrackingType.transformation &&
+                      _trackingType == TrackingType.transformation
+                  ? const _MonthTimeline()
+                  : null,
+            ),
+            const SizedBox(height: CanopySpace.s12),
+          ],
+          const SizedBox(height: CanopySpace.section - CanopySpace.s12),
+
+          // ── Photos ────────────────────────────────────────────────────
+          _Heading('Photos', trailing: '${_photos.length} of $_kMaxPhotos'),
+          if (_trackingType == TrackingType.transformation)
+            Padding(
+              padding: const EdgeInsets.only(bottom: CanopySpace.s12),
+              child: Text('Your first photo becomes the "before" shot.',
+                  style: CanopyType.caption.copyWith(color: p.inkMuted)),
+            ),
+          _PhotoGrid(
+            photos: _photos,
+            uploading: _saving,
+            failed: _submitFailed,
+            showRequired: _showErrors && _photos.isEmpty,
+            onAdd: _pickPhoto,
+            onRemove: (i) => setState(() => _photos.removeAt(i)),
+            onRetry: _submit,
+          ),
+          const SizedBox(height: CanopySpace.section),
+
+          // ── Activity link ─────────────────────────────────────────────
+          _Heading('Organisation activity', trailing: 'Optional'),
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _activities,
+            builder: (context, snap) {
+              final activities = snap.data?.docs
+                      .where((d) =>
+                          d.data()['orgId'] is String &&
+                          (d.data()['orgId'] as String).isNotEmpty)
+                      .toList() ??
+                  const [];
+              return CanopyPickerField(
+                label: 'Linked activity',
+                value: _activityTitle,
+                placeholder: snap.hasData ? 'None' : 'Loading…',
+                helper: snap.hasError
+                    ? 'Activities are unavailable right now. You can still submit.'
+                    : 'Linking an activity lets its organisation verify your work.',
+                onTap: () => _chooseActivity(activities),
+              );
+            },
+          ),
+          const SizedBox(height: CanopySpace.section),
+
+          // ── Links ─────────────────────────────────────────────────────
+          _Heading('Links', trailing: 'Optional'),
+          for (final s in _kSocialPlatforms) ...[
+            CanopyTextField(
+              label: s.$2,
+              hint: s.$3,
+              controller: _socialControllers[s.$1],
+              keyboardType: TextInputType.url,
+              textCapitalization: TextCapitalization.none,
+            ),
+            const SizedBox(height: CanopySpace.s12),
+          ],
+          const SizedBox(height: CanopySpace.s12),
+
+          // ── Estimate ──────────────────────────────────────────────────
+          CanopyCard(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ESTIMATED POINTS',
+                          style: CanopyType.eyebrow.copyWith(color: p.inkMuted)),
+                      const SizedBox(height: CanopySpace.s4),
+                      Text('Added to your total once verified.',
+                          style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                    ],
+                  ),
+                ),
+                PointsLabel(_estimate, fontSize: 22),
+              ],
+            ),
+          ),
+          if (_submitFailed) ...[
+            const SizedBox(height: CanopySpace.s16),
+            CanopyCallout(
+              kind: CalloutKind.danger,
+              title: "Your contribution didn't send",
+              text: 'Nothing was lost — your photos and details are still here.',
+              action: CanopyButton.quiet(label: 'Try again', onPressed: _submit),
+            ),
+          ],
+        ],
+      ),
+      sticky: StickyActionBar(children: [
+        CanopyButton(
+          label: 'Submit contribution',
+          expand: true,
+          loading: _saving,
+          onPressed: _submit,
+        ),
+      ]),
+    );
+  }
+
+  Future<void> _chooseWorkType() async {
+    final picked = await showCanopySheet<String>(
+      context,
+      builder: (ctx) => CanopySheetBody(
+        title: 'Work type',
+        children: [
+          CanopyListGroup(children: [
+            for (final w in _kWorkTypes)
+              CanopyListRow(
+                icon: w.$2,
+                title: w.$1,
+                chevron: false,
+                trailing: w.$1 == _workType
+                    ? Icon(Icons.check, color: ctx.canopy.ink)
+                    : null,
+                onTap: () => Navigator.pop(ctx, w.$1),
+              ),
+          ]),
+        ],
+      ),
+    );
+    if (picked != null) setState(() => _workType = picked);
+  }
+
+  Future<void> _chooseActivity(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> activities) async {
+    final picked = await showCanopySheet<(String?, String?)>(
+      context,
+      tall: true,
+      builder: (ctx) => CanopySheetBody(
+        title: 'Link an activity',
+        caption: 'Its organisation reviews and verifies your contribution.',
+        children: [
+          if (activities.isEmpty)
+            const CanopyEmptyState(
+              boxed: true,
+              icon: Icons.event_note_outlined,
+              title: 'No organisation activities yet',
+            )
+          else
+            CanopyListGroup(children: [
+              CanopyListRow(
+                title: 'None',
+                chevron: false,
+                onTap: () => Navigator.pop(ctx, (null, null)),
+              ),
+              for (final d in activities)
+                CanopyListRow(
+                  title: (d.data()['title'] ?? d.data()['name'] ?? 'Community activity')
+                      .toString(),
+                  subtitle: (d.data()['organizerName'] ?? d.data()['orgName'] ?? '')
+                      .toString(),
+                  chevron: false,
+                  trailing: d.id == _activityId
+                      ? Icon(Icons.check, color: ctx.canopy.ink)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, (
+                    d.id,
+                    (d.data()['title'] ?? d.data()['name'] ?? 'Community activity')
+                        .toString()
+                  )),
+                ),
+            ]),
+        ],
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _activityId = picked.$1;
+        _activityTitle = picked.$2;
+      });
+    }
+  }
+}
+
+class _LocationDenied implements Exception {
+  const _LocationDenied();
+}
+
+// ── Pieces ───────────────────────────────────────────────────────────────────
+
+class _Heading extends StatelessWidget {
+  final String text;
+  final String? trailing;
+  const _Heading(this.text, {this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: CanopySpace.s12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(text, style: CanopyType.heading.copyWith(color: p.ink)),
+            ),
+          ),
+          if (trailing != null)
+            Text(trailing!, style: CanopyType.caption.copyWith(color: p.inkMuted)),
+        ],
+      ),
+    );
+  }
+}
+
+class _LocationBlock extends StatelessWidget {
+  final Position? position;
+  final bool locating;
+  final String? error;
+  final bool showRequired;
+  final VoidCallback onCapture;
+  final VoidCallback onChoose;
+
+  const _LocationBlock({
+    required this.position,
+    required this.locating,
+    required this.error,
+    required this.showRequired,
+    required this.onCapture,
+    required this.onChoose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    if (position != null) {
+      return CanopyListGroup(children: [
+        CanopyListRow(
+          icon: Icons.my_location_outlined,
+          title: position!.accuracy == 0 ? 'Place chosen on the map' : 'Location captured',
+          subtitle:
+              '${position!.latitude.toStringAsFixed(5)}, ${position!.longitude.toStringAsFixed(5)}${position!.accuracy == 0 ? '' : ' · ±${position!.accuracy.round()} m'}',
+          below: StatusLabel('Ready', color: p.success),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            CanopyButton.quiet(label: 'Map', size: CanopyButtonSize.compact, onPressed: onChoose),
+            CanopyButton.quiet(label: 'GPS', size: CanopyButtonSize.compact, onPressed: onCapture),
+          ]),
+        ),
+      ]);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CanopyCard(
+          borderColor: showRequired ? p.danger : null,
+          borderWidth: showRequired ? 2 : 1,
+          child: Row(
+            children: [
+              Icon(Icons.location_on_outlined,
+                  size: CanopyIconSize.nav, color: p.inkMuted),
+              const SizedBox(width: CanopySpace.s12),
+              Expanded(
+                child: Text(
+                  'Required. We record where the work happened so it can be verified.',
+                  style: CanopyType.body.copyWith(color: p.ink),
+                ),
+              ),
+              const SizedBox(width: CanopySpace.s8),
+              CanopyButton.secondary(
+                label: 'Capture',
+                size: CanopyButtonSize.compact,
+                loading: locating,
+                onPressed: onCapture,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: CanopySpace.s8),
+        CanopyButton.quiet(label: 'Choose the place on the map', expand: true, onPressed: onChoose),
+        if (error != null) ...[
+          const SizedBox(height: CanopySpace.s8),
+          CanopyCallout(kind: CalloutKind.warning, text: error!),
+        ],
+      ],
+    );
+  }
+}
+
+/// Transformation month timeline: Today (before) → Month 1 → Month 2 → Month 3…
+class _MonthTimeline extends StatelessWidget {
+  const _MonthTimeline();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    final steps = [
+      ('Today', 'Before photos'),
+      ('Month 1', "We'll remind you"),
+      ('Month 2', 'Progress photos'),
+      ('Month 3+', 'Keep tracing'),
+    ];
+    return Column(
+      children: [
+        for (var i = 0; i < steps.length; i++)
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 22,
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 14,
+                        height: 14,
+                        margin: const EdgeInsets.only(top: 3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i == 0 ? p.primary : p.surface,
+                          border: Border.all(
+                              color: i == 0 ? p.primary : p.outlineStrong,
+                              width: 2),
+                        ),
+                      ),
+                      if (i < steps.length - 1)
+                        Expanded(
+                          child: Container(width: 2, color: p.outline),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: CanopySpace.s8),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: CanopySpace.s12),
+                    child: Text.rich(TextSpan(children: [
+                      TextSpan(
+                          text: '${steps[i].$1}  ',
+                          style: CanopyType.bodyStrong.copyWith(color: p.ink)),
+                      TextSpan(
+                          text: steps[i].$2,
+                          style: CanopyType.caption.copyWith(color: p.inkMuted)),
+                    ])),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// PhotoPickerTile grid: empty (dashed) · picked (thumb + remove) ·
+/// uploading (ring) · failed (retry).
+class _PhotoGrid extends StatelessWidget {
+  final List<XFile> photos;
+  final bool uploading;
+  final bool failed;
+  final bool showRequired;
+  final VoidCallback onAdd;
+  final ValueChanged<int> onRemove;
+  final VoidCallback onRetry;
+
+  const _PhotoGrid({
+    required this.photos,
+    required this.uploading,
+    required this.failed,
+    required this.showRequired,
+    required this.onAdd,
+    required this.onRemove,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.canopy;
+    final showAdd = photos.length < _kMaxPhotos && !uploading;
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      crossAxisSpacing: CanopySpace.s12,
+      mainAxisSpacing: CanopySpace.s12,
+      children: [
+        for (var i = 0; i < photos.length; i++)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(CanopyRadius.sm),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.file(File(photos[i].path), fit: BoxFit.cover),
+                if (uploading || failed)
+                  ColoredBox(
+                    color: p.scrim,
+                    child: Center(
+                      child: uploading
+                          ? const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 3, color: CanopyPalette.onHero))
+                          : Semantics(
+                              button: true,
+                              label: 'Retry upload',
+                              child: InkWell(
+                                onTap: onRetry,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.refresh,
+                                        color: CanopyPalette.onHero),
+                                    Text('Retry',
+                                        style: CanopyType.label.copyWith(
+                                            color: CanopyPalette.onHero)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                    ),
+                  ),
+                if (i == 0)
+                  Positioned(
+                    left: CanopySpace.s8,
+                    bottom: CanopySpace.s8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      color: p.scrim,
+                      child: Text('COVER',
+                          style: CanopyType.micro
+                              .copyWith(color: CanopyPalette.onHero)),
+                    ),
+                  ),
+                if (!uploading)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: CanopyIconButton(
+                      icon: Icons.close,
+                      tooltip: 'Remove photo',
+                      onImage: true,
+                      onPressed: () => onRemove(i),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (showAdd)
+          DashedBorder(
+            color: showRequired ? p.danger : p.outlineStrong,
+            radius: CanopyRadius.sm,
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: onAdd,
+                borderRadius: BorderRadius.circular(CanopyRadius.sm),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_a_photo_outlined,
+                          size: CanopyIconSize.nav, color: p.ink),
+                      const SizedBox(height: CanopySpace.s8),
+                      Text('Add photo',
+                          style: CanopyType.label.copyWith(color: p.ink)),
+                      if (showRequired)
+                        Text('At least one',
+                            style: CanopyType.caption.copyWith(color: p.danger)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}

@@ -1,1086 +1,495 @@
 // lib/Organization/Map/org_map_ops.dart
 //
-// Allows org reps to add community map pins (amenities, dumpsites, landmarks).
-// Opened from the community map; roles determine available pin types.
+// Map pin (ORG_HANDOFF §3.8, T). Org reps add community pins — amenities,
+// dumpsites, landmarks. You have to be AT the place: the pin is the phone's GPS
+// position at that moment (never a tap or a drag on the map), and a photo taken
+// right there is required. The sheet offers pin-type chips that depend on the
+// org's role, a name, dumpsite ownership, then "Add pin". New pins are
+// unverified until the community confirms them.
 
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/material.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../Shared/theme/app_theme.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PIN TYPE MODEL
-// ─────────────────────────────────────────────────────────────────────────────
+import '../../Shared/Inputs/pin_picker_screen.dart';
+import '../../theme/canopy_components.dart';
+import '../../theme/canopy_map_style.dart';
 
 enum _PinRole { all, envOps, specialOps }
 
 class _PinType {
   final String id;
   final String label;
-  final String description;
   final IconData icon;
-  final Color color;
   final _PinRole role;
-  final bool hasDumpsteFields; // needs managing-org section
+  final bool managed; // dumpsite: who manages it
 
-  const _PinType({
-    required this.id,
-    required this.label,
-    required this.description,
-    required this.icon,
-    required this.color,
-    required this.role,
-    this.hasDumpsteFields = false,
-  });
+  const _PinType(this.id, this.label, this.icon, this.role, {this.managed = false});
 }
 
 const _allPinTypes = <_PinType>[
-  // ── Common — all orgs ─────────────────────────────────────────────────────
-  _PinType(
-    id: 'police_station',
-    label: 'Police Station',
-    description: 'Police post or station in the community',
-    icon: Icons.local_police_outlined,
-    color: Color(0xFF1565C0),
-    role: _PinRole.all,
-  ),
-  _PinType(
-    id: 'public_toilet',
-    label: 'Public Toilet',
-    description: 'Public washroom or sanitation facility',
-    icon: Icons.wc_outlined,
-    color: Color(0xFF6A1B9A),
-    role: _PinRole.all,
-  ),
-  _PinType(
-    id: 'water_point',
-    label: 'Water Point',
-    description: 'Borehole, tap, or public water access',
-    icon: Icons.water_drop_outlined,
-    color: Color(0xFF1E88E5),
-    role: _PinRole.all,
-  ),
-  _PinType(
-    id: 'community_center',
-    label: 'Community Centre',
-    description: 'Community hall, meeting place, or gathering spot',
-    icon: Icons.people_outlined,
-    color: Color(0xFF00838F),
-    role: _PinRole.all,
-  ),
-  _PinType(
-    id: 'market',
-    label: 'Market / Trading Area',
-    description: 'Local market, duka cluster, or street market',
-    icon: Icons.storefront_outlined,
-    color: Color(0xFFEF6C00),
-    role: _PinRole.all,
-  ),
-  _PinType(
-    id: 'school',
-    label: 'School',
-    description: 'Primary, secondary, or informal learning centre',
-    icon: Icons.school_outlined,
-    color: Color(0xFF0277BD),
-    role: _PinRole.all,
-  ),
-  _PinType(
-    id: 'health_clinic',
-    label: 'Health Clinic / Dispensary',
-    description: 'Clinic, dispensary, or health post',
-    icon: Icons.local_hospital_outlined,
-    color: Color(0xFFAD1457),
-    role: _PinRole.all,
-  ),
-  _PinType(
-    id: 'place_of_worship',
-    label: 'Place of Worship',
-    description: 'Church, mosque, temple, or shrine',
-    icon: Icons.church_outlined,
-    color: Color(0xFF4E342E),
-    role: _PinRole.all,
-  ),
-  _PinType(
-    id: 'landmark',
-    label: 'Community Landmark',
-    description: 'Notable local landmark or point of interest',
-    icon: Icons.location_city_outlined,
-    color: Color(0xFF455A64),
-    role: _PinRole.all,
-  ),
-
-  // ── Environmental orgs ─────────────────────────────────────────────────────
-  _PinType(
-    id: 'dumpsite',
-    label: 'Dumpsite',
-    description: 'Active or monitored waste disposal site',
-    icon: Icons.delete_outline,
-    color: Color(0xFFE53935),
-    role: _PinRole.envOps,
-    hasDumpsteFields: true,
-  ),
-  _PinType(
-    id: 'recycling_dropoff',
-    label: 'Recycling Drop-Off',
-    description: 'Designated point for recyclable materials',
-    icon: Icons.recycling,
-    color: Color(0xFF43A047),
-    role: _PinRole.envOps,
-  ),
-  _PinType(
-    id: 'collection_site',
-    label: 'Collection Site',
-    description: 'Waste or recyclable aggregation point',
-    icon: Icons.inventory_2_outlined,
-    color: Color(0xFF2D7A4F),
-    role: _PinRole.envOps,
-  ),
-  _PinType(
-    id: 'scrap_buying_site',
-    label: 'Scrap Buying Site',
-    description: 'Buy-back partner, yard, or trading point',
-    icon: Icons.point_of_sale_outlined,
-    color: Color(0xFF8B5E34),
-    role: _PinRole.envOps,
-  ),
-  _PinType(
-    id: 'sorting_hub',
-    label: 'Sorting Hub',
-    description: 'Sorting, baling, staging, or recovery hub',
-    icon: Icons.warehouse_outlined,
-    color: Color(0xFF4B6A88),
-    role: _PinRole.envOps,
-  ),
-  _PinType(
-    id: 'tree_site',
-    label: 'Tree Planting Site',
-    description: 'Active or planned tree planting location',
-    icon: Icons.park_outlined,
-    color: Color(0xFF2E7D32),
-    role: _PinRole.envOps,
-  ),
-
-  // ── Special ops ────────────────────────────────────────────────────────────
-  _PinType(
-    id: 'cleanup_event',
-    label: 'Cleanup Event',
-    description: 'Scheduled or active community cleanup site',
-    icon: Icons.cleaning_services_outlined,
-    color: Color(0xFF00897B),
-    role: _PinRole.specialOps,
-  ),
-  _PinType(
-    id: 'canopy_hub',
-    label: 'Canopy Hub',
-    description: 'Official Canopy programme hub or activity centre',
-    icon: Icons.solar_power_outlined,
-    color: AppTheme.tertiary,
-    role: _PinRole.specialOps,
-  ),
+  _PinType('police_station', 'Police station', Icons.local_police_outlined, _PinRole.all),
+  _PinType('public_toilet', 'Public toilet', Icons.wc_outlined, _PinRole.all),
+  _PinType('water_point', 'Water point', Icons.water_drop_outlined, _PinRole.all),
+  _PinType('community_center', 'Community centre', Icons.people_outline, _PinRole.all),
+  _PinType('market', 'Market', Icons.storefront_outlined, _PinRole.all),
+  _PinType('school', 'School', Icons.school_outlined, _PinRole.all),
+  _PinType('health_clinic', 'Clinic', Icons.local_hospital_outlined, _PinRole.all),
+  _PinType('place_of_worship', 'Place of worship', Icons.church_outlined, _PinRole.all),
+  _PinType('landmark', 'Landmark', Icons.location_city_outlined, _PinRole.all),
+  _PinType('dumpsite', 'Dumpsite', Icons.delete_outline, _PinRole.envOps, managed: true),
+  _PinType('recycling_dropoff', 'Recycling drop-off', Icons.recycling, _PinRole.envOps),
+  _PinType('collection_site', 'Collection site', Icons.inventory_2_outlined, _PinRole.envOps),
+  _PinType('scrap_buying_site', 'Scrap buyer', Icons.point_of_sale_outlined, _PinRole.envOps),
+  _PinType('sorting_hub', 'Sorting hub', Icons.warehouse_outlined, _PinRole.envOps),
+  _PinType('tree_site', 'Tree planting site', Icons.park_outlined, _PinRole.envOps),
+  _PinType('cleanup_event', 'Clean-up site', Icons.cleaning_services_outlined, _PinRole.specialOps),
+  _PinType('canopy_hub', 'Canopy hub', Icons.hub_outlined, _PinRole.specialOps),
 ];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
 
 class OrgMapOpsScreen extends StatefulWidget {
   final Map<String, dynamic> orgData;
   final String? initialPinTypeId;
 
-  const OrgMapOpsScreen({
-    required this.orgData,
-    this.initialPinTypeId,
-    Key? key,
-  }) : super(key: key);
+  const OrgMapOpsScreen({super.key, required this.orgData, this.initialPinTypeId});
 
   @override
   State<OrgMapOpsScreen> createState() => _OrgMapOpsScreenState();
 }
 
 class _OrgMapOpsScreenState extends State<OrgMapOpsScreen> {
-  GoogleMapController? _mapController;
-
-  LatLng? _pickedLocation;
-  bool _formVisible = false;
-
-  // Form fields
-  _PinType? _selectedType;
-  final _nameCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  final _hoursCtrl = TextEditingController();
-
-  // Dumpsite-only fields
+  GoogleMapController? _map;
+  // Live GPS. The pin is wherever this phone is, once the fix is precise enough.
+  static const double _maxAccuracyM = 25;
+  StreamSubscription<Position>? _gps;
+  Position? _fix;
+  String? _gpsProblem;
+  _PinType? _type;
+  final _name = TextEditingController();
+  final _desc = TextEditingController();
+  final _hours = TextEditingController();
   bool _selfManaged = true;
-  final _linkedOrgCtrl = TextEditingController();
-  String? _linkedOrgId;
-  List<Map<String, dynamic>> _orgSearchResults = [];
-  bool _searchingOrg = false;
-  Timer? _orgSearchDebounce;
+  (String, String)? _linkedOrg; // id, name
+  File? _image;
+  bool _saving = false, _showErrors = false, _moreOpen = false;
 
-  // Image
-  File? _imageFile;
-  bool _uploading = false;
+  // The exact place picked on the map instead of read from this phone's GPS.
+  LatLng? _chosen;
+  bool get _manual => _chosen != null;
 
-  final _formKey = GlobalKey<FormState>();
+  bool get _preciseEnough => _fix != null && _fix!.accuracy <= _maxAccuracyM && !_fix!.isMocked;
 
-  bool get _isEnvOrg {
-    final sector = widget.orgData['sectorId'] as String? ?? '';
-    final envStatus = widget.orgData['envOpsStatus'] as String? ?? '';
-    return sector == 'sector_env' || envStatus == 'approved';
+  Map<String, dynamic> get _org => widget.orgData;
+  String get _orgId => _org['orgId'] as String? ?? '';
+  String get _orgName => (_org['org_name'] ?? _org['name'] ?? '') as String;
+
+  bool get _isEnvOrg => _org['sectorId'] == 'sector_env' || _org['envOpsStatus'] == 'approved';
+  bool get _isSpecialOps => _org['envOpsStatus'] == 'approved' || _org['marketplaceStatus'] == 'approved';
+
+  List<_PinType> get _types => _allPinTypes
+      .where((t) =>
+          t.role == _PinRole.all ||
+          (t.role == _PinRole.envOps && _isEnvOrg) ||
+          (t.role == _PinRole.specialOps && _isSpecialOps))
+      .toList();
+
+  CameraPosition get _start {
+    final gp = _org['location'];
+    final lat = gp is GeoPoint ? gp.latitude : (_org['lat'] as num?)?.toDouble();
+    final lng = gp is GeoPoint ? gp.longitude : (_org['lng'] as num?)?.toDouble();
+    return CameraPosition(target: LatLng(lat ?? -1.2921, lng ?? 36.8219), zoom: lat == null ? 12 : 15);
   }
-
-  bool get _isSpecialOps {
-    final env = widget.orgData['envOpsStatus'] as String? ?? '';
-    final mkt = widget.orgData['marketplaceStatus'] as String? ?? '';
-    return env == 'approved' || mkt == 'approved';
-  }
-
-  List<_PinType> get _availableTypes {
-    return _allPinTypes.where((t) {
-      if (t.role == _PinRole.all) return true;
-      if (t.role == _PinRole.envOps && _isEnvOrg) return true;
-      if (t.role == _PinRole.specialOps && _isSpecialOps) return true;
-      return false;
-    }).toList();
-  }
-
-  static const _initialPosition = CameraPosition(
-    target: LatLng(-1.2921, 36.8219),
-    zoom: 13,
-  );
 
   @override
   void initState() {
     super.initState();
-    final initialId = widget.initialPinTypeId;
-    if (initialId != null && initialId.isNotEmpty) {
-      for (final type in _availableTypes) {
-        if (type.id == initialId) {
-          _selectedType = type;
-          break;
-        }
+    final id = widget.initialPinTypeId;
+    if (id != null) {
+      for (final t in _types) {
+        if (t.id == id) _type = t;
       }
+    }
+    _startGps();
+  }
+
+  Future<void> _startGps() async {
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        if (mounted) setState(() => _gpsProblem = 'Turn on location for Canopy. You have to be at the place to map it.');
+        return;
+      }
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        if (mounted) setState(() => _gpsProblem = 'Turn on your phone\'s location (GPS).');
+        return;
+      }
+      _gps?.cancel();
+      _gps = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 0),
+      ).listen((pos) {
+        if (!mounted) return;
+        final first = _fix == null;
+        setState(() {
+          _fix = pos;
+          _gpsProblem = null;
+        });
+        if (first) _map?.animateCamera(CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 18));
+      }, onError: (_) {
+        if (mounted) setState(() => _gpsProblem = "Couldn't read your position. Move to open sky and try again.");
+      });
+    } catch (_) {
+      if (mounted) setState(() => _gpsProblem = "Couldn't read your position. Try again.");
     }
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _descCtrl.dispose();
-    _hoursCtrl.dispose();
-    _linkedOrgCtrl.dispose();
-    _orgSearchDebounce?.cancel();
-    _mapController?.dispose();
+    _name.dispose();
+    _desc.dispose();
+    _hours.dispose();
+    _gps?.cancel();
+    _map?.dispose();
     super.dispose();
   }
 
-  // ── Map tap ──────────────────────────────────────────────────────────────
-
-  void _onMapTap(LatLng pos) {
-    setState(() {
-      _pickedLocation = pos;
-      _formVisible = true;
-    });
+  Future<void> _chooseOnMap() async {
+    final f = _fix;
+    final start = _chosen ?? (f == null ? null : LatLng(f.latitude, f.longitude));
+    final at = await pickPin(context, initial: start, title: 'Where is it?');
+    if (at == null || !mounted) return;
+    setState(() => _chosen = at);
+    await _map?.animateCamera(CameraUpdate.newLatLngZoom(at, 17));
   }
 
-  // ── Image picker ──────────────────────────────────────────────────────────
+  Future<void> _recentre() async {
+    final f = _fix;
+    if (f != null) await _map?.animateCamera(CameraUpdate.newLatLngZoom(LatLng(f.latitude, f.longitude), 18));
+  }
 
   Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final xFile = await picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 85);
-    if (xFile != null) {
-      setState(() => _imageFile = File(xFile.path));
+    // At the place, the photo is taken with the camera. When the place was chosen
+    // on the map (you may not be there), a photo from the gallery is fine.
+    var source = ImageSource.camera;
+    if (_manual) {
+      final picked = await showCanopySheet<ImageSource>(context, builder: (ctx) {
+        return CanopySheetBody(title: 'Photo', children: [
+          CanopyListGroup(children: [
+            CanopyListRow(icon: Icons.photo_camera_outlined, title: 'Take a photo', chevron: false, onTap: () => Navigator.pop(ctx, ImageSource.camera)),
+            CanopyListRow(icon: Icons.photo_library_outlined, title: 'Choose from gallery', chevron: false, onTap: () => Navigator.pop(ctx, ImageSource.gallery)),
+          ]),
+        ]);
+      });
+      if (picked == null) return;
+      source = picked;
     }
+    final f = await ImagePicker().pickImage(source: source, imageQuality: 85, maxWidth: 1600);
+    if (f != null) setState(() => _image = File(f.path));
   }
 
-  // ── Org search (for dumpsite linking) ────────────────────────────────────
-
-  void _onLinkedOrgChanged(String value) {
-    _orgSearchDebounce?.cancel();
-    if (value.length < 2) {
-      setState(() => _orgSearchResults = []);
-      return;
-    }
-    _orgSearchDebounce = Timer(const Duration(milliseconds: 500), () async {
-      setState(() => _searchingOrg = true);
-      try {
-        final snap = await FirebaseFirestore.instance
-            .collection('organizations')
-            .get();
-        final q = value.toLowerCase();
-        final results = snap.docs
-            .where((d) {
-              final data = d.data();
-              final name = ((data['org_name'] ?? data['name'] ?? '') as String)
-                  .toLowerCase();
-              return name.contains(q) && d.id != widget.orgData['orgId'];
-            })
-            .map((d) {
-              final data = d.data();
-              return {
-                'id': d.id,
-                'name': (data['org_name'] ?? data['name'] ?? 'Unknown') as String,
-                'city': data['city'] as String? ?? '',
-              };
-            })
-            .take(5)
-            .toList();
-        if (mounted) setState(() => _orgSearchResults = results);
-      } catch (_) {
-      } finally {
-        if (mounted) setState(() => _searchingOrg = false);
-      }
-    });
+  Future<void> _pickLinkedOrg() async {
+    final picked = await showCanopySheet<(String, String)>(context, tall: true, builder: (_) => _OrgPicker(selfId: _orgId));
+    if (picked != null) setState(() => _linkedOrg = picked);
   }
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  String? get _error {
+    if (!_manual) {
+      if (_gpsProblem != null) return _gpsProblem;
+      if (_fix == null) return 'Waiting for your location…';
+      if (_fix!.isMocked) return 'A fake location is on. Turn it off to map a place.';
+      if (!_preciseEnough) return 'Not precise enough yet (±${_fix!.accuracy.round()} m). Stand in the open and wait for ±${_maxAccuracyM.round()} m or better.';
+    }
+    if (_image == null) return _manual ? 'Add a photo of the place.' : 'Take a photo of the place. It has to be taken on the spot.';
+    if (_type == null) return 'Choose what this pin is.';
+    if (_name.text.trim().isEmpty) return 'Give it a name people will recognise.';
+    if (_type!.managed && !_selfManaged && _linkedOrg == null) return 'Choose who manages it.';
+    return null;
+  }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_pickedLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please tap the map to place a pin')),
-      );
-      return;
-    }
-    if (_selectedType == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a pin type')),
-      );
-      return;
-    }
-
-    setState(() => _uploading = true);
+    setState(() => _showErrors = true);
+    if (_error != null) return;
+    setState(() => _saving = true);
     try {
-      String? imageUrl;
-      if (_imageFile != null) {
-        final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
-        final ref = FirebaseStorage.instance
-            .ref('map_pins/${DateTime.now().millisecondsSinceEpoch}_$uid.jpg');
-        await ref.putFile(_imageFile!);
-        imageUrl = await ref.getDownloadURL();
+      // The point is where this phone is right now: read fresh, not whatever the
+      // last stream value was, and re-checked for precision.
+      final chosen = _chosen;
+      Position? pos;
+      if (chosen == null) {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, timeLimit: Duration(seconds: 15)),
+        );
+        if (pos.isMocked || pos.accuracy > _maxAccuracyM) {
+          if (mounted) {
+            showCanopySnack(context, "Your position isn't precise enough (±${pos.accuracy.round()} m). Wait a moment in the open and try again.", error: true);
+          }
+          return;
+        }
       }
-
-      final orgId = widget.orgData['orgId'] as String? ?? '';
-      final orgName =
-          (widget.orgData['org_name'] ?? widget.orgData['name'] ?? '') as String;
-
-      final Map<String, dynamic> pinData = {
-        'pin_type': _selectedType!.id,
-        'name': _nameCtrl.text.trim(),
-        'description': _descCtrl.text.trim(),
-        'location': GeoPoint(
-          _pickedLocation!.latitude,
-          _pickedLocation!.longitude,
-        ),
+      final lat = chosen?.latitude ?? pos!.latitude;
+      final lng = chosen?.longitude ?? pos!.longitude;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anon';
+      final ref = FirebaseStorage.instance.ref('map_pins/${DateTime.now().millisecondsSinceEpoch}_$uid.jpg');
+      await ref.putFile(_image!);
+      final imageUrl = await ref.getDownloadURL();
+      final t = _type!;
+      await FirebaseFirestore.instance.collection('map_pins').add({
+        'pin_type': t.id,
+        'name': _name.text.trim(),
+        'description': _desc.text.trim(),
+        'location': GeoPoint(lat, lng),
+        if (pos != null) 'location_accuracy_m': pos.accuracy,
+        'location_source': chosen == null ? 'device_gps' : 'chosen_on_map',
+        'captured_at': FieldValue.serverTimestamp(),
         'image_url': imageUrl,
-        'operating_hours': _hoursCtrl.text.trim().isEmpty
-            ? null
-            : _hoursCtrl.text.trim(),
-        'added_by_org_id': orgId,
-        'added_by_org_name': orgName,
-        'country': widget.orgData['country'] as String? ?? 'Kenya',
-        'city': widget.orgData['city'] as String? ?? '',
-        'area': widget.orgData['area'] as String? ?? '',
+        'operating_hours': _hours.text.trim().isEmpty ? null : _hours.text.trim(),
+        'added_by_org_id': _orgId,
+        'added_by_org_name': _orgName,
+        'country': _org['country'] as String? ?? 'Kenya',
+        'city': _org['city'] as String? ?? '',
+        'area': _org['area'] as String? ?? '',
         'is_active': true,
         'is_verified': false,
         'created_at': FieldValue.serverTimestamp(),
-      };
-
-      if (_selectedType!.hasDumpsteFields) {
-        pinData['managing_org_id'] = _selfManaged ? orgId : _linkedOrgId;
-        pinData['managing_org_name'] =
-            _selfManaged ? orgName : _linkedOrgCtrl.text.trim();
-        pinData['self_managed'] = _selfManaged;
-      }
-
-      await FirebaseFirestore.instance.collection('map_pins').add(pinData);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Pin added — pending community verification'),
-            backgroundColor: AppTheme.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+        if (t.managed) ...{
+          'managing_org_id': _selfManaged ? _orgId : _linkedOrg?.$1,
+          'managing_org_name': _selfManaged ? _orgName : _linkedOrg?.$2,
+          'self_managed': _selfManaged,
+        },
+      });
+      if (!mounted) return;
+      showCanopySnack(context, 'Pin added. It shows as unverified until the community confirms it.');
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) showCanopySnack(context, "Couldn't add the pin. Try again.", error: true);
     } finally {
-      if (mounted) setState(() => _uploading = false);
+      if (mounted) setState(() => _saving = false);
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).padding.bottom;
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Google Map
-          GoogleMap(
-            initialCameraPosition: _initialPosition,
-            onMapCreated: (c) => _mapController = c,
-            onTap: _onMapTap,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
-            markers: _pickedLocation == null
-                ? {}
-                : {
-                    Marker(
-                      markerId: const MarkerId('picked'),
-                      position: _pickedLocation!,
-                      draggable: true,
-                      onDragEnd: (pos) => setState(() => _pickedLocation = pos),
-                    ),
-                  },
-          ),
-
-          // Top bar
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 12,
-            right: 12,
-            child: Row(
-              children: [
-                _MapIconButton(
-                  icon: Icons.arrow_back_ios_new_rounded,
-                  onTap: () => Navigator.pop(context),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.94),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.10),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      _pickedLocation == null
-                          ? 'Tap the map to place a pin'
-                          : 'Pin placed — fill in details below',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.darkGreen.withOpacity(0.80),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Form sheet (slides up once pin is placed)
-          if (_formVisible)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: _FormSheet(
-                formKey: _formKey,
-                availableTypes: _availableTypes,
-                selectedType: _selectedType,
-                onTypeSelected: (t) => setState(() => _selectedType = t),
-                nameCtrl: _nameCtrl,
-                descCtrl: _descCtrl,
-                hoursCtrl: _hoursCtrl,
-                imageFile: _imageFile,
-                onPickImage: _pickImage,
-                selfManaged: _selfManaged,
-                onSelfManagedChanged: (v) => setState(() => _selfManaged = v),
-                linkedOrgCtrl: _linkedOrgCtrl,
-                onLinkedOrgChanged: _onLinkedOrgChanged,
-                orgSearchResults: _orgSearchResults,
-                searchingOrg: _searchingOrg,
-                onSelectLinkedOrg: (org) {
-                  setState(() {
-                    _linkedOrgId = org['id'];
-                    _linkedOrgCtrl.text = org['name'] ?? '';
-                    _orgSearchResults = [];
-                  });
-                },
-                uploading: _uploading,
-                onSubmit: _submit,
-                bottomPad: bottomPad,
-              ),
-            ),
-        ],
-      ),
+    final p = context.canopy;
+    final top = MediaQuery.paddingOf(context).top;
+    return CanopyScaffold(
+      body: Stack(children: [
+        GoogleMap(
+          initialCameraPosition: _start,
+          style: canopyMapStyle(context),
+          onMapCreated: (c) => _map = c,
+          myLocationEnabled: true,
+          myLocationButtonEnabled: false,
+          markers: {
+            if (_chosen != null) Marker(markerId: const MarkerId('chosen'), position: _chosen!),
+          },
+          zoomControlsEnabled: false,
+          mapToolbarEnabled: false,
+        ),
+        Positioned(
+          top: top + CanopySpace.s8,
+          left: CanopySpace.s12,
+          right: CanopySpace.s12,
+          child: Row(children: [
+            CanopyIconButton(icon: Icons.arrow_back, tooltip: 'Back', float: true, onPressed: () => Navigator.maybePop(context)),
+            const Spacer(),
+            CanopyIconButton(icon: Icons.my_location, tooltip: 'Centre on me', float: true, onPressed: _recentre),
+          ]),
+        ),
+        Align(alignment: Alignment.bottomCenter, child: _sheet(p)),
+      ]),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FORM SHEET
-// ─────────────────────────────────────────────────────────────────────────────
+  Widget _gpsStatus(CanopyPalette p) {
+    if (_manual) {
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(Icons.push_pin_outlined, size: 18, color: p.success),
+        const SizedBox(width: CanopySpace.s8),
+        Expanded(
+          child: Text('Place chosen on the map (${_chosen!.latitude.toStringAsFixed(5)}, ${_chosen!.longitude.toStringAsFixed(5)}).',
+              style: CanopyType.caption.copyWith(color: p.success)),
+        ),
+        CanopyButton.quiet(label: 'Change', size: CanopyButtonSize.compact, onPressed: _chooseOnMap),
+        CanopyButton.quiet(label: 'Use GPS', size: CanopyButtonSize.compact, onPressed: () => setState(() => _chosen = null)),
+      ]);
+    }
+    final f = _fix;
+    final IconData icon;
+    final Color color;
+    final String text;
+    if (_gpsProblem != null) {
+      icon = Icons.location_off_outlined;
+      color = p.danger;
+      text = _gpsProblem!;
+    } else if (f == null) {
+      icon = Icons.gps_not_fixed;
+      color = p.inkMuted;
+      text = 'Finding your exact position…';
+    } else if (f.isMocked) {
+      icon = Icons.gps_off;
+      color = p.danger;
+      text = 'A fake location is on. Turn it off.';
+    } else if (f.accuracy <= _maxAccuracyM) {
+      icon = Icons.gps_fixed;
+      color = p.success;
+      text = 'Exact position locked (±${f.accuracy.round()} m). The pin goes where you are standing.';
+    } else {
+      icon = Icons.gps_not_fixed;
+      color = p.warning;
+      text = 'Improving… ±${f.accuracy.round()} m. Stand in the open; it needs ±${_maxAccuracyM.round()} m or better.';
+    }
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, size: 18, color: color),
+      const SizedBox(width: CanopySpace.s8),
+      Expanded(child: Text(text, style: CanopyType.caption.copyWith(color: color))),
+      if (_gpsProblem != null) CanopyButton.quiet(label: 'Retry', size: CanopyButtonSize.compact, onPressed: _startGps),
+      CanopyButton.quiet(label: 'Choose on map', size: CanopyButtonSize.compact, onPressed: _chooseOnMap),
+    ]);
+  }
 
-class _FormSheet extends StatelessWidget {
-  final GlobalKey<FormState> formKey;
-  final List<_PinType> availableTypes;
-  final _PinType? selectedType;
-  final ValueChanged<_PinType> onTypeSelected;
-  final TextEditingController nameCtrl;
-  final TextEditingController descCtrl;
-  final TextEditingController hoursCtrl;
-  final File? imageFile;
-  final VoidCallback onPickImage;
-  final bool selfManaged;
-  final ValueChanged<bool> onSelfManagedChanged;
-  final TextEditingController linkedOrgCtrl;
-  final ValueChanged<String> onLinkedOrgChanged;
-  final List<Map<String, dynamic>> orgSearchResults;
-  final bool searchingOrg;
-  final ValueChanged<Map<String, dynamic>> onSelectLinkedOrg;
-  final bool uploading;
-  final VoidCallback onSubmit;
-  final double bottomPad;
-
-  const _FormSheet({
-    required this.formKey,
-    required this.availableTypes,
-    required this.selectedType,
-    required this.onTypeSelected,
-    required this.nameCtrl,
-    required this.descCtrl,
-    required this.hoursCtrl,
-    required this.imageFile,
-    required this.onPickImage,
-    required this.selfManaged,
-    required this.onSelfManagedChanged,
-    required this.linkedOrgCtrl,
-    required this.onLinkedOrgChanged,
-    required this.orgSearchResults,
-    required this.searchingOrg,
-    required this.onSelectLinkedOrg,
-    required this.uploading,
-    required this.onSubmit,
-    required this.bottomPad,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _sheet(CanopyPalette p) {
+    final bottom = MediaQuery.paddingOf(context).bottom;
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.65,
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .62),
+      decoration: BoxDecoration(
+        color: p.canvas,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(CanopyRadius.lg)),
+        border: Border(top: BorderSide(color: p.outline)),
       ),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 24,
-            offset: Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(top: 10, bottom: 8),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Text(
-                  'Add to Community Map',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.darkGreen,
-                  ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(CanopySpace.gutter, CanopySpace.s16, CanopySpace.gutter, CanopySpace.s16 + bottom),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Text('Map this place', style: CanopyType.subhead.copyWith(color: p.ink)),
+                const SizedBox(height: CanopySpace.s4),
+                _gpsStatus(p),
+                const SizedBox(height: CanopySpace.s12),
+                Wrap(spacing: CanopySpace.s8, runSpacing: CanopySpace.s8, children: [
+                  for (final t in _types)
+                    CanopyFilterChip(
+                      label: t.label,
+                      icon: t.icon,
+                      selected: _type == t,
+                      onTap: () => setState(() => _type = t),
+                    ),
+                ]),
+                const SizedBox(height: CanopySpace.s16),
+                CanopyTextField(
+                  label: 'Name',
+                  hint: 'e.g. Kibera Market water tap',
+                  controller: _name,
+                  onChanged: (_) => setState(() {}),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPad + 16),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Pin type selector
-                    _SectionLabel(
-                        label: 'Pin Type',
-                        note: availableTypes.any((t) => t.role != _PinRole.all)
-                            ? 'Showing types available for your org role'
-                            : null),
-                    const SizedBox(height: 8),
-                    _PinTypeGrid(
-                      types: availableTypes,
-                      selected: selectedType,
-                      onSelect: onTypeSelected,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Name
-                    _SectionLabel(label: 'Name'),
-                    const SizedBox(height: 6),
-                    _TextField(
-                      controller: nameCtrl,
-                      hint: 'e.g. Kangemi Police Post',
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Description
-                    _SectionLabel(label: 'Description'),
-                    const SizedBox(height: 6),
-                    _TextField(
-                      controller: descCtrl,
-                      hint: 'Brief description of this place',
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Image
-                    _SectionLabel(label: 'Photo (optional)'),
-                    const SizedBox(height: 6),
-                    _ImagePicker(
-                        imageFile: imageFile, onTap: onPickImage),
-                    const SizedBox(height: 14),
-
-                    // Operating hours
-                    _SectionLabel(label: 'Operating Hours (optional)'),
-                    const SizedBox(height: 6),
-                    _TextField(
-                      controller: hoursCtrl,
-                      hint: 'e.g. Mon–Fri 8am–5pm',
-                    ),
-
-                    // Dumpsite managing-org section
-                    if (selectedType?.hasDumpsteFields == true) ...[
-                      const SizedBox(height: 18),
-                      _SectionLabel(
-                        label: 'Who Manages this Dumpsite?',
-                        note: 'If another registered org manages this site, '
-                            'link them so their profile is connected',
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          _ManagementToggle(
-                            label: 'Our Organisation',
-                            selected: selfManaged,
-                            onTap: () => onSelfManagedChanged(true),
-                          ),
-                          const SizedBox(width: 10),
-                          _ManagementToggle(
-                            label: 'Link Another Org',
-                            selected: !selfManaged,
-                            onTap: () => onSelfManagedChanged(false),
-                          ),
-                        ],
-                      ),
-                      if (!selfManaged) ...[
-                        const SizedBox(height: 12),
-                        _TextField(
-                          controller: linkedOrgCtrl,
-                          hint: 'Search registered org by name…',
-                          onChanged: onLinkedOrgChanged,
-                        ),
-                        if (searchingOrg)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 8),
-                            child: Center(
-                                child: CircularProgressIndicator(strokeWidth: 2)),
-                          ),
-                        if (orgSearchResults.isNotEmpty)
-                          Container(
-                            margin: const EdgeInsets.only(top: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade200),
-                            ),
-                            child: Column(
-                              children: orgSearchResults.map((org) {
-                                return ListTile(
-                                  dense: true,
-                                  leading: const CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: AppTheme.lightGreen,
-                                    child: Icon(Icons.business_outlined,
-                                        size: 14, color: AppTheme.darkGreen),
-                                  ),
-                                  title: Text(org['name'] as String,
-                                      style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600)),
-                                  subtitle: Text(org['city'] as String? ?? '',
-                                      style: const TextStyle(fontSize: 11)),
-                                  onTap: () => onSelectLinkedOrg(org),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                      ],
-                    ],
-
-                    const SizedBox(height: 24),
-
-                    // Submit button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: uploading ? null : onSubmit,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: uploading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'Add Pin to Map',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PIN TYPE GRID
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PinTypeGrid extends StatelessWidget {
-  final List<_PinType> types;
-  final _PinType? selected;
-  final ValueChanged<_PinType> onSelect;
-
-  const _PinTypeGrid(
-      {required this.types, required this.selected, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 0.90,
-      ),
-      itemCount: types.length,
-      itemBuilder: (_, i) {
-        final t = types[i];
-        final isSelected = selected?.id == t.id;
-        return GestureDetector(
-          onTap: () => onSelect(t),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            decoration: BoxDecoration(
-              color: isSelected ? t.color : t.color.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected ? t.color : t.color.withOpacity(0.20),
-                width: isSelected ? 2 : 1,
-              ),
-            ),
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(t.icon,
-                    size: 24,
-                    color: isSelected ? Colors.white : t.color),
-                const SizedBox(height: 6),
-                Text(
-                  t.label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                    color: isSelected
-                        ? Colors.white
-                        : AppTheme.darkGreen.withOpacity(0.80),
+                if (_type?.managed ?? false) ...[
+                  const SizedBox(height: CanopySpace.s12),
+                  CanopySwitchRow(
+                    title: 'We manage this site',
+                    value: _selfManaged,
+                    onChanged: (v) => setState(() => _selfManaged = v),
                   ),
-                ),
-                if (t.role == _PinRole.envOps)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      'Env Ops',
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: isSelected
-                            ? Colors.white.withOpacity(0.75)
-                            : t.color.withOpacity(0.70),
-                        fontWeight: FontWeight.w600,
-                      ),
+                  if (!_selfManaged)
+                    CanopyPickerField(
+                      label: 'Managed by',
+                      value: _linkedOrg?.$2,
+                      placeholder: 'Choose organisation',
+                      onTap: _pickLinkedOrg,
                     ),
-                  ),
-                if (t.role == _PinRole.specialOps)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      'Special Ops',
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: isSelected
-                            ? Colors.white.withOpacity(0.75)
-                            : t.color.withOpacity(0.70),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SMALL WIDGETS
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  final String label;
-  final String? note;
-  const _SectionLabel({required this.label, this.note});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.darkGreen,
-            letterSpacing: 0.2,
-          ),
-        ),
-        if (note != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              note!,
-              style: TextStyle(
-                fontSize: 11,
-                color: AppTheme.darkGreen.withOpacity(0.50),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _TextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final int maxLines;
-  final String? Function(String?)? validator;
-  final ValueChanged<String>? onChanged;
-
-  const _TextField({
-    required this.controller,
-    required this.hint,
-    this.maxLines = 1,
-    this.validator,
-    this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      validator: validator,
-      onChanged: onChanged,
-      style: const TextStyle(fontSize: 14, color: AppTheme.darkGreen),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(
-            fontSize: 13, color: AppTheme.darkGreen.withOpacity(0.35)),
-        filled: true,
-        fillColor: const Color(0xFFF4F6F9),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      ),
-    );
-  }
-}
-
-class _ImagePicker extends StatelessWidget {
-  final File? imageFile;
-  final VoidCallback onTap;
-  const _ImagePicker({required this.imageFile, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 90,
-        decoration: BoxDecoration(
-          color: const Color(0xFFF4F6F9),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppTheme.primary.withOpacity(0.20),
-            style: BorderStyle.solid,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: imageFile != null
-            ? Image.file(imageFile!, fit: BoxFit.cover, width: double.infinity)
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_photo_alternate_outlined,
-                      size: 26, color: AppTheme.primary.withOpacity(0.60)),
-                  const SizedBox(height: 5),
-                  Text(
-                    'Add a photo',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.primary.withOpacity(0.70),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
                 ],
+                const SizedBox(height: CanopySpace.s8),
+                const SizedBox(height: CanopySpace.s12),
+                Text('Photo (required)', style: CanopyType.label.copyWith(color: p.ink)),
+                const SizedBox(height: CanopySpace.s8),
+                if (_image == null)
+                  CanopyButton.secondary(label: 'Take a photo of the place', expand: true, onPressed: _pickImage)
+                else
+                  Row(children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(CanopyRadius.xs),
+                      child: Image.file(_image!, width: 72, height: 72, fit: BoxFit.cover),
+                    ),
+                    const SizedBox(width: CanopySpace.s12),
+                    CanopyButton.quiet(label: 'Retake', size: CanopyButtonSize.compact, onPressed: _pickImage),
+                  ]),
+                const SizedBox(height: CanopySpace.s8),
+                if (!_moreOpen)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: CanopyButton.quiet(
+                        label: 'Add details',
+                        size: CanopyButtonSize.compact,
+                        onPressed: () => setState(() => _moreOpen = true)),
+                  )
+                else ...[
+                  CanopyTextField(label: 'Description (optional)', controller: _desc, minLines: 2, maxLines: 4),
+                  const SizedBox(height: CanopySpace.s12),
+                  CanopyTextField(label: 'Opening hours (optional)', hint: 'e.g. Mon–Sat 7am–6pm', controller: _hours),
+                ],
+                if (_showErrors && _error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: CanopySpace.s8),
+                    child: Text(_error!, style: CanopyType.caption.copyWith(color: p.danger)),
+                  ),
+                const SizedBox(height: CanopySpace.s16),
+                CanopyButton(label: 'Add pin here', expand: true, loading: _saving, onPressed: (_manual || _preciseEnough) ? _submit : null),
+              ]),
+      ),
+    );
+  }
+}
+
+class _OrgPicker extends StatefulWidget {
+  final String selfId;
+  const _OrgPicker({required this.selfId});
+
+  @override
+  State<_OrgPicker> createState() => _OrgPickerState();
+}
+
+class _OrgPickerState extends State<_OrgPicker> {
+  String _q = '';
+  late final Future<List<(String, String, String)>> _orgs = FirebaseFirestore.instance
+      .collection('organizations')
+      .get()
+      .then((s) => s.docs
+          .where((d) => d.id != widget.selfId)
+          .map((d) => (
+                d.id,
+                ((d.data()['org_name'] ?? d.data()['name'] ?? '') as String).trim(),
+                (d.data()['city'] as String?) ?? '',
+              ))
+          .where((o) => o.$2.isNotEmpty)
+          .toList()
+        ..sort((a, b) => a.$2.toLowerCase().compareTo(b.$2.toLowerCase())));
+
+  @override
+  Widget build(BuildContext context) {
+    return CanopySheetBody(title: 'Managed by', children: [
+      CanopyTextField.search(hint: 'Organisation name', autofocus: true, onChanged: (v) => setState(() => _q = v.trim().toLowerCase())),
+      const SizedBox(height: CanopySpace.s12),
+      FutureBuilder<List<(String, String, String)>>(
+        future: _orgs,
+        builder: (context, snap) {
+          if (snap.hasError) return const CanopyErrorState(inline: true, title: "Couldn't load organisations.");
+          if (!snap.hasData) return const CanopyListSkeleton(rows: 4);
+          final list = snap.data!.where((o) => o.$2.toLowerCase().contains(_q)).take(40).toList();
+          if (list.isEmpty) return const CanopyEmptyState(boxed: true, icon: Icons.apartment_outlined, title: 'No organisations match');
+          return CanopyListGroup(children: [
+            for (final o in list)
+              CanopyListRow(
+                title: o.$2,
+                subtitle: o.$3.isEmpty ? null : o.$3,
+                chevron: false,
+                onTap: () => Navigator.pop(context, (o.$1, o.$2)),
               ),
+          ]);
+        },
       ),
-    );
-  }
-}
-
-class _ManagementToggle extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ManagementToggle(
-      {required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          height: 40,
-          decoration: BoxDecoration(
-            color: selected ? AppTheme.primary : const Color(0xFFF4F6F9),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: selected ? Colors.white : AppTheme.darkGreen.withOpacity(0.60),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MapIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _MapIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.94),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.10),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Icon(icon, size: 18, color: AppTheme.darkGreen),
-      ),
-    );
+    ]);
   }
 }

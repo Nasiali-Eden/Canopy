@@ -15,6 +15,13 @@
 // `market_listings`) — that split is documented in this codebase as the
 // reason buy orders were invisible outside their posting org. Services has
 // one collection per concept, written once, same as /listings.
+//
+// Payment: initiatePayment below calls the initiateServicePayment Cloud
+// Function (functions/src/index.ts) — real M-Pesa Daraja STK Push, not the
+// `Future.delayed(...)` mock this replaces (see ServiceBooking's file
+// header). The booking doc's paymentStatus then updates in place as
+// Safaricom's callback lands; watchBookingById's existing stream is what
+// the UI should already be listening to, no separate polling needed.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -161,6 +168,16 @@ class ServiceMarketplaceService {
     final text = query.searchText.trim().toLowerCase();
     final filtered = all.where((l) {
       if (l.status != query.status) return false;
+      // Electrical/plumbing listings stay out of public browse until Canopy
+      // verifies the uploaded license document — see
+      // ServiceCategory.requiresLicenseVerification and
+      // USER_PAGES_SERVICE_CATEGORIES_BRIEF.md for how that review happens
+      // today (there's no admin UI yet, same honesty gap as elsewhere in
+      // this codebase's verification pipelines).
+      if (l.requiresLicenseVerification &&
+          l.licenseVerificationStatus != LicenseVerificationStatus.verified) {
+        return false;
+      }
       if (query.category != null && l.category != query.category) return false;
       if (text.isNotEmpty) {
         final haystack = [
@@ -207,6 +224,42 @@ class ServiceMarketplaceService {
 
   Future<void> setListingStatus(String id, ServiceListingStatus status) =>
       updateListing(id, {'status': status.name});
+
+  /// Provider re-uploads a license document (after a rejection, or their
+  /// first submission if the create flow's upload failed silently). Resets
+  /// status to 'pending' — firestore.rules only allows this exact
+  /// transition from the client (see its service_listings update rule); it
+  /// refuses to let a listing go straight back to 'verified' from here.
+  Future<void> resubmitLicenseDocument(String id, String documentUrl) =>
+      updateListing(id, {
+        'licenseDocumentUrl': documentUrl,
+        'licenseVerificationStatus': LicenseVerificationStatus.pending.name,
+      });
+
+  /// For admin/verification use once a real admin path exists. Firestore
+  /// rules only allow this write via isServerWrite() (Cloud Functions Admin
+  /// SDK, or a human editing Firestore directly in the Firebase console) —
+  /// calling this from an ordinary signed-in client fails permission-denied
+  /// by design. It exists to document the intended shape, mirroring
+  /// ContributionService.updateContributionStatus; see
+  /// USER_PAGES_SERVICE_CATEGORIES_BRIEF.md for how verification is
+  /// actually done today (by hand, in the console) until that admin path
+  /// is built.
+  Future<void> updateLicenseVerificationStatus(
+    String id, {
+    required LicenseVerificationStatus status,
+    String? verifiedBy,
+    String? rejectionReason,
+  }) =>
+      _listings.doc(id).set({
+        'licenseVerificationStatus': status.name,
+        'licenseVerifiedBy': verifiedBy,
+        'licenseRejectionReason': rejectionReason,
+        'licenseVerifiedAt': status == LicenseVerificationStatus.verified
+            ? FieldValue.serverTimestamp()
+            : null,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
   Future<void> incrementListingView(String id) => _listings
       .doc(id)
@@ -340,17 +393,21 @@ class ServiceMarketplaceService {
     }, SetOptions(merge: true));
   }
 
-  /// Mocked checkout — identical shape to marketplace_checkout.dart's
-  /// `_pay()`: a simulated delay standing in for a real M-Pesa STK push,
-  /// documented there and in firestore.rules/rules-tests as "simulated
-  /// rather than reconciled through authenticated callbacks." Real payment
-  /// integration is explicitly out of scope for this pass — see
-  /// IMPLEMENTATION_NOTES_SERVICES.md.
-  Future<void> simulatedPay(String bookingId) async {
-    await Future.delayed(const Duration(seconds: 2)); // M-Pesa STK push (simulated)
-    await _bookings.doc(bookingId).set({
-      'paymentStatus': 'simulated_paid',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+  /// Online payment isn't connected. The requester and provider settle the
+  /// price directly; this keeps the pay button's callers working and tells
+  /// the user so.
+  Future<void> initiatePayment(String bookingId, {String? phone}) async {
+    throw const ServicePaymentException(
+        "Online payment isn't available yet. Please agree payment directly with the provider.");
   }
+}
+
+/// Thrown by [ServiceMarketplaceService.initiatePayment] with a
+/// user-presentable message — mirrors CheckInException's role for
+/// EventsService.checkIn.
+class ServicePaymentException implements Exception {
+  final String message;
+  const ServicePaymentException(this.message);
+  @override
+  String toString() => message;
 }

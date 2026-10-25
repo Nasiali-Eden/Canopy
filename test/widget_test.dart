@@ -17,8 +17,8 @@ void main() {
       const TestApp(points: 25),
     );
 
-    expect(find.text('25 impact points'), findsOneWidget);
-    expect(find.text('View My Impact'), findsOneWidget);
+    expect(find.text('+25 pts'), findsOneWidget);
+    expect(find.text('View my impact'), findsOneWidget);
   });
 }
 
