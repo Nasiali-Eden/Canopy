@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../Services/Profile/profile_privacy.dart';
 import '../../Community/Home/community_home.dart';
 import '../../MarketPlace/market_home.dart';
 import '../../Organization/Home/org_home.dart';
@@ -59,6 +60,7 @@ class _SplashScreenState extends State<SplashScreen>
     }
 
     debugPrint('[Splash] User authenticated: ${authUser.uid}');
+    ProfilePrivacy.sync(); // keep email/phone off the shared profile
 
     // Seed demo data (non-critical)
     try {

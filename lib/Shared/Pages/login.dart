@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../MarketPlace/market_home.dart';
 import '../../theme/canopy_components.dart';
 import '../../Services/Authentication/auth.dart';
+import '../../Services/Profile/profile_privacy.dart';
 import '../../Services/storage/user_persistence.dart';
 import '../../Community/Home/community_home.dart';
 import '../../Organization/Home/org_home.dart';
@@ -170,6 +171,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _route(User user) async {
     final db = FirebaseFirestore.instance;
+    ProfilePrivacy.sync();
 
     try {
       debugPrint('[Login] Routing user ${user.uid}...');

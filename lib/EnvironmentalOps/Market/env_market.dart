@@ -22,6 +22,7 @@ import '../../Shared/widgets/location_switcher.dart' show showLocationPicker;
 import '../../theme/canopy_components.dart';
 import '../../MarketPlace/market_ui.dart' show showListingResponses;
 import '../envops_ui.dart';
+import '../../Shared/widgets/report_sheet.dart';
 import 'create_listing_screen.dart';
 
 enum _Chip { offered, wanted, recurring, yours }
@@ -289,6 +290,11 @@ class MaterialListingCard extends StatelessWidget {
                   const SizedBox(width: CanopySpace.s4),
                   CanopyIconButton(icon: Icons.directions_outlined, tooltip: 'Directions', onPressed: _directions),
                 ],
+                CanopyIconButton(
+                    icon: Icons.flag_outlined,
+                    tooltip: 'Report this listing',
+                    onPressed: () => showReportSheet(context,
+                        targetType: 'listing', targetId: listing.id, ownerId: listing.postedByUid, subject: 'this listing')),
               ]),
           ]),
         ),

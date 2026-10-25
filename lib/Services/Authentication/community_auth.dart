@@ -93,7 +93,6 @@ class CommunityAuthService {
       final sellerData = {
         ...sellerGeo.toFirestore(),
         'uid': user.uid,
-        'email': email,
         'name': name,
         'phone': phone,
         // Shop identity
@@ -131,7 +130,6 @@ class CommunityAuthService {
       await _db.collection('Users').doc(user.uid).set(
         {
           'name': name,
-          'email': email,
           'role': 'Marketplace Seller',
           'marketplace_role': marketplaceRole,
           'shop_name': shopName,
@@ -281,7 +279,6 @@ class CommunityAuthService {
       await _db.collection('Users').doc(user.uid).set(
         {
           'name': orgRepName,
-          'email': email,
           'role': 'Org Rep',
           'orgId': orgId,
           'orgName': orgName,
@@ -356,7 +353,6 @@ class CommunityAuthService {
 
       final data = {
         'name': name,
-        'email': email,
         'role': role,
         if (normalizedUsername != null) 'username': normalizedUsername,
         if (role == 'Volunteer') 'volunteer': true,

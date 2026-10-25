@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { onCall } from "firebase-functions/v2/https";
 import { withAuthedContext } from "./auth";
+import { deleteMyAccountImpl } from "./accountDeletion";
 import { inviteOrgRepImpl, acceptOrgInviteImpl, removeOrgAccessImpl, switchActiveOrgImpl } from "./orgAccess";
 
 initializeApp();
@@ -19,3 +20,7 @@ export const removeOrgAccess = onCall(async request =>
 
 export const switchActiveOrg = onCall(async request =>
   withAuthedContext(request, async (data: { orgId?: string }, ctx) => switchActiveOrgImpl(data, ctx)));
+
+// A person deleting their own account and personal data.
+export const deleteMyAccount = onCall(async request =>
+  withAuthedContext(request, async (_data: Record<string, never>, ctx) => deleteMyAccountImpl(ctx.uid)));

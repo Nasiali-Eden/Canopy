@@ -35,9 +35,7 @@ dependencies:
   firebase_core: any
   firebase_auth: any
   cloud_firestore: any
-  firebase_analytics: any
   firebase_storage: any
-  firebase_messaging: any
   cloud_functions: ^6.4.0  # calls checkInToEvent (functions/src/index.ts) — the QR check-in Cloud Function
 
   # UI & Utility dependencies

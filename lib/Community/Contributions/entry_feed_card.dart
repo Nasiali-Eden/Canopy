@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../Organization/Explorer/org_view_screen.dart';
 import '../../Services/Contributions/contribution_service.dart';
 import '../../theme/canopy_components.dart';
+import '../../Shared/widgets/report_sheet.dart';
 import 'feed_post_screen.dart';
 
 
@@ -349,6 +350,9 @@ class _EntryFeedCardState extends State<EntryFeedCard> {
 
   Future<void> _share() => SharePlus.instance.share(ShareParams(text: _shareText, subject: _title));
 
+  void _report() => showReportSheet(context,
+      targetType: 'contribution', targetId: widget.entry.contributionId ?? '', ownerId: widget.entry.userId, subject: 'this post');
+
   void _openPost() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => FeedPostScreen(entry: widget.entry)));
 
   @override
@@ -506,6 +510,8 @@ class _EntryFeedCardState extends State<EntryFeedCard> {
                   CanopyIconButton(icon: icon, tooltip: name, color: p.inkMuted, onPressed: () => _openUrl(url)),
                 CanopyIconButton(icon: Icons.link, tooltip: 'Copy link', color: p.inkMuted, onPressed: _copy),
                 CanopyIconButton(icon: Icons.ios_share, tooltip: 'Share', color: p.inkMuted, onPressed: _share),
+                if (!widget.editable)
+                  CanopyIconButton(icon: Icons.flag_outlined, tooltip: 'Report', color: p.inkMuted, onPressed: _report),
               ]),
             ),
             if (widget.editable && e.contributionId != null)

@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 
 import '../../../Services/Authentication/community_auth.dart';
 import '../../../theme/canopy_components.dart';
+import '../../widgets/legal_consent.dart';
 import '../../Pages/community_guidelines.dart';
 import '../../Pages/login.dart';
 import '../components/choice_sheet.dart';
@@ -32,6 +33,7 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen> {
   final _username = TextEditingController();
 
   bool _obscure = true, _loading = false, _usernameOk = false, _showErrors = false;
+  bool _agreed = false;
   String? _city, _area;
   Map<String, List<String>> _cities = {};
   bool _citiesFailed = false;
@@ -99,7 +101,8 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen> {
 
   Future<void> _submit() async {
     setState(() => _showErrors = true);
-    final blocker = _nameError ??
+    final blocker = (!_agreed ? 'Confirm your age and agree to the Terms and Privacy policy.' : null) ??
+        _nameError ??
         (!_usernameOk ? 'Choose an available username.' : null) ??
         _emailError ??
         _passwordError ??
@@ -126,6 +129,8 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen> {
         showCanopySnack(context, "Couldn't create your account. Try again.", error: true);
         return;
       }
+      await recordLegalConsent(user.uid);
+      if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const CommunityGuidelinesScreen()), (_) => false);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -224,6 +229,11 @@ class _MemberRegisterScreenState extends State<MemberRegisterScreen> {
         ),
       ),
       sticky: StickyActionBar(children: [
+        LegalConsentRow(
+          value: _agreed,
+          onChanged: (v) => setState(() => _agreed = v),
+          error: _showErrors && !_agreed ? 'Required to create an account.' : null,
+        ),
         CanopyButton(label: 'Create account', expand: true, loading: _loading, onPressed: _loading ? null : _submit),
         const SizedBox(height: CanopySpace.s8),
         CanopyButton(

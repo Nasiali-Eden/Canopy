@@ -15,6 +15,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../Services/Authentication/community_auth.dart';
 import '../../../theme/canopy_components.dart';
+import '../../widgets/legal_consent.dart';
 import '../../Pages/community_guidelines.dart';
 import '../components/choice_sheet.dart';
 import '../models/org_taxonomy_models.dart';
@@ -30,6 +31,7 @@ class _OrgRegisterWizardState extends State<OrgRegisterWizard> {
   static const _labels = ['Account', 'What you do', 'Who you serve', 'Where', 'Logo', 'Review'];
   int _step = 0;
   bool _showErrors = false, _submitting = false, _obscure = true;
+  bool _agreed = false;
 
   // 1 Account
   final _orgName = TextEditingController();
@@ -172,6 +174,8 @@ class _OrgRegisterWizardState extends State<OrgRegisterWizard> {
         showCanopySnack(context, "Couldn't register the organisation. Try again.", error: true);
         return;
       }
+      await recordLegalConsent(user.uid);
+      if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const CommunityGuidelinesScreen()), (_) => false);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -481,6 +485,8 @@ class _OrgRegisterWizardState extends State<OrgRegisterWizard> {
         CanopyFactRow(label: 'Location', value: [_area, _city, 'Kenya'].whereType<String>().where((s) => s.isNotEmpty).join(', ')),
       ]),
       const SizedBox(height: CanopySpace.s16),
+      LegalConsentRow(value: _agreed, onChanged: (v) => setState(() => _agreed = v)),
+      const SizedBox(height: CanopySpace.s12),
       const CanopyCallout(
         kind: CalloutKind.info,
         text: 'Next you will agree to the community guidelines. Then you can add events, invite people and apply for '
@@ -527,7 +533,7 @@ class _OrgRegisterWizardState extends State<OrgRegisterWizard> {
             Expanded(
               flex: 2,
               child: last
-                  ? CanopyButton(label: 'Register', loading: _submitting, onPressed: _submitting ? null : _submit)
+                  ? CanopyButton(label: 'Register', loading: _submitting, onPressed: (_submitting || !_agreed) ? null : _submit)
                   : CanopyButton(label: _step == 4 && _logo == null ? 'Skip for now' : 'Next', onPressed: _next),
             ),
           ]),

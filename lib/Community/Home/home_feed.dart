@@ -10,6 +10,8 @@
 // Built on lib/theme/canopy_components.dart (v2). Routing shell:
 // community_home.dart.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -17,6 +19,7 @@ import 'package:intl/intl.dart';
 import '../../HomeServices/services_home_screen.dart';
 import '../../MarketPlace/The Market/eco_shop.dart';
 import '../../Organization/Access/org_invite_banner.dart';
+import '../../Services/Moderation/moderation_service.dart';
 import '../../Services/Rank/leaderboard_service.dart';
 import '../../Shared/Activities/activity_detail_screen.dart';
 import '../../theme/canopy_components.dart';
@@ -76,6 +79,8 @@ class _HomeFeedState extends State<HomeFeed> {
   late Stream<QuerySnapshot<Map<String, dynamic>>> _announcements;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _articles;
   late Stream<QuerySnapshot<Map<String, dynamic>>> _contributions;
+  Set<String> _blocked = const {};
+  StreamSubscription<Set<String>>? _blockSub;
   int _refreshTick = 0; // bumping it rebuilds the points card with fresh data
 
   @override
@@ -85,6 +90,15 @@ class _HomeFeedState extends State<HomeFeed> {
     _subscribeAnnouncements();
     _subscribeArticles();
     _subscribeContributions();
+    _blockSub = ModerationService.instance.watchBlocked().listen((b) {
+      if (mounted) setState(() => _blocked = b);
+    });
+  }
+
+  @override
+  void dispose() {
+    _blockSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -287,7 +301,7 @@ class _HomeFeedState extends State<HomeFeed> {
         }
         if (!snap.hasData) return const CanopyCardSkeleton(aspectRatio: 1);
 
-        final docs = snap.data!.docs;
+        final docs = snap.data!.docs.where((d) => !_blocked.contains(d.data()['userId'])).toList();
         if (docs.isEmpty) {
           return CanopyEmptyState(
             boxed: true,

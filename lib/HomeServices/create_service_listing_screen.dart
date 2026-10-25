@@ -21,6 +21,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+
+import '../Services/Profile/profile_privacy.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../Models/geo/canopy_location.dart';
@@ -53,6 +55,7 @@ class _CreateServiceListingScreenState extends State<CreateServiceListingScreen>
   late final _to = TextEditingController(
       text: widget.existing?.pricing.toKes?.round().toString());
   late final _county = TextEditingController(text: widget.existing?.location.countyName);
+  late final _phone = TextEditingController(text: widget.existing?.contactPhone);
   late final _base = TextEditingController(text: widget.existing?.location.venue);
   late ServiceRateType _rate = widget.existing?.pricing.rateType ?? ServiceRateType.perVisit;
   late double _radius = (widget.existing?.serviceRadiusKm ?? 10).clamp(1, 50).toDouble();
@@ -70,6 +73,11 @@ class _CreateServiceListingScreenState extends State<CreateServiceListingScreen>
   @override
   void initState() {
     super.initState();
+    if (widget.existing == null) {
+      ProfilePrivacy.myPhone().then((v) {
+        if (mounted && (v ?? '').isNotEmpty && _phone.text.isEmpty) setState(() => _phone.text = v!.replaceFirst('+254', '0'));
+      });
+    }
     if (_editing) _step = 1;
   }
 
@@ -101,11 +109,21 @@ class _CreateServiceListingScreenState extends State<CreateServiceListingScreen>
 
   String? get _countyError => _county.text.trim().isEmpty ? 'Say which county you work in.' : null;
 
+  /// Kenyan mobile to +254XXXXXXXXX, or null.
+  String? get _contact {
+    var d = _phone.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (d.startsWith('254')) d = d.substring(3);
+    if (d.startsWith('0')) d = d.substring(1);
+    return d.length == 9 ? '+254$d' : null;
+  }
+
+  String? get _phoneError => _contact == null ? 'Add a Kenyan mobile number customers can call.' : null;
+
   bool _stepValid(int s) => switch (s) {
         0 => _category != null &&
             (!_category!.requiresLicenseVerification || _licence != null || _editing),
         1 => _titleError == null && _offeringsError == null,
-        2 => _fromError == null && _toError == null && _countyError == null,
+        2 => _fromError == null && _toError == null && _countyError == null && _phoneError == null,
         _ => true,
       };
 
@@ -199,6 +217,7 @@ class _CreateServiceListingScreenState extends State<CreateServiceListingScreen>
           if (photoUrl != null) 'images': [photoUrl, ...e.images.skip(1)],
           'pricing': pricing.toMap(),
           'serviceRadiusKm': _radius,
+          'contactPhone': _contact ?? '',
           ...location.toFirestore(),
         });
         if (mounted) {
@@ -224,6 +243,7 @@ class _CreateServiceListingScreenState extends State<CreateServiceListingScreen>
         images: [if (photoUrl != null) photoUrl],
         provider: SellerSnapshot(sellerId: uid, shopName: name, city: _county.text.trim()),
         postedByUid: uid,
+        contactPhone: _contact ?? '',
         pricing: pricing,
         serviceRadiusKm: _radius,
         location: location,
@@ -459,7 +479,7 @@ class _CreateServiceListingScreenState extends State<CreateServiceListingScreen>
         ),
       if (_rate != ServiceRateType.quoteOnly) ...[
         const SizedBox(height: CanopySpace.s8),
-        Text('The actual price is agreed per job when you send a quote. Canopy keeps 8% of it.',
+        Text('The actual price is agreed per job when you send a quote. You and the customer settle payment directly; Canopy takes no fee.',
             style: CanopyType.caption.copyWith(color: p.inkMuted)),
       ],
       const SizedBox(height: CanopySpace.section),
@@ -468,6 +488,13 @@ class _CreateServiceListingScreenState extends State<CreateServiceListingScreen>
         hint: 'Nairobi',
         controller: _county,
         error: _showErrors ? _countyError : null,
+        onChanged: (_) => setState(() {}),
+      ),
+      const SizedBox(height: CanopySpace.s16),
+      CanopyTextField.phone(
+        label: 'Phone number customers can call',
+        controller: _phone,
+        error: _showErrors ? _phoneError : null,
         onChanged: (_) => setState(() {}),
       ),
       const SizedBox(height: CanopySpace.s16),

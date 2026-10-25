@@ -21,13 +21,13 @@ class ProfileService {
       : _db = db ?? FirebaseFirestore.instance;
 
   Stream<ProfileData> watchProfile({required String userId}) {
-    return _db.collection('Users').doc(userId).snapshots().map((doc) {
+    return _db.collection('Users').doc(userId).snapshots().asyncMap((doc) async {
       final data = doc.data() ?? {};
       return ProfileData(
         name: (data['name'] ?? '') as String,
         location: (data['location'] ?? '') as String,
         photoUrl: data['photoUrl'] as String?,
-        phone: data['phone'] as String?,
+        phone: await _phone(userId, data),
       );
     });
   }
@@ -40,8 +40,17 @@ class ProfileService {
       name: (data['name'] ?? '') as String,
       location: (data['location'] ?? '') as String,
       photoUrl: data['photoUrl'] as String?,
-      phone: data['phone'] as String?,
+      phone: await _phone(userId, data),
     );
+  }
+
+  /// The phone lives in the private record; the old shared profile is only a fallback.
+  Future<String?> _phone(String userId, Map<String, dynamic> shared) async {
+    try {
+      final p = (await _db.collection('UserPrivate').doc(userId).get()).data()?['phone'] as String?;
+      if ((p ?? '').isNotEmpty) return p;
+    } catch (_) {}
+    return shared['phone'] as String?;
   }
 
   /// Phase 2.4 (Minimal Release Roadmap) — settings should let every role
@@ -55,12 +64,17 @@ class ProfileService {
     String? phone,
     String? photoUrl,
   }) {
-    return _db.collection('Users').doc(userId).set({
-      'name': name,
-      'location': location,
-      if (phone != null) 'phone': phone,
-      if (photoUrl != null) 'photoUrl': photoUrl,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    return () async {
+      await _db.collection('Users').doc(userId).set({
+        'name': name,
+        'location': location,
+        if (photoUrl != null) 'photoUrl': photoUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      // The phone is private: it never goes on the shared profile.
+      if (phone != null) {
+        await _db.collection('UserPrivate').doc(userId).set({'phone': phone, 'updatedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+      }
+    }();
   }
 }

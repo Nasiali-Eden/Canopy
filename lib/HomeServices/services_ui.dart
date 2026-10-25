@@ -548,8 +548,8 @@ class _ContactSheet extends StatelessWidget {
   Future<String?> _phone(ServiceBooking b) async {
     if (asProvider) return b.requesterPhone;
     try {
-      final d = (await FirebaseFirestore.instance.collection('Users').doc(b.providerUid).get()).data();
-      return (d?['phone'] ?? d?['Contact'] ?? d?['contact']) as String?;
+      final d = (await FirebaseFirestore.instance.collection('service_listings').doc(b.listingId).get()).data();
+      return d?['contactPhone'] as String?;
     } catch (_) {
       return null;
     }

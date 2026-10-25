@@ -109,6 +109,17 @@ service cloud.firestore {
     // ── Identity ──────────────────────────────────────────────────────────
     // Covers both casings found in the codebase (`Users`, `users`) until
     // Week 1's collection consolidation lands — see IMPLEMENTATION_NOTES.
+    // Private list of people this member has blocked.
+    match /Users/{userId}/blockedUsers/{blockedId} {
+      allow read, write: if isOwner(userId);
+    }
+    // Reports of posts, listings and people. Anyone signed in can file one; only
+    // the Canopy team can read them (in the console).
+    match /reports/{reportId} {
+      allow create: if isSignedIn() && request.resource.data.reporterId == uid() &&
+        request.resource.data.status == 'open';
+      allow read, update, delete: if false;
+    }
     match /Users/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId) &&
@@ -196,9 +207,15 @@ service cloud.firestore {
       allow write: if isOrgMember(orgId) || isServerWrite();
     }
 
+    // Email and phone live here, readable only by the person (never in Users).
+    match /UserPrivate/{userId} {
+      allow read, write: if isOwner(userId) || isServerWrite();
+    }
     match /org_rep/{repId} {
-      allow read: if isSignedIn();
-      allow write: if isServerWrite() || (isSignedIn() && resource == null);
+      allow read: if isOwner(repId) || isServerWrite();
+      // A person may create only their own record; access is granted by the server.
+      allow create: if isOwner(repId) && resource == null;
+      allow update, delete: if isServerWrite();
     }
     match /OrgMembers/{docId} {
       allow read: if isSignedIn();

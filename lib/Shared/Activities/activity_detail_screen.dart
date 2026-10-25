@@ -17,6 +17,7 @@
 // passed map only until the first snapshot (e.g. straight after creating).
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -320,7 +321,7 @@ class _ActionBarState extends State<_ActionBar> {
         activityId: widget.activityId,
         activity: widget.a,
         userId: userId,
-        userEmail: profile?['email'] as String? ?? '',
+        userEmail: FirebaseAuth.instance.currentUser?.email ?? '',
         userName: (profile?['displayName'] ?? profile?['name']) as String? ?? '',
         userAvatarUrl: profile?['avatarUrl'] as String?,
       ),

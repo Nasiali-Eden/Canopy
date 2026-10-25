@@ -19,6 +19,7 @@ import '../../Culture/Heritage/Services/heritage_data_service.dart';
 import '../../theme/canopy_components.dart';
 import 'archive_feedback_sheet.dart';
 import 'category_browse_screen.dart';
+import '../../Shared/widgets/report_sheet.dart';
 import 'heritage_ui.dart';
 
 class HeritageItemScreen extends StatefulWidget {
@@ -98,6 +99,13 @@ class _HeritageItemScreenState extends State<HeritageItemScreen> {
     final lang = langs.contains(_lang) ? _lang! : (langs.isEmpty ? null : langs.first);
 
     return HeritageBackdropPage(
+      actions: [
+        GlassIconButton(
+          icon: Icons.flag_outlined,
+          tooltip: 'Report this entry',
+          onPressed: () => showReportSheet(context, targetType: 'heritage_entry', targetId: item.id, ownerId: item.authorUid, subject: 'this entry'),
+        ),
+      ],
       backdropHeight: hasCover ? 440 : 340,
       backdrop: HeritageMedia(
         url: hasCover ? item.coverImageUrl : HeritageBundledImages.forContentType(item.contentType),

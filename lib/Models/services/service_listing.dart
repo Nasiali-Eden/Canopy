@@ -358,6 +358,9 @@ class ServiceListing {
   final String? orgName;
   final String postedByUid;
 
+  /// How customers reach the provider. Payment is agreed directly.
+  final String contactPhone;
+
   // ── Commercial ──
   final ServicePricing pricing;
 
@@ -403,6 +406,7 @@ class ServiceListing {
     this.orgId,
     this.orgName,
     this.postedByUid = '',
+    this.contactPhone = '',
     this.pricing = const ServicePricing(),
     this.serviceRadiusKm = 0,
     this.location = CanopyLocation.empty,
@@ -465,6 +469,7 @@ class ServiceListing {
       orgId: d['orgId'] as String?,
       orgName: d['orgName'] as String?,
       postedByUid: d['postedByUid'] as String? ?? '',
+      contactPhone: d['contactPhone'] as String? ?? '',
       pricing:
           ServicePricing.fromMap(d['pricing'] as Map<String, dynamic>? ?? {}),
       serviceRadiusKm: (d['serviceRadiusKm'] as num?)?.toDouble() ?? 0,
@@ -497,6 +502,7 @@ class ServiceListing {
         'orgId': orgId,
         'orgName': orgName,
         'postedByUid': postedByUid,
+        'contactPhone': contactPhone,
         'pricing': pricing.toMap(),
         'serviceRadiusKm': serviceRadiusKm,
         'licenseDocumentUrl': licenseDocumentUrl,
@@ -541,6 +547,7 @@ class ServiceListing {
       orgId: orgId,
       orgName: orgName,
       postedByUid: postedByUid,
+      contactPhone: contactPhone,
       pricing: pricing ?? this.pricing,
       serviceRadiusKm: serviceRadiusKm ?? this.serviceRadiusKm,
       location: location ?? this.location,

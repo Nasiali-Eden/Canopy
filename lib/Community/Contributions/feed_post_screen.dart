@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../Organization/Explorer/org_view_screen.dart';
 import '../../theme/canopy_components.dart';
+import '../../Shared/widgets/report_sheet.dart';
 import 'entry_feed_card.dart';
 
 class FeedPostScreen extends StatefulWidget {
@@ -82,6 +83,11 @@ class _FeedPostScreenState extends State<FeedPostScreen> {
       appBar: canopyAppBar(
         context,
         actions: [
+          CanopyIconButton(
+              icon: Icons.flag_outlined,
+              tooltip: 'Report',
+              onPressed: () => showReportSheet(context,
+                  targetType: 'contribution', targetId: e.contributionId ?? '', ownerId: e.userId, subject: 'this post')),
           CanopyIconButton(
               icon: Icons.ios_share,
               tooltip: 'Share',

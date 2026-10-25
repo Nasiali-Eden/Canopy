@@ -9,6 +9,7 @@
  *    clients cannot write — hence these functions.
  */
 
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 
@@ -57,7 +58,13 @@ async function activate(uid: string, orgId: string, role: string, org: FirebaseF
   const db = getFirestore();
   const orgName = String(org.org_name ?? org.name ?? "Organisation");
   const user = (await db.collection("Users").doc(uid).get()).data() ?? {};
-  const email = String(user.email ?? "");
+  // The email is no longer on the shared profile; it is the sign-in email.
+  let email = "";
+  try {
+    email = (await getAuth().getUser(uid)).email ?? "";
+  } catch (_) {
+    email = "";
+  }
   const name = String(user.name ?? [user.FirstName, user.LastName].filter(Boolean).join(" ") ?? "").trim();
   const batch = db.batch();
   batch.set(db.collection("Users").doc(uid), { orgId, orgName, role: "Org Rep" }, { merge: true });
